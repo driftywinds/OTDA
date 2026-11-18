@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:uuid/uuid.dart';
 
 import 'clock.dart';
@@ -22,6 +24,22 @@ class Repo {
 
   Future<List<Label>> labels() async =>
       (await db.entities('label')).map((e) => Label(e['id'] as String, e)).toList();
+
+  /// The workspaces the sync exchange last reported, in the server's order.
+  Future<List<Workspace>> workspaces() async {
+    final raw = await db.meta('sync.workspaces');
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final entry in decoded)
+          if (entry is Map) Workspace(entry.cast<String, dynamic>()),
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
 
   /// The account's own preferences: one synced row per account under `me`
   /// (`date_format`, `week_start`, `language`, `row_layout`, …). Absent fields

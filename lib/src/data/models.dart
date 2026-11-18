@@ -33,6 +33,9 @@ class Task {
 
   bool get isSomeday => raw['start']?.toString() == 'someday';
   bool get isEvening => raw['evening'] == true;
+
+  /// When the task was completed, Unix ms, or null while it is open.
+  int? get completedAt => (raw['completed_at'] as num?)?.toInt();
   List<String> get labels => ((raw['labels'] as List?) ?? const []).map((e) => e.toString()).toList();
 
   /// The day this task should surface on, if it has one.
@@ -51,6 +54,9 @@ class Project {
   bool get isArchived => raw['archived'] == true;
   bool get isDeleted => raw['deleted_at'] != null;
   double get position => (raw['position'] as num?)?.toDouble() ?? 0;
+
+  /// The workspace the project lives in; null means the account's default one.
+  String? get workspaceId => raw['workspace_id']?.toString();
 }
 
 class Label {
@@ -63,4 +69,17 @@ class Label {
   String? get color => raw['color']?.toString();
   bool get isDeleted => raw['deleted_at'] != null;
   double get position => (raw['position'] as num?)?.toDouble() ?? 0;
+}
+
+/// A directory entry from the sync exchange: projects, labels and views live in
+/// one, and a person can be in several.
+class Workspace {
+  Workspace(this.raw);
+
+  final Map<String, dynamic> raw;
+
+  String get id => raw['id']?.toString() ?? '';
+  String get name => raw['name']?.toString() ?? '';
+  bool get isDefault => raw['default'] == true;
+  int get memberCount => (raw['members'] as List?)?.length ?? 0;
 }
