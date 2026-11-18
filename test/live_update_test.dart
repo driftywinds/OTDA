@@ -1,3 +1,6 @@
+@Tags(['integration'])
+library;
+
 // The live channel: a change made by another device must land without waiting
 // for the 30 s poll.
 //

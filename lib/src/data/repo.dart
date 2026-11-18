@@ -20,6 +20,42 @@ class Repo {
   Future<List<Project>> projects() async =>
       (await db.entities('project')).map((e) => Project(e['id'] as String, e)).toList();
 
+  Future<List<Label>> labels() async =>
+      (await db.entities('label')).map((e) => Label(e['id'] as String, e)).toList();
+
+  /// The id of the label with this name (case-insensitive), creating it when it
+  /// does not exist yet — what the web app does when a quick-add line names a
+  /// label that is not there.
+  Future<String> ensureLabel(String name) async {
+    final wanted = name.trim();
+    final existing = await labels();
+    for (final label in existing) {
+      if (label.name.toLowerCase() == wanted.toLowerCase()) return label.id;
+    }
+    final id = newId();
+    final ts = await clock.next();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in {
+      'name': wanted,
+      'created_at': now,
+      'position': now.toDouble(),
+    }.entries) {
+      await db.putField('label', id, entry.key, entry.value, ts, engine.device);
+    }
+    return id;
+  }
+
+  /// Turns the names a quick-add line produced into label ids.
+  Future<List<String>> resolveLabelNames(Iterable<Object?> names) async {
+    final ids = <String>[];
+    for (final raw in names) {
+      final name = raw is Map ? (raw['name']?.toString() ?? '') : (raw?.toString() ?? '');
+      if (name.trim().isEmpty) continue;
+      ids.add(await ensureLabel(name));
+    }
+    return ids;
+  }
+
   Future<Task?> task(String id) async {
     final row = await db.entity('task', id);
     return row == null ? null : Task(id, row);

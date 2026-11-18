@@ -47,12 +47,14 @@ $env:TEMP="$PWD\.tmp\temp"; $env:TMP=$env:TEMP
 $env:ANDROID_HOME='W:\repos\librarium-android\.tooling\android-sdk'
 $env:GRADLE_USER_HOME="$PWD\.tmp\gradle"; $env:ANDROID_USER_HOME="$PWD\.tmp\android-user"
 
-.flutter\flutter.bat test            # unit + parity + integration (needs the local server)
+.flutter\flutter.bat test --exclude-tags integration   # what CI runs
+.flutter\flutter.bat test --tags integration           # needs the server below
 .flutter\flutter.bat analyze
+.flutter\flutter.bat build apk --release --split-per-abi
 ```
 
-The integration tests expect a server at `http://127.0.0.1:18080` with the
-account `dev@otda.local`. Start one from the release binary:
+The integration tests are tagged and expect a server at `http://127.0.0.1:18080`
+with the account `dev@otda.local`. Start one from the release binary:
 
 ```powershell
 $env:OPENTODO_ADDR='127.0.0.1:18080'; $env:OPENTODO_DATA_DIR="$PWD\.tmp\server\data"
@@ -64,6 +66,30 @@ To check the real dataset on a live server (read-only):
 ```powershell
 flutter test test/remote_pull_test.dart --dart-define=OT_SERVER=https://… --dart-define=OT_TOKEN=ot_…
 ```
+
+## Releasing
+
+Two workflows, adapted from the scrobbler project:
+
+- `.github/workflows/ci.yml` — analyze, unit tests (integration tags excluded) and
+  a release APK build on every pull request and push to `main`.
+- `.github/workflows/release.yml` — on a `v*` tag or by hand. Tests, then builds
+  the universal APK, one APK per ABI and the Play bundle, uploads them and
+  publishes a GitHub release.
+
+Add these repository secrets before the first signed release:
+
+| Secret | What it is |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the release keystore file, base64: `base64 -w0 release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore's store password |
+| `ANDROID_KEY_ALIAS` | the key's alias |
+| `ANDROID_KEY_PASSWORD` | the key's password |
+
+Without `ANDROID_KEYSTORE_BASE64` the release job still runs and warns: the
+artifacts are then signed with the debug key, which is fine for testing and
+unusable for distribution. `key.properties` and `*.keystore` are gitignored, so
+the keystore only ever exists on the runner.
 
 ## Regenerate the API spec
 

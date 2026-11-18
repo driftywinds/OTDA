@@ -52,3 +52,15 @@ class Project {
   bool get isDeleted => raw['deleted_at'] != null;
   double get position => (raw['position'] as num?)?.toDouble() ?? 0;
 }
+
+class Label {
+  Label(this.id, this.raw);
+
+  final String id;
+  final Map<String, Object?> raw;
+
+  String get name => raw['name']?.toString() ?? '';
+  String? get color => raw['color']?.toString();
+  bool get isDeleted => raw['deleted_at'] != null;
+  double get position => (raw['position'] as num?)?.toDouble() ?? 0;
+}

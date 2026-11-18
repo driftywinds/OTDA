@@ -52,3 +52,9 @@ app.*.map.json
 .tmp/
 # the reference checkout of OpenTodo (v1.5.0 / main), not part of this app
 _research/
+
+# Release signing material — never commit
+android/key.properties
+android/app/*.keystore
+android/app/*.jks
+*.keystore

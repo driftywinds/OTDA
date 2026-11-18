@@ -146,6 +146,12 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       priority: _priority,
       projectId: _projectId,
     );
+    // A quick-add line names labels; a task stores ids.
+    final named = fields.remove('labels');
+    if (named is List && named.isNotEmpty) {
+      final ids = await widget.repo.resolveLabelNames(named);
+      if (ids.isNotEmpty) fields['labels'] = ids;
+    }
     await widget.repo.createTask(title, projectId: _projectId, extra: fields);
     if (mounted) Navigator.of(context).pop(true);
   }

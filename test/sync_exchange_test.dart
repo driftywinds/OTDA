@@ -1,3 +1,6 @@
+@Tags(['integration'])
+library;
+
 // Integration test for the sync engine against a real OpenTodo server.
 //
 //   flutter test test/sync_exchange_test.dart
