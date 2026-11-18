@@ -26,7 +26,9 @@ void main() {
     expect(fields['due'], {'date': '2026-11-19', 'time': '15:00'});
     expect(fields['estimate_minutes'], 30);
     expect(fields['recurrence'], 'every week');
-    expect(fields['labels'], ['l1']);
+    // Labels are names on the way out of the parser; the save path resolves them
+    // to ids, so they are not part of the create body this returns.
+    expect(fields.containsKey('labels'), isFalse);
   });
 
   test('a control value wins over the parsed one', () {

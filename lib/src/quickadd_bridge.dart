@@ -9,7 +9,12 @@ import 'quickadd/quickadd.dart';
 
 /// What the composer shows under the input.
 class ParsedLine {
-  const ParsedLine({required this.title, this.fields = const {}, this.chips = const []});
+  const ParsedLine({
+    required this.title,
+    this.fields = const {},
+    this.chips = const [],
+    this.unmatched = const [],
+  });
 
   /// The title with the recognised tokens cut out.
   final String title;
@@ -19,6 +24,9 @@ class ParsedLine {
 
   /// Short human labels for the preview line, e.g. `tomorrow 15:00`, `p1`, `#work`.
   final List<String> chips;
+
+  /// Tokens that looked like a reference but matched nothing, e.g. `#tga`.
+  final List<String> unmatched;
 
   bool get isEmpty => chips.isEmpty;
 
@@ -58,6 +66,7 @@ ParsedLine parseLine(
     title: result.title,
     fields: result.fields,
     chips: [for (final chip in result.chips) chipLabel(chip, projects: refs)],
+    unmatched: [for (final miss in result.unmatched) miss.span.text],
   );
 }
 

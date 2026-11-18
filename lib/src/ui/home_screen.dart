@@ -254,8 +254,8 @@ class _AccountMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final name = '${state.account?.displayName ?? ''}'.trim();
-    final email = '${state.account?.userEmail ?? ''}'.trim();
+    final name = (state.account?.displayName ?? '').trim();
+    final email = (state.account?.userEmail ?? '').trim();
     final seed = name.isNotEmpty ? name : email;
     final initial = seed.isEmpty ? '?' : seed.substring(0, 1).toUpperCase();
     return PopupMenuButton<String>(
