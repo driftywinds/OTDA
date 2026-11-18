@@ -1,0 +1,3769 @@
+{
+ "base": "https://otd.003274.xyz",
+ "served_version": "v1.5.0",
+ "description_version": "0.0.0-dev",
+ "operations": [
+  {
+   "method": "GET",
+   "path": "/api/v1/activity",
+   "probe_path": "/api/v1/activity",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/app-passwords",
+   "probe_path": "/api/v1/app-passwords",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/app-passwords",
+   "probe_path": "/api/v1/app-passwords",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/app-passwords/{id}",
+   "probe_path": "/api/v1/app-passwords/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/app-passwords/{id}",
+   "probe_path": "/api/v1/app-passwords/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/app/sign-out",
+   "probe_path": "/api/v1/app/sign-out",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/app/token",
+   "probe_path": "/api/v1/app/token",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/assistant/routine-draft",
+   "probe_path": "/api/v1/assistant/routine-draft",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/assistant/skills",
+   "probe_path": "/api/v1/assistant/skills",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/assistant/turn",
+   "probe_path": "/api/v1/assistant/turn",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/attachments/{id}",
+   "probe_path": "/api/v1/attachments/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/attachments/{id}",
+   "probe_path": "/api/v1/attachments/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/attachments/{id}/content",
+   "probe_path": "/api/v1/attachments/00000000-0000-4000-8000-000000000001/content",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/attachments/{id}/content",
+   "probe_path": "/api/v1/attachments/00000000-0000-4000-8000-000000000001/content",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/audit",
+   "probe_path": "/api/v1/audit",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/audit/export",
+   "probe_path": "/api/v1/audit/export",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/audit/verify",
+   "probe_path": "/api/v1/audit/verify",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/login",
+   "probe_path": "/api/v1/auth/login",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/logout",
+   "probe_path": "/api/v1/auth/logout",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/mfa",
+   "probe_path": "/api/v1/auth/mfa",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/auth/oidc/callback",
+   "probe_path": "/api/v1/auth/oidc/callback",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/auth/oidc/start",
+   "probe_path": "/api/v1/auth/oidc/start",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/passkey",
+   "probe_path": "/api/v1/auth/passkey",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/passkey/options",
+   "probe_path": "/api/v1/auth/passkey/options",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/password-reset",
+   "probe_path": "/api/v1/auth/password-reset",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/reauth",
+   "probe_path": "/api/v1/auth/reauth",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/register",
+   "probe_path": "/api/v1/auth/register",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/auth/status",
+   "probe_path": "/api/v1/auth/status",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/auth/verify/{token}",
+   "probe_path": "/api/v1/auth/verify/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/auth/verify/{token}",
+   "probe_path": "/api/v1/auth/verify/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/backups",
+   "probe_path": "/api/v1/backups",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/backups/archives",
+   "probe_path": "/api/v1/backups/archives",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/backups/restore",
+   "probe_path": "/api/v1/backups/restore",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/backups/restore",
+   "probe_path": "/api/v1/backups/restore",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/backups/restore/prepare",
+   "probe_path": "/api/v1/backups/restore/prepare",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/backups/restore/safety-copies/{name}",
+   "probe_path": "/api/v1/backups/restore/safety-copies/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/backups/restore/uploads",
+   "probe_path": "/api/v1/backups/restore/uploads",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/backups/restore/{id}",
+   "probe_path": "/api/v1/backups/restore/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/backups/run",
+   "probe_path": "/api/v1/backups/run",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/backups/settings",
+   "probe_path": "/api/v1/backups/settings",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/backups/settings",
+   "probe_path": "/api/v1/backups/settings",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/backups/test",
+   "probe_path": "/api/v1/backups/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-feeds/events",
+   "probe_path": "/api/v1/calendar-feeds/events",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/calendar-feeds/feed",
+   "probe_path": "/api/v1/calendar-feeds/feed",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-feeds/feed",
+   "probe_path": "/api/v1/calendar-feeds/feed",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-feeds/feed",
+   "probe_path": "/api/v1/calendar-feeds/feed",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-feeds/subscriptions",
+   "probe_path": "/api/v1/calendar-feeds/subscriptions",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-feeds/subscriptions",
+   "probe_path": "/api/v1/calendar-feeds/subscriptions",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/calendar-feeds/subscriptions/{id}",
+   "probe_path": "/api/v1/calendar-feeds/subscriptions/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/calendar-feeds/subscriptions/{id}",
+   "probe_path": "/api/v1/calendar-feeds/subscriptions/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-feeds/subscriptions/{id}/refresh",
+   "probe_path": "/api/v1/calendar-feeds/subscriptions/00000000-0000-4000-8000-000000000001/refresh",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-sync/connections",
+   "probe_path": "/api/v1/calendar-sync/connections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-sync/connections",
+   "probe_path": "/api/v1/calendar-sync/connections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/calendar-sync/connections/{id}",
+   "probe_path": "/api/v1/calendar-sync/connections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/calendar-sync/connections/{id}",
+   "probe_path": "/api/v1/calendar-sync/connections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-sync/connections/{id}/sync",
+   "probe_path": "/api/v1/calendar-sync/connections/00000000-0000-4000-8000-000000000001/sync",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-sync/google/callback",
+   "probe_path": "/api/v1/calendar-sync/google/callback",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-sync/google/start",
+   "probe_path": "/api/v1/calendar-sync/google/start",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/calendar-sync/microsoft/callback",
+   "probe_path": "/api/v1/calendar-sync/microsoft/callback",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/calendar-sync/microsoft/start",
+   "probe_path": "/api/v1/calendar-sync/microsoft/start",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/comments/{id}",
+   "probe_path": "/api/v1/comments/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/comments/{id}",
+   "probe_path": "/api/v1/comments/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/comments/{id}/reactions",
+   "probe_path": "/api/v1/comments/00000000-0000-4000-8000-000000000001/reactions",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/demo/sandbox",
+   "probe_path": "/api/v1/demo/sandbox",
+   "status": 404,
+   "allow": "",
+   "exists": false,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/email-inbox",
+   "probe_path": "/api/v1/email-inbox",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/email-inbox",
+   "probe_path": "/api/v1/email-inbox",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/email-inbox/rotate",
+   "probe_path": "/api/v1/email-inbox/rotate",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/encryption/keys",
+   "probe_path": "/api/v1/encryption/keys",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/encryption/keys",
+   "probe_path": "/api/v1/encryption/keys",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/encryption/keys",
+   "probe_path": "/api/v1/encryption/keys",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/encryption/purge-history",
+   "probe_path": "/api/v1/encryption/purge-history",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/export",
+   "probe_path": "/api/v1/export",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/export/archive",
+   "probe_path": "/api/v1/export/archive",
+   "status": 404,
+   "allow": "",
+   "exists": false,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/fields",
+   "probe_path": "/api/v1/fields",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/fields",
+   "probe_path": "/api/v1/fields",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/fields/{id}",
+   "probe_path": "/api/v1/fields/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/fields/{id}",
+   "probe_path": "/api/v1/fields/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/fields/{id}",
+   "probe_path": "/api/v1/fields/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/frames",
+   "probe_path": "/api/v1/frames",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/frames",
+   "probe_path": "/api/v1/frames",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/frames/{id}",
+   "probe_path": "/api/v1/frames/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/frames/{id}",
+   "probe_path": "/api/v1/frames/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/frames/{id}",
+   "probe_path": "/api/v1/frames/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/habits",
+   "probe_path": "/api/v1/habits",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/habits/{id}",
+   "probe_path": "/api/v1/habits/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/habits/{id}/log",
+   "probe_path": "/api/v1/habits/00000000-0000-4000-8000-000000000001/log",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/health",
+   "probe_path": "/api/v1/health",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/import",
+   "probe_path": "/api/v1/import",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/import/jobs",
+   "probe_path": "/api/v1/import/jobs",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/import/jobs/{id}",
+   "probe_path": "/api/v1/import/jobs/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/import/jobs/{id}/undo",
+   "probe_path": "/api/v1/import/jobs/00000000-0000-4000-8000-000000000001/undo",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/import/preview",
+   "probe_path": "/api/v1/import/preview",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/import/todoist",
+   "probe_path": "/api/v1/import/todoist",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/invitations",
+   "probe_path": "/api/v1/invitations",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/invitations",
+   "probe_path": "/api/v1/invitations",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/invitations/{id}",
+   "probe_path": "/api/v1/invitations/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/invitations/{id}",
+   "probe_path": "/api/v1/invitations/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/issues/connections",
+   "probe_path": "/api/v1/issues/connections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/issues/connections",
+   "probe_path": "/api/v1/issues/connections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/issues/connections/{id}",
+   "probe_path": "/api/v1/issues/connections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/issues/connections/{id}",
+   "probe_path": "/api/v1/issues/connections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/issues/connections/{id}/sync",
+   "probe_path": "/api/v1/issues/connections/00000000-0000-4000-8000-000000000001/sync",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/issues/connections/{id}/test",
+   "probe_path": "/api/v1/issues/connections/00000000-0000-4000-8000-000000000001/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/labels",
+   "probe_path": "/api/v1/labels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/labels",
+   "probe_path": "/api/v1/labels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/labels/{id}",
+   "probe_path": "/api/v1/labels/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/labels/{id}",
+   "probe_path": "/api/v1/labels/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/labels/{id}",
+   "probe_path": "/api/v1/labels/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/fonts/{fontstack}/{range}",
+   "probe_path": "/api/v1/maps/fonts/x/0-255",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/reverse",
+   "probe_path": "/api/v1/maps/reverse",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/search",
+   "probe_path": "/api/v1/maps/search",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/sprites/{file}",
+   "probe_path": "/api/v1/maps/sprites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/style",
+   "probe_path": "/api/v1/maps/style",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/maps/tiles/{z}/{x}/{y}",
+   "probe_path": "/api/v1/maps/tiles/0/0/0",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me",
+   "probe_path": "/api/v1/me",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/activity",
+   "probe_path": "/api/v1/me/activity",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/agent-access",
+   "probe_path": "/api/v1/me/agent-access",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/me/agent-access",
+   "probe_path": "/api/v1/me/agent-access",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/app-sign-in",
+   "probe_path": "/api/v1/me/app-sign-in",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/apps",
+   "probe_path": "/api/v1/me/apps",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/apps/{id}",
+   "probe_path": "/api/v1/me/apps/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/assistant",
+   "probe_path": "/api/v1/me/assistant",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/me/assistant",
+   "probe_path": "/api/v1/me/assistant",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/assistant/disclosure-seen",
+   "probe_path": "/api/v1/me/assistant/disclosure-seen",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/assistant/test",
+   "probe_path": "/api/v1/me/assistant/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/assistant/usage",
+   "probe_path": "/api/v1/me/assistant/usage",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/avatar",
+   "probe_path": "/api/v1/me/avatar",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/me/avatar",
+   "probe_path": "/api/v1/me/avatar",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/email",
+   "probe_path": "/api/v1/me/email",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/email",
+   "probe_path": "/api/v1/me/email",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/email-digest",
+   "probe_path": "/api/v1/me/email-digest",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/me/email-digest",
+   "probe_path": "/api/v1/me/email-digest",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/email/confirm",
+   "probe_path": "/api/v1/me/email/confirm",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/identities",
+   "probe_path": "/api/v1/me/identities",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/identities/{id}",
+   "probe_path": "/api/v1/me/identities/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/mcp-consent",
+   "probe_path": "/api/v1/me/mcp-consent",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/mcp-consent",
+   "probe_path": "/api/v1/me/mcp-consent",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/member-invitations",
+   "probe_path": "/api/v1/me/member-invitations",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/member-invitations/{id}/accept",
+   "probe_path": "/api/v1/me/member-invitations/00000000-0000-4000-8000-000000000001/accept",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/member-invitations/{id}/decline",
+   "probe_path": "/api/v1/me/member-invitations/00000000-0000-4000-8000-000000000001/decline",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/oauth-grants",
+   "probe_path": "/api/v1/me/oauth-grants",
+   "status": 404,
+   "allow": "",
+   "exists": false,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/oauth-grants/{id}",
+   "probe_path": "/api/v1/me/oauth-grants/00000000-0000-4000-8000-000000000001",
+   "status": 404,
+   "allow": "",
+   "exists": false,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/password",
+   "probe_path": "/api/v1/me/password",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/profile",
+   "probe_path": "/api/v1/me/profile",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/me/profile",
+   "probe_path": "/api/v1/me/profile",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/rules",
+   "probe_path": "/api/v1/me/rules",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/rules/catalogue",
+   "probe_path": "/api/v1/me/rules/catalogue",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/me/rules/paused",
+   "probe_path": "/api/v1/me/rules/paused",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/rules/proposals",
+   "probe_path": "/api/v1/me/rules/proposals",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/me/rules/proposals/{id}",
+   "probe_path": "/api/v1/me/rules/proposals/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/rules/proposals/{id}",
+   "probe_path": "/api/v1/me/rules/proposals/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/rules/proposals/{id}/apply",
+   "probe_path": "/api/v1/me/rules/proposals/00000000-0000-4000-8000-000000000001/apply",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/me/rules/runs",
+   "probe_path": "/api/v1/me/rules/runs",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/rules/runs/{run}/commit",
+   "probe_path": "/api/v1/me/rules/runs/probe/commit",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/rules/runs/{run}/fail",
+   "probe_path": "/api/v1/me/rules/runs/probe/fail",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/me/sign-out-everywhere",
+   "probe_path": "/api/v1/me/sign-out-everywhere",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/members/{id}/mfa/reset",
+   "probe_path": "/api/v1/members/00000000-0000-4000-8000-000000000001/mfa/reset",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/mfa",
+   "probe_path": "/api/v1/mfa",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/mfa/recovery-codes/regenerate",
+   "probe_path": "/api/v1/mfa/recovery-codes/regenerate",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/mfa/totp",
+   "probe_path": "/api/v1/mfa/totp",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/mfa/totp/confirm",
+   "probe_path": "/api/v1/mfa/totp/confirm",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/mfa/totp/enroll",
+   "probe_path": "/api/v1/mfa/totp/enroll",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/mfa/trusted-devices",
+   "probe_path": "/api/v1/mfa/trusted-devices",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/mfa/trusted-devices",
+   "probe_path": "/api/v1/mfa/trusted-devices",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/mfa/trusted-devices/{id}",
+   "probe_path": "/api/v1/mfa/trusted-devices/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notes",
+   "probe_path": "/api/v1/notes",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notes",
+   "probe_path": "/api/v1/notes",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/notes/{id}",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notes/{id}",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/notes/{id}",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notes/{id}/append",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/append",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notes/{id}/attachments",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notes/{id}/attachments",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notes/{id}/history",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/history",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/notes/{id}/page",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notes/{id}/page",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notes/{id}/page",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/notes/{id}/page/snapshot",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/page/snapshot",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/notes/{id}/purge",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/purge",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notes/{id}/to-task",
+   "probe_path": "/api/v1/notes/00000000-0000-4000-8000-000000000001/to-task",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notification-channels",
+   "probe_path": "/api/v1/notification-channels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notification-channels",
+   "probe_path": "/api/v1/notification-channels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/notification-channels/{id}",
+   "probe_path": "/api/v1/notification-channels/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/notification-channels/{id}",
+   "probe_path": "/api/v1/notification-channels/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notification-channels/{id}/deliveries",
+   "probe_path": "/api/v1/notification-channels/00000000-0000-4000-8000-000000000001/deliveries",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notification-channels/{id}/test",
+   "probe_path": "/api/v1/notification-channels/00000000-0000-4000-8000-000000000001/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/notifications",
+   "probe_path": "/api/v1/notifications",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/notifications/{id}/read",
+   "probe_path": "/api/v1/notifications/00000000-0000-4000-8000-000000000001/read",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/objectives",
+   "probe_path": "/api/v1/objectives",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/objectives",
+   "probe_path": "/api/v1/objectives",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/objectives/{id}",
+   "probe_path": "/api/v1/objectives/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/objectives/{id}",
+   "probe_path": "/api/v1/objectives/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/objectives/{id}",
+   "probe_path": "/api/v1/objectives/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/openapi.json",
+   "probe_path": "/api/v1/openapi.json",
+   "status": 404,
+   "allow": "",
+   "exists": false,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}",
+   "probe_path": "/api/v1/pages/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}/files/{fileId}",
+   "probe_path": "/api/v1/pages/probe/files/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}/maps/fonts/{fontstack}/{range}",
+   "probe_path": "/api/v1/pages/probe/maps/fonts/x/0-255",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}/maps/sprites/{file}",
+   "probe_path": "/api/v1/pages/probe/maps/sprites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}/maps/style",
+   "probe_path": "/api/v1/pages/probe/maps/style",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/pages/{secret}/maps/tiles/{z}/{x}/{y}",
+   "probe_path": "/api/v1/pages/probe/maps/tiles/0/0/0",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/pages/{secret}/replies",
+   "probe_path": "/api/v1/pages/probe/replies",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/pages/{secret}/tick",
+   "probe_path": "/api/v1/pages/probe/tick",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/passkeys",
+   "probe_path": "/api/v1/passkeys",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/passkeys/register",
+   "probe_path": "/api/v1/passkeys/register",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/passkeys/register/options",
+   "probe_path": "/api/v1/passkeys/register/options",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/passkeys/{id}",
+   "probe_path": "/api/v1/passkeys/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/passkeys/{id}",
+   "probe_path": "/api/v1/passkeys/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/password-resets/{token}",
+   "probe_path": "/api/v1/password-resets/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/password-resets/{token}",
+   "probe_path": "/api/v1/password-resets/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/places",
+   "probe_path": "/api/v1/places",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/project-invites/{token}",
+   "probe_path": "/api/v1/project-invites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/project-invites/{token}/accept",
+   "probe_path": "/api/v1/project-invites/probe/accept",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects",
+   "probe_path": "/api/v1/projects",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects",
+   "probe_path": "/api/v1/projects",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/projects/{id}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/activity",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/activity",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/agent-access",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/agent-access",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/projects/{id}/agent-access",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/agent-access",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects/{id}/grants",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/grants",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/grants/{groupId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/grants/00000000-0000-4000-8000-000000000003",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/projects/{id}/grants/{groupId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/grants/00000000-0000-4000-8000-000000000003",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/history",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/history",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/invites",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects/{id}/invites",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/invites/{inviteId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/invites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/member-invitations/{invitationId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/member-invitations/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/members",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/members",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects/{id}/members",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/members",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/members/{userId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/projects/{id}/members/{userId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/projects/{id}/public-links",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/public-links",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects/{id}/public-links",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/public-links",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/public-links/{linkId}",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/public-links/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/projects/{id}/purge",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/purge",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/projects/{id}/transfer",
+   "probe_path": "/api/v1/projects/00000000-0000-4000-8000-000000000001/transfer",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/public/{token}",
+   "probe_path": "/api/v1/public/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/public/{token}/tick",
+   "probe_path": "/api/v1/public/probe/tick",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/push/subscriptions",
+   "probe_path": "/api/v1/push/subscriptions",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/push/subscriptions/{id}",
+   "probe_path": "/api/v1/push/subscriptions/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/push/test",
+   "probe_path": "/api/v1/push/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/push/vapid-key",
+   "probe_path": "/api/v1/push/vapid-key",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/quick-add/parse",
+   "probe_path": "/api/v1/quick-add/parse",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/relay/answers/{id}",
+   "probe_path": "/api/v1/relay/answers/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/relay/devices",
+   "probe_path": "/api/v1/relay/devices",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/relay/devices/{device}",
+   "probe_path": "/api/v1/relay/devices/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/relay/devices/{device}",
+   "probe_path": "/api/v1/relay/devices/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/relay/devices/{device}/routines",
+   "probe_path": "/api/v1/relay/devices/probe/routines",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/relay/devices/{device}/routines",
+   "probe_path": "/api/v1/relay/devices/probe/routines",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/relay/events",
+   "probe_path": "/api/v1/relay/events",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/reminders",
+   "probe_path": "/api/v1/reminders",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/reminders",
+   "probe_path": "/api/v1/reminders",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/reminders/{id}",
+   "probe_path": "/api/v1/reminders/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/reminders/{id}",
+   "probe_path": "/api/v1/reminders/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/reminders/{id}",
+   "probe_path": "/api/v1/reminders/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/routine-emails/{token}",
+   "probe_path": "/api/v1/routine-emails/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/routine-emails/{token}/stop",
+   "probe_path": "/api/v1/routine-emails/probe/stop",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/rules",
+   "probe_path": "/api/v1/rules",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules",
+   "probe_path": "/api/v1/rules",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules/test",
+   "probe_path": "/api/v1/rules/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/rules/{id}",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/rules/{id}",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/rules/{id}",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/rules/{id}/ai-usage",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/ai-usage",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules/{id}/run",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/run",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/rules/{id}/runs",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/runs",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/rules/{id}/runs/{run}",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/runs/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules/{id}/runs/{run}/dismiss",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/runs/probe/dismiss",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules/{id}/runs/{run}/undo",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/runs/probe/undo",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/rules/{id}/test",
+   "probe_path": "/api/v1/rules/00000000-0000-4000-8000-000000000001/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/sections",
+   "probe_path": "/api/v1/sections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/sections",
+   "probe_path": "/api/v1/sections",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/sections/{id}",
+   "probe_path": "/api/v1/sections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/sections/{id}",
+   "probe_path": "/api/v1/sections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/sections/{id}",
+   "probe_path": "/api/v1/sections/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/assistant",
+   "probe_path": "/api/v1/settings/assistant",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/assistant",
+   "probe_path": "/api/v1/settings/assistant",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/settings/assistant/test",
+   "probe_path": "/api/v1/settings/assistant/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": true
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/attachments",
+   "probe_path": "/api/v1/settings/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/attachments",
+   "probe_path": "/api/v1/settings/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/audit",
+   "probe_path": "/api/v1/settings/audit",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/audit",
+   "probe_path": "/api/v1/settings/audit",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/automations",
+   "probe_path": "/api/v1/settings/automations",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/automations",
+   "probe_path": "/api/v1/settings/automations",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/branding",
+   "probe_path": "/api/v1/settings/branding",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/branding",
+   "probe_path": "/api/v1/settings/branding",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/settings/branding/logo",
+   "probe_path": "/api/v1/settings/branding/logo",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/branding/logo",
+   "probe_path": "/api/v1/settings/branding/logo",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/caldav",
+   "probe_path": "/api/v1/settings/caldav",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/caldav",
+   "probe_path": "/api/v1/settings/caldav",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/calendar-feeds",
+   "probe_path": "/api/v1/settings/calendar-feeds",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/calendar-feeds",
+   "probe_path": "/api/v1/settings/calendar-feeds",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/calendar-sync",
+   "probe_path": "/api/v1/settings/calendar-sync",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/calendar-sync",
+   "probe_path": "/api/v1/settings/calendar-sync",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/calendar-sync/google",
+   "probe_path": "/api/v1/settings/calendar-sync/google",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/calendar-sync/google",
+   "probe_path": "/api/v1/settings/calendar-sync/google",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/calendar-sync/microsoft",
+   "probe_path": "/api/v1/settings/calendar-sync/microsoft",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/calendar-sync/microsoft",
+   "probe_path": "/api/v1/settings/calendar-sync/microsoft",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/issues",
+   "probe_path": "/api/v1/settings/issues",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/issues",
+   "probe_path": "/api/v1/settings/issues",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/maps",
+   "probe_path": "/api/v1/settings/maps",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/maps",
+   "probe_path": "/api/v1/settings/maps",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/mcp",
+   "probe_path": "/api/v1/settings/mcp",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/mcp",
+   "probe_path": "/api/v1/settings/mcp",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/mcp/clients",
+   "probe_path": "/api/v1/settings/mcp/clients",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/settings/mcp/clients",
+   "probe_path": "/api/v1/settings/mcp/clients",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/settings/mcp/clients/{id}",
+   "probe_path": "/api/v1/settings/mcp/clients/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/mfa",
+   "probe_path": "/api/v1/settings/mfa",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/mfa",
+   "probe_path": "/api/v1/settings/mfa",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/notification-channels",
+   "probe_path": "/api/v1/settings/notification-channels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/notification-channels",
+   "probe_path": "/api/v1/settings/notification-channels",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/oidc",
+   "probe_path": "/api/v1/settings/oidc",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/oidc",
+   "probe_path": "/api/v1/settings/oidc",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/settings/oidc/test",
+   "probe_path": "/api/v1/settings/oidc/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/project-invites",
+   "probe_path": "/api/v1/settings/project-invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/project-invites",
+   "probe_path": "/api/v1/settings/project-invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/smtp",
+   "probe_path": "/api/v1/settings/smtp",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/smtp",
+   "probe_path": "/api/v1/settings/smtp",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/settings/smtp/test",
+   "probe_path": "/api/v1/settings/smtp/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/storage",
+   "probe_path": "/api/v1/settings/storage",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/stt",
+   "probe_path": "/api/v1/settings/stt",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/stt",
+   "probe_path": "/api/v1/settings/stt",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/settings/stt/test",
+   "probe_path": "/api/v1/settings/stt/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/themes/default",
+   "probe_path": "/api/v1/settings/themes/default",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/settings/themes/instance/{id}",
+   "probe_path": "/api/v1/settings/themes/instance/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/themes/instance/{id}",
+   "probe_path": "/api/v1/settings/themes/instance/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings/webhooks",
+   "probe_path": "/api/v1/settings/webhooks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings/webhooks",
+   "probe_path": "/api/v1/settings/webhooks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/slots",
+   "probe_path": "/api/v1/slots",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/slots",
+   "probe_path": "/api/v1/slots",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/slots/{id}",
+   "probe_path": "/api/v1/slots/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/slots/{id}",
+   "probe_path": "/api/v1/slots/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/slots/{id}",
+   "probe_path": "/api/v1/slots/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/sync",
+   "probe_path": "/api/v1/sync",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/sync/events",
+   "probe_path": "/api/v1/sync/events",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/task-pages",
+   "probe_path": "/api/v1/task-pages",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks",
+   "probe_path": "/api/v1/tasks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks",
+   "probe_path": "/api/v1/tasks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/tasks/{id}",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/tasks/{id}",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/activity",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/activity",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/attachments",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/attachments",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/attachments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/comments",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/comments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/comments",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/comments",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/history",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/history",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/note/append",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/note/append",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/occurrences",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/occurrences",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/tasks/{id}/occurrences/{date}",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/occurrences/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/occurrences/{date}/complete",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/occurrences/probe/complete",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/occurrences/{date}/skip",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/occurrences/probe/skip",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/tasks/{id}/page",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/page",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/page",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/page/replies",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page/replies",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/tasks/{id}/page/replies/{replyId}",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page/replies/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/tasks/{id}/page/snapshot",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/page/snapshot",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/tasks/{id}/purge",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/purge",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tasks/{id}/split",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/split",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tasks/{id}/time-entries",
+   "probe_path": "/api/v1/tasks/00000000-0000-4000-8000-000000000001/time-entries",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/themes/instance",
+   "probe_path": "/api/v1/themes/instance",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/time-entries",
+   "probe_path": "/api/v1/time-entries",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/time-entries",
+   "probe_path": "/api/v1/time-entries",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/time-entries/running",
+   "probe_path": "/api/v1/time-entries/running",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/time-entries/stop",
+   "probe_path": "/api/v1/time-entries/stop",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/time-entries/{id}",
+   "probe_path": "/api/v1/time-entries/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/time-entries/{id}",
+   "probe_path": "/api/v1/time-entries/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/tokens",
+   "probe_path": "/api/v1/tokens",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/tokens",
+   "probe_path": "/api/v1/tokens",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/tokens/{id}",
+   "probe_path": "/api/v1/tokens/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/trash/purge",
+   "probe_path": "/api/v1/trash/purge",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/users",
+   "probe_path": "/api/v1/users",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/users/{id}",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/users/{id}/avatar",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/avatar",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/users/{id}/deactivate",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/deactivate",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/users/{id}/password-reset",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/password-reset",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/users/{id}/reactivate",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/reactivate",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/users/{id}/role",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/role",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/users/{id}/transfer-ownership",
+   "probe_path": "/api/v1/users/00000000-0000-4000-8000-000000000001/transfer-ownership",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/views",
+   "probe_path": "/api/v1/views",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/views",
+   "probe_path": "/api/v1/views",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/views/{id}",
+   "probe_path": "/api/v1/views/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/views/{id}",
+   "probe_path": "/api/v1/views/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/views/{id}",
+   "probe_path": "/api/v1/views/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/voice/transcribe",
+   "probe_path": "/api/v1/voice/transcribe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/webhooks",
+   "probe_path": "/api/v1/webhooks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/webhooks",
+   "probe_path": "/api/v1/webhooks",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/webhooks/{id}",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/webhooks/{id}",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/webhooks/{id}",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/webhooks/{id}/deliveries",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001/deliveries",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/webhooks/{id}/deliveries/{did}/redeliver",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001/deliveries/probe/redeliver",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/webhooks/{id}/test",
+   "probe_path": "/api/v1/webhooks/00000000-0000-4000-8000-000000000001/test",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspace-invites/{token}",
+   "probe_path": "/api/v1/workspace-invites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspace-invites/{token}/accept",
+   "probe_path": "/api/v1/workspace-invites/probe/accept",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspaces",
+   "probe_path": "/api/v1/workspaces",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces",
+   "probe_path": "/api/v1/workspaces",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspaces/{id}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/workspaces/{id}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspaces/{id}/groups",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces/{id}/groups",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}/groups/{groupId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups/00000000-0000-4000-8000-000000000003",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/workspaces/{id}/groups/{groupId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups/00000000-0000-4000-8000-000000000003",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}/groups/{groupId}/members/{userId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups/00000000-0000-4000-8000-000000000003/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/workspaces/{id}/groups/{groupId}/members/{userId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/groups/00000000-0000-4000-8000-000000000003/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspaces/{id}/invites",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces/{id}/invites",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/invites",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}/invites/{inviteId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/invites/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces/{id}/leave",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/leave",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}/member-invitations/{invitationId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/member-invitations/probe",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/workspaces/{id}/members",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/members",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces/{id}/members",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/members",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "DELETE",
+   "path": "/api/v1/workspaces/{id}/members/{userId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "PATCH",
+   "path": "/api/v1/workspaces/{id}/members/{userId}",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/members/00000000-0000-4000-8000-000000000002",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/workspaces/{id}/transfer",
+   "probe_path": "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/transfer",
+   "status": 405,
+   "allow": "",
+   "exists": true,
+   "ai": false
+  }
+ ]
+}

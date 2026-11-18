@@ -1,0 +1,198 @@
+{
+ "me": {
+  "status": 200,
+  "bytes": 780,
+  "keys": [
+   "agent_excluded_projects",
+   "attachments",
+   "auth",
+   "automations",
+   "closed_list",
+   "day_parts",
+   "encryption",
+   "energy_levels",
+   "maps",
+   "mfa",
+   "minClientVersion",
+   "speech",
+   "time_sectors",
+   "user"
+  ]
+ },
+ "tasks": {
+  "status": 200,
+  "bytes": 457,
+  "keys": [
+   "tasks"
+  ],
+  "item_keys": [
+   "appends",
+   "body_version",
+   "completed_at",
+   "created_at",
+   "deleted_at",
+   "description",
+   "due",
+   "energy",
+   "estimate_minutes",
+   "fields",
+   "id",
+   "labels",
+   "origin",
+   "parent_id",
+   "position",
+   "priority",
+   "project_id",
+   "rotation",
+   "sector",
+   "title"
+  ],
+  "item": {
+   "appends": [],
+   "body_version": "1795005680843:94b6546e-3f85-4226-9668-f17193d432c2",
+   "completed_at": null,
+   "created_at": 1795005680837,
+   "deleted_at": null,
+   "description": "",
+   "due": {
+    "date": "2026-11-19",
+    "time": "09:00"
+   },
+   "energy": null,
+   "estimate_minutes": null,
+   "fields": {},
+   "id": "e77e249b-fa6e-45ad-a27c-0b3e18ef0c92",
+   "labels": [],
+   "origin": null,
+   "parent_id": null,
+   "position": 1795005680837,
+   "priority": 4,
+   "project_id": null,
+   "rotation": [],
+   "sector": null,
+   "title": "Paper"
+  }
+ },
+ "projects": {
+  "status": 200,
+  "bytes": 16,
+  "keys": [
+   "projects"
+  ]
+ },
+ "labels": {
+  "status": 200,
+  "bytes": 14,
+  "keys": [
+   "labels"
+  ]
+ },
+ "sections": {
+  "status": 200,
+  "bytes": 16,
+  "keys": [
+   "sections"
+  ]
+ },
+ "views": {
+  "status": 200,
+  "bytes": 13,
+  "keys": [
+   "views"
+  ]
+ },
+ "notes": {
+  "status": 200,
+  "bytes": 13,
+  "keys": [
+   "notes"
+  ]
+ },
+ "reminders": {
+  "status": 200,
+  "bytes": 17,
+  "keys": [
+   "reminders"
+  ]
+ },
+ "workspaces": {
+  "status": 200,
+  "bytes": 286,
+  "keys": [
+   "workspaces"
+  ],
+  "item_keys": [
+   "color",
+   "default",
+   "groups",
+   "icon",
+   "id",
+   "members",
+   "name",
+   "ownerId",
+   "role"
+  ],
+  "item": {
+   "id": "355ec40e-add1-89ee-9ca0-93c29f94fc4d",
+   "name": "Personal",
+   "icon": "",
+   "color": "",
+   "default": true,
+   "role": "owner",
+   "ownerId": "c1373d59-b22d-4f96-b270-364c06c974e4",
+   "members": [
+    {
+     "userId": "c1373d59-b22d-4f96-b270-364c06c974e4",
+     "name": "drifty",
+     "role": "owner"
+    }
+   ],
+   "groups": []
+  }
+ },
+ "places": {
+  "status": 200,
+  "bytes": 14,
+  "keys": [
+   "places"
+  ]
+ },
+ "objectives": {
+  "status": 200,
+  "bytes": 18,
+  "keys": [
+   "objectives"
+  ]
+ },
+ "fields": {
+  "status": 200,
+  "bytes": 14,
+  "keys": [
+   "fields"
+  ]
+ },
+ "time-entries": {
+  "status": 200,
+  "bytes": 42,
+  "keys": [
+   "entries",
+   "serverTime"
+  ]
+ },
+ "notifications": {
+  "status": 200,
+  "bytes": 32,
+  "keys": [
+   "notifications",
+   "unread"
+  ]
+ },
+ "settings": {
+  "status": 404,
+  "bytes": 62
+ },
+ "people": {
+  "status": 404,
+  "bytes": 62
+ }
+}
