@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../app_state.dart';
 import '../data/models.dart';
 import '../data/views.dart';
+import 'new_task_sheet.dart';
 import 'task_sheet.dart';
 
 enum TaskView { today, inbox, anytime, someday }
@@ -95,13 +96,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _add() async {
-    final title = await showDialog<String>(
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final projects = await repo.projects();
+    if (!mounted) return;
+    final created = await showModalBottomSheet<bool>(
       context: context,
-      builder: (context) => const _AddTaskDialog(),
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => NewTaskSheet(repo: repo, projects: projects),
     );
-    if (title == null || title.trim().isEmpty) return;
-    await widget.state.repo?.createTask(title);
-    await _load();
+    if (created == true) await _load();
   }
 
   @override
@@ -294,42 +299,5 @@ class _StatusBar extends StatelessWidget {
     if (d.inMinutes < 60) return '${d.inMinutes}m ago';
     if (d.inHours < 24) return '${d.inHours}h ago';
     return '${d.inDays}d ago';
-  }
-}
-
-class _AddTaskDialog extends StatefulWidget {
-  const _AddTaskDialog();
-
-  @override
-  State<_AddTaskDialog> createState() => _AddTaskDialogState();
-}
-
-class _AddTaskDialogState extends State<_AddTaskDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() => Navigator.of(context).pop(_controller.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('New task'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textInputAction: TextInputAction.done,
-        decoration: const InputDecoration(hintText: 'What needs doing?'),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        FilledButton(onPressed: _submit, child: const Text('Add')),
-      ],
-    );
   }
 }

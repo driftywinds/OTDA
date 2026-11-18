@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 
 /// The local replica: one row per entity field, with the clock that wrote it.
 ///
@@ -248,10 +249,5 @@ class OtdaDb {
     });
   }
 
-  static String _uuid() {
-    final rnd = DateTime.now().microsecondsSinceEpoch.toRadixString(16).padLeft(16, '0');
-    final extra = (DateTime.now().microsecondsSinceEpoch * 31 + rnd.hashCode).toRadixString(16);
-    final s = (rnd + extra).padRight(32, '0').substring(0, 32);
-    return '${s.substring(0, 8)}-${s.substring(8, 12)}-4${s.substring(13, 16)}-8${s.substring(17, 20)}-${s.substring(20, 32)}';
-  }
+  static String _uuid() => const Uuid().v4();
 }

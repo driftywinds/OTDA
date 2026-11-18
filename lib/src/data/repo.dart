@@ -1,3 +1,5 @@
+import 'package:uuid/uuid.dart';
+
 import 'clock.dart';
 import 'db.dart';
 import 'models.dart';
@@ -76,15 +78,6 @@ class Repo {
     return Project(id, {'id': id, ...fields});
   }
 
-  /// A v4-shaped id: 32 hex characters with the version and variant nibbles set.
-  static String newId() {
-    final micros = DateTime.now().microsecondsSinceEpoch;
-    final rand = (micros * 2654435761) & 0xFFFFFFFF;
-    final hex = micros.toRadixString(16).padLeft(12, '0') + rand.toRadixString(16).padLeft(8, '0');
-    final s = hex.padRight(32, '0').substring(0, 32).split('');
-    s[12] = '4';
-    s[16] = '8';
-    final j = s.join();
-    return '${j.substring(0, 8)}-${j.substring(8, 12)}-${j.substring(12, 16)}-${j.substring(16, 20)}-${j.substring(20)}';
-  }
+  /// A fresh entity id: a v4 UUID, the same shape the server makes.
+  static String newId() => const Uuid().v4();
 }

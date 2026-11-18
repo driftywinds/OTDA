@@ -1,502 +1,350 @@
-// The recurring-tasks rule grammar, canonical form and first occurrence, ported
-// from web/src/lib/recurrence.ts (OpenTodo v1.5.0). Only what the quick-add
-// parser needs is here: parseRule, canonicalOf, nthWeekdayDate, firstOccurrence
-// and compatibleRule.
-//
-// Dates are floating YYYY-MM-DD strings. All arithmetic runs on proleptic
-// Gregorian day numbers, never on `DateTime`, so results do not depend on the
-// device's time zone or on daylight saving changes.
+// Recurrence phrases in the quick-add line (quick-add-recurrence, design D1, D2):
+// "every Monday", "jeden Montag", "tous les 3 jours après achèvement", "every 2nd
+// Tuesday until 31 Dec", "daily". A phrase is translated into the canonical
+// English rule of the recurring-tasks grammar and accepted only if parseRule
+// accepts it, so the parser never emits a rule the server would refuse.
+// Ported from web/src/lib/nlp/recurrence.ts (OpenTodo v1.5.0).
+import 'dates.dart';
+import 'rule.dart' show parseRule;
+import 'tokenize.dart';
+import 'vocab/index.dart';
 
-const int maxRuleLength = 200;
-const int _maxInterval = 999;
-const int _maxCount = 10000;
-
-class Rule {
-  Rule({
-    required this.kind,
-    this.interval = 1,
-    this.unit = 'day',
-    this.afterCompletion = false,
-    this.days = 0,
-    this.monthDay = 0,
-    this.ordinal = 0,
-    this.weekday = 0,
-    this.month = 0,
-    this.until,
-    this.count = 0,
+class RecurrenceMatch {
+  const RecurrenceMatch({
+    required this.rule,
+    required this.from,
+    required this.to,
+    this.literal = false,
+    this.start,
   });
 
-  /// interval, weekday, weekdays, monthDay, lastDay, workday or nthWeekday.
-  String kind;
+  /// The canonical rule, e.g. "every monday"; empty for a literal match.
+  final String rule;
 
-  /// `every N <unit>`.
-  int interval;
-  String unit;
+  final int from;
+  final int to;
 
-  /// `after completion` (interval rules only).
-  bool afterCompletion;
+  /// A phrase the grammar cannot express that must stay in the title as a unit
+  /// ("every 2 Mondays"): it wins the longest-match comparison like any match but
+  /// records no attribute.
+  final bool literal;
 
-  /// The weekday mask of `weekday` / `weekdays`.
-  int days;
-
-  /// `every 15th`.
-  int monthDay;
-
-  /// The ordinal of `workday` / `nthWeekday`: 1–4, or -1 for the last.
-  int ordinal;
-
-  /// 1 = Monday … 7 = Sunday (`nthWeekday`).
-  int weekday;
-
-  /// 1–12 for a yearly `nthWeekday`, 0 otherwise.
-  int month;
-
-  /// YYYY-MM-DD or null.
-  String? until;
-
-  /// `for N times`, 0 when absent.
-  int count;
-
-  Rule copy() => Rule(
-        kind: kind,
-        interval: interval,
-        unit: unit,
-        afterCompletion: afterCompletion,
-        days: days,
-        monthDay: monthDay,
-        ordinal: ordinal,
-        weekday: weekday,
-        month: month,
-        ,
-      );
+  /// The date of a start phrase next to the rule ("starting tomorrow"): the series
+  /// starts on its first date on or after it.
+  final String? start;
 }
 
-class RuleParse {
-  const RuleParse.ok(this.rule, this.canonical)
-      : ok = true,
-        error = null;
-  const RuleParse.fail(this.error)
-      : ok = false,
-        rule = null,
-        canonical = null;
+/// A pattern after "every"; `monthly` patterns accept the "of the month" tail.
+class _Pattern {
+  const _Pattern(this.n, this.pattern, this.monthly);
 
-  final bool ok;
-  final Rule? rule;
-
-  /// The form to store; null when the input does not parse.
-  final String? canonical;
-
-  /// Why it did not parse (English only: the web app translates these, the parser
-  /// never shows them).
-  final String? error;
+  final int n;
+  final String pattern;
+  final bool monthly;
 }
 
-const List<String> _weekdayNames = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const Map<String, int> _weekdayAliases = {
-  'monday': 1, 'mon': 1,
-  'tuesday': 2, 'tue': 2,
-  'wednesday': 3, 'wed': 3,
-  'thursday': 4, 'thu': 4,
-  'friday': 5, 'fri': 5,
-  'saturday': 6, 'sat': 6,
-  'sunday': 7, 'sun': 7,
-};
-const Map<String, int> _wordOrdinals = {'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'last': -1};
-const List<String> _monthNames = [
+const List<String> _weekdayEn = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const Map<int, String> _ordinalEn = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', -1: 'last'};
+
+Token? _tok(List<Token> tokens, int i) => i >= 0 && i < tokens.length ? tokens[i] : null;
+
+({int n, String unit})? _recUnitAt(List<Token> tokens, int i, Vocabulary v) {
+  for (final unit in ['day', 'week', 'month', 'year']) {
+    final n = phraseAt(tokens, i, v.units[unit], '${v.code}:unit:$unit');
+    if (n != 0) return (n: n, unit: unit);
+  }
+  return null;
+}
+
+/// Any unit word at i, including hours and minutes (a number before one is never
+/// an ordinal).
+bool _anyUnitAt(List<Token> tokens, int i, Vocabulary v) => ['minute', 'hour', 'day', 'week', 'month', 'year']
+    .any((u) => phraseAt(tokens, i, v.units[u], '${v.code}:unit:$u') > 0);
+
+/// A weekday at i, or its plural after "every": Romance plurals without their
+/// final s ("lundis", "segundas"), hyphenated ones without the s of each part
+/// ("segundas-feiras"), German ones without their final e ("Montage").
+int _weekdayPluralAt(List<Token> tokens, int i, Vocabulary v) {
+  final wd = weekdayAt(tokens, i, v);
+  if (wd >= 0) return wd;
+  final t = _tok(tokens, i);
+  if (t == null || t.quoted) return -1;
+  for (final stem in _pluralStems(t.norm)) {
+    final w = weekdayAt([Token(text: t.text, norm: stem, start: t.start, end: t.end, quoted: t.quoted)], 0, v);
+    if (w >= 0) return w;
+  }
+  return -1;
+}
+
+/// Candidate singular forms of a plural weekday token.
+List<String> _pluralStems(String norm) {
+  final out = <String>[];
+  if (norm.length >= 4 && norm.endsWith('s')) out.add(norm.substring(0, norm.length - 1));
+  if (norm.length >= 6 && norm.endsWith('e')) out.add(norm.substring(0, norm.length - 1));
+  if (norm.contains('-')) {
+    out.add(norm.split('-').map((p) => p.endsWith('s') ? p.substring(0, p.length - 1) : p).join('-'));
+  }
+  return out;
+}
+
+/// An ordinal at i: a day number with a suffix ("2nd", "15.", "3º") or an ordinal word.
+({int n, int value})? _ordinalAt(List<Token> tokens, int i, Vocabulary v) {
+  final t = _tok(tokens, i);
+  if (t == null || t.quoted) return null;
+  if (!RegExp(r'^\d+$').hasMatch(t.norm)) {
+    final d = dayNumber(t);
+    if (d != 0) return (n: 1, value: d);
+  }
+  final word = lookupAt(tokens, i, v.ordinals, '${v.code}:ord');
+  return word == null ? null : (n: word.n, value: word.value);
+}
+
+/// The pattern after "every" at token k: [N] unit, weekday list, collective
+/// weekday, ordinal forms.
+_Pattern? _patternAt(List<Token> tokens, int k, Vocabulary v) {
+  final all = phraseAt(tokens, k, v.weekdayAll, '${v.code}:wdall');
+  if (all != 0) return _Pattern(all, 'weekday', false);
+  // [N] unit, and "[N] weeks on <weekdays>" (quick-add-weekday-recurrence D1)
+  final tk = _tok(tokens, k);
+  final count = (tk != null && !tk.quoted && RegExp(r'^\d{1,3}$').hasMatch(tk.norm)) ? int.parse(tk.norm) : 0;
+  final unit = _recUnitAt(tokens, k + (count != 0 ? 1 : 0), v);
+  if (unit != null) {
+    final n = (count != 0 ? 1 : 0) + unit.n;
+    final pattern = count != 0 && count != 1 ? '$count ${unit.unit}s' : unit.unit;
+    final on = unit.unit == 'week' ? _weeksOnAt(tokens, k + n, v) : null;
+    if (on != null) return _Pattern(n + on.n, '$pattern on ${on.days}', false);
+    return _Pattern(n, pattern, false);
+  }
+  if (count != 0 && _anyUnitAt(tokens, k + 1, v)) return null; // "every 3 hours": not expressible
+  // ordinal weekday: "2nd monday", "2e lundis", "segunda segunda-feira"
+  final nth = weekdayOrdinalAt(tokens, k, v, (w) => _weekdayPluralAt(tokens, w, v) >= 0);
+  if (nth != null) {
+    final wd = _weekdayPluralAt(tokens, k + nth.n, v);
+    return _ofAMonth(tokens, k + nth.n + 1, v, _Pattern(nth.n + 1, '${_ordinalEn[nth.value]} ${_weekdayEn[wd]}', true));
+  }
+  // ordinal [weekday | day | weekday-collective]
+  final ord = _ordinalAt(tokens, k, v);
+  if (ord != null) {
+    final j = k + ord.n;
+    final wd = _weekdayPluralAt(tokens, j, v);
+    if (wd >= 0 && ord.value <= 4) {
+      return _ofAMonth(tokens, j + 1, v, _Pattern(ord.n + 1, '${_ordinalEn[ord.value]} ${_weekdayEn[wd]}', true));
+    }
+    // "1st weekday" … "last weekday": the n-th Monday-to-Friday day of the month.
+    final wall = ord.value <= 4 ? phraseAt(tokens, j, v.weekdayAll, '${v.code}:wdall') : 0;
+    if (wall != 0) return _Pattern(ord.n + wall, '${_ordinalEn[ord.value]} weekday', true);
+    if (ord.value == -1) {
+      final day = phraseAt(tokens, j, v.units.day, '${v.code}:unit:day');
+      if (day != 0) return _Pattern(ord.n + day, 'last day', true);
+      return null;
+    }
+    // A bare day of the month ("every 15th"); ordinal words alone mean nothing.
+    if (RegExp(r'^\d').hasMatch(tk!.norm) && ord.value >= 1 && ord.value <= 31) {
+      final value = ord.value;
+      final suffix = value % 10 == 1 && value != 11
+          ? 'st'
+          : (value % 10 == 2 && value != 12 ? 'nd' : (value % 10 == 3 && value != 13 ? 'rd' : 'th'));
+      return _Pattern(ord.n, '$value$suffix', true);
+    }
+    return null;
+  }
+  final list = _weekdayListAt(tokens, k, v);
+  return list == null ? null : _Pattern(list.n, list.days, false);
+}
+
+const List<String> _monthEn = [
   '', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
 ];
-const List<String> _units = ['day', 'week', 'month', 'year'];
 
-String ordinalSuffix(int n) {
-  if (n % 100 >= 11 && n % 100 <= 13) return 'th';
-  return n % 10 == 1 ? 'st' : (n % 10 == 2 ? 'nd' : (n % 10 == 3 ? 'rd' : 'th'));
+/// An ordinal weekday followed by a month ("last sunday in march") is yearly:
+/// `every last sunday of march`, with the same "of"/"in" words one-off dates read.
+_Pattern _ofAMonth(List<Token> tokens, int k, Vocabulary v, _Pattern p) {
+  final of = phraseAt(tokens, k, v.ordinalOf, '${v.code}:ordof');
+  final month = of != 0 ? monthAt(tokens, k + of, v, true) : 0;
+  return month != 0 ? _Pattern(p.n + of + 1, '${p.pattern} of ${_monthEn[month]}', false) : p;
 }
 
-int? _numericOrdinal(String tok) {
-  final m = RegExp(r'^([1-9][0-9]?)(st|nd|rd|th)$').firstMatch(tok);
-  if (m == null) return null;
-  final n = int.parse(m[1]!);
-  return n <= 31 && m[2] == ordinalSuffix(n) ? n : null;
-}
-
-int? _positiveInt(String? tok, int max) {
-  if (tok == null || !RegExp(r'^[1-9][0-9]*$').hasMatch(tok)) return null;
-  final n = int.parse(tok);
-  return n <= max ? n : null;
-}
-
-class _RuleError implements Exception {
-  const _RuleError(this.message);
-
-  final String message;
-}
-
-/// Parse a rule; on success `canonical` is the form to store.
-RuleParse parseRule(String input) {
-  try {
-    final rule = _parseOrThrow(input);
-    return RuleParse.ok(rule, canonicalOf(rule));
-  } on _RuleError catch (e) {
-    return RuleParse.fail(e.message);
-  }
-}
-
-/// The canonical form of a valid rule, or null when it does not parse.
-String? canonicalRule(String input) {
-  final r = parseRule(input);
-  return r.ok ? r.canonical : null;
-}
-
-Rule _parseOrThrow(String input) {
-  if (input.length > maxRuleLength) throw const _RuleError('longer than 200 characters');
-  final toks = input.toLowerCase().replaceAll(',', ' , ').split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
-  if (toks.isEmpty || toks[0] != 'every') throw const _RuleError('must start with "every"');
-  var i = 1;
-  String? peek([int k = 0]) => i + k < toks.length ? toks[i + k] : null;
-
-  // `name ((, | and | , and) name)*` from token i: the weekday mask.
-  int weekdayList() {
-    var days = 0;
-    while (true) {
-      final item = peek();
-      if (item == null || !_weekdayAliases.containsKey(item)) throw _RuleError('expected a weekday, got "$item"');
-      days |= 1 << _weekdayAliases[item]!;
-      i++;
-      var j = i;
-      if ((j < toks.length ? toks[j] : null) == ',') j++;
-      if ((j < toks.length ? toks[j] : null) == 'and') j++;
-      if (j == i) return days;
-      if (j >= toks.length) throw const _RuleError('expected a weekday after the list separator');
-      i = j;
-    }
-  }
-
-  final tok = peek();
-  if (tok == null) throw const _RuleError('missing pattern after "every"');
-  Rule rule;
-  if (tok == 'day' || tok == 'week' || tok == 'month' || tok == 'year') {
-    rule = Rule(kind: 'interval', interval: 1, unit: tok);
-    i++;
-    if (tok == 'week' && peek() == 'on') {
-      i++;
-      rule = Rule(kind: 'weekdays', days: weekdayList(), interval: 1);
-    }
-  } else if (tok == 'weekday' || tok == 'weekdays') {
-    rule = Rule(kind: 'weekday', days: 0x3E);
-    i++;
-  } else if (RegExp(r'^[0-9]+$').hasMatch(tok)) {
-    final n = _positiveInt(tok, _maxInterval);
-    if (n == null) throw const _RuleError('interval must be from 1 to 999');
-    final singular = (peek(1) ?? '').replaceFirst(RegExp(r's$'), '');
-    if (!_units.contains(singular)) throw _RuleError('expected day(s), week(s), month(s) or year(s) after $tok');
-    rule = Rule(kind: 'interval', interval: n, unit: singular);
-    i += 2;
-    // every N weeks on <weekdays> (quick-add-weekday-recurrence D1).
-    if (singular == 'week' && peek() == 'on') {
-      i++;
-      rule = Rule(kind: 'weekdays', days: weekdayList(), interval: n);
-    }
-  } else if (tok == 'last' && (peek(1) == 'day' || peek(1) == 'weekday')) {
-    rule = peek(1) == 'day'
-        ? Rule(kind: 'lastDay')
-        : Rule(kind: 'workday', ordinal: -1);
-    i += 2;
-  } else if (_weekdayAliases.containsKey(tok)) {
-    rule = Rule(kind: 'weekdays', days: weekdayList(), interval: 1);
-  } else {
-    final word = _wordOrdinals[tok];
-    final num = _numericOrdinal(tok);
-    if (word == null && num == null) throw _RuleError('unknown pattern "$tok"');
-    final next = peek(1);
-    if (next == 'weekday') {
-      final ordinal = num ?? word ?? 0;
-      if (ordinal > 4) throw const _RuleError('weekday ordinal must be 1st to 4th or last');
-      rule = Rule(kind: 'workday', ordinal: ordinal);
-      i += 2;
-    } else if (next != null && _weekdayAliases.containsKey(next)) {
-      // One of the two is set (checked above).
-      final ordinal = num ?? word ?? 0;
-      if (ordinal > 4) throw const _RuleError('weekday ordinal must be 1st to 4th or last');
-      rule = Rule(kind: 'nthWeekday', ordinal: ordinal, weekday: _weekdayAliases[next]!);
-      i += 2;
-      // `of <month>` (or `in <month>`) makes it yearly (yearly-weekday-of-month D1).
-      final monthWord = peek(1) ?? '';
-      if ((peek() == 'of' || peek() == 'in') && _monthAliases.containsKey(monthWord)) {
-        rule.month = _monthAliases[monthWord]!;
-        i += 2;
-      }
-    } else {
-      if (num == null) throw _RuleError('expected a weekday after "$tok"');
-      rule = Rule(kind: 'monthDay', monthDay: num);
-      i++;
-    }
-  }
-  if (peek() == 'after') {
-    if (peek(1) != 'completion') throw const _RuleError('expected "completion" after "after"');
-    if (rule.kind != 'interval') throw const _RuleError('"after completion" only applies to day, week, month and year intervals');
-    rule.afterCompletion = true;
-    i += 2;
-  }
-  if (peek() == 'until') {
-    final d = peek(1);
-    if (d == null || _dayNumberIso(d) == null) throw const _RuleError('until needs a date YYYY-MM-DD');
-    rule.until = d;
-    i += 2;
-  } else if (peek() == 'for') {
-    final n = _positiveInt(peek(1), _maxCount);
-    if (n == null || (peek(2) != 'times' && peek(2) != 'time')) throw const _RuleError('expected "for N times" with N from 1 to 10000');
-    rule.count = n;
-    i += 3;
-  }
-  if (i < toks.length) throw _RuleError('unexpected "${toks[i]}"');
-  return rule;
-}
-
-final Map<String, int> _monthAliases = () {
-  final map = <String, int>{'sept': 9};
-  for (var m = 1; m < _monthNames.length; m++) {
-    final name = _monthNames[m];
-    map[name] = m;
-    map[name.substring(0, 3)] = m;
-  }
-  return map;
-}();
-
-/// The canonical text of a parsed rule.
-String canonicalOf(Rule r) {
-  var s = 'every ';
-  switch (r.kind) {
-    case 'interval':
-      s += r.interval == 1 ? r.unit : '${r.interval} ${r.unit}s';
-    case 'weekday':
-      s += 'weekday';
-    case 'weekdays':
-      if (r.interval > 1) s += '${r.interval} weeks on ';
-      s += _weekdayNames.asMap().entries.where((e) => e.key > 0 && r.days & (1 << e.key) != 0).map((e) => e.value).join(', ');
-    case 'monthDay':
-      s += '${r.monthDay}${ordinalSuffix(r.monthDay)}';
-    case 'lastDay':
-      s += 'last day';
-    case 'workday':
-      s += '${r.ordinal < 0 ? 'last' : '${r.ordinal}${ordinalSuffix(r.ordinal)}'} weekday';
-    case 'nthWeekday':
-      s += '${r.ordinal < 0 ? 'last' : '${r.ordinal}${ordinalSuffix(r.ordinal)}'} ${_weekdayNames[r.weekday]}';
-      if (r.month != 0) s += ' of ${_monthNames[r.month]}';
-  }
-  if (r.afterCompletion) s += ' after completion';
-  if (r.until != null) s += ' until ${r.until}';
-  if (r.count == 1) {
-    s += ' for 1 time';
-  } else if (r.count > 1) {
-    s += ' for ${r.count} times';
-  }
-  return s;
-}
-
-// ---- calendar arithmetic on day numbers (days since 1970-01-01) ----
-
-/// Integer division that rounds toward negative infinity (like Math.floor).
-int _floorDiv(int a, int b) => (a - a % b) ~/ b;
-
-int _daysFromCivil(int y, int m, int d) {
-  y -= m <= 2 ? 1 : 0;
-  final era = _floorDiv(y, 400);
-  final yoe = y - era * 400;
-  final doy = _floorDiv(153 * (m > 2 ? m - 3 : m + 9) + 2, 5) + d - 1;
-  final doe = yoe * 365 + _floorDiv(yoe, 4) - _floorDiv(yoe, 100) + doy;
-  return era * 146097 + doe - 719468;
-}
-
-List<int> _civilFromDays(int z) {
-  z += 719468;
-  final era = _floorDiv(z, 146097);
-  final doe = z - era * 146097;
-  final yoe = _floorDiv(doe - _floorDiv(doe, 1460) + _floorDiv(doe, 36524) - _floorDiv(doe, 146096), 365);
-  final doy = doe - (365 * yoe + _floorDiv(yoe, 4) - _floorDiv(yoe, 100));
-  final mp = _floorDiv(5 * doy + 2, 153);
-  final d = doy - _floorDiv(153 * mp + 2, 5) + 1;
-  final m = mp < 10 ? mp + 3 : mp - 9;
-  return [yoe + era * 400 + (m <= 2 ? 1 : 0), m, d];
-}
-
-bool _isLeap(int y) => y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-
-int _monthLen(int y, int m) {
-  if (m == 2) return _isLeap(y) ? 29 : 28;
-  return m == 4 || m == 6 || m == 9 || m == 11 ? 30 : 31;
-}
-
-/// ISO weekday, 1 = Monday … 7 = Sunday; day 0 (1970-01-01) was a Thursday.
-int _isoWeekday(int z) => ((z + 3) % 7) + 1;
-
-/// Day number of a valid YYYY-MM-DD date, or null.
-int? _dayNumberIso(String s) {
-  final m = RegExp(r'^([0-9]{4})-([0-9]{2})-([0-9]{2})$').firstMatch(s);
-  if (m == null) return null;
-  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
-  if (mo < 1 || mo > 12 || d < 1 || d > _monthLen(y, mo)) return null;
-  return _daysFromCivil(y, mo, d);
-}
-
-String _formatDate(int z) {
-  final p = _civilFromDays(z);
-  return '${p[0].toString().padLeft(4, '0')}-${p[1].toString().padLeft(2, '0')}-${p[2].toString().padLeft(2, '0')}';
-}
-
-int _mustDate(String s, String what) {
-  final z = _dayNumberIso(s);
-  if (z == null) throw ArgumentError('recurrence: $what "$s" is not a valid YYYY-MM-DD date');
-  return z;
-}
-
-int _addMonths(int z, int n) {
-  final p = _civilFromDays(z);
-  final idx = p[0] * 12 + (p[1] - 1) + n;
-  final ny = _floorDiv(idx, 12);
-  final nm = idx - ny * 12 + 1;
-  final d = p[2];
-  final len = _monthLen(ny, nm);
-  return _daysFromCivil(ny, nm, d < len ? d : len);
-}
-
-int _step(Rule r, int anchor, int k) {
-  switch (r.unit) {
-    case 'week':
-      return anchor + 7 * r.interval * k;
-    case 'month':
-      return _addMonths(anchor, r.interval * k);
-    case 'year':
-      return _addMonths(anchor, 12 * r.interval * k);
-    default:
-      return anchor + r.interval * k;
-  }
-}
-
-/// The `ordinal`-th Monday-to-Friday day of month m (1–4, or -1 for the last);
-/// weekends are not counted.
-int _workdayOf(int y, int m, int ordinal) {
-  if (ordinal < 0) {
-    var z = _daysFromCivil(y, m, _monthLen(y, m));
-    while (_isoWeekday(z) > 5) {
-      z--;
-    }
-    return z;
-  }
-  var z = _daysFromCivil(y, m, 1) - 1;
-  for (var n = 0; n < ordinal;) {
-    z++;
-    if (_isoWeekday(z) <= 5) n++;
-  }
-  return z;
-}
-
-int _nthWeekdayOf(int y, int m, int ordinal, int wd) {
-  if (ordinal < 0) {
-    final z = _daysFromCivil(y, m, _monthLen(y, m));
-    return z - ((_isoWeekday(z) - wd + 7) % 7);
-  }
-  final first = _daysFromCivil(y, m, 1);
-  return first + ((wd - _isoWeekday(first) + 7) % 7) + 7 * (ordinal - 1);
-}
-
-/// The date of the `ordinal`-th `weekday` (1 = Monday … 7 = Sunday) of month `m`
-/// of year `y`, as YYYY-MM-DD; `ordinal` is 1–4, or -1 for the last. Quick add
-/// resolves one-off ordinal weekdays with it ("second Monday").
-String nthWeekdayDate(int y, int m, int ordinal, int weekday) =>
-    _formatDate(_nthWeekdayOf(y, m, ordinal, weekday));
-
-int _inMonth(Rule r, int y, int m) {
-  switch (r.kind) {
-    case 'monthDay':
-      final len = _monthLen(y, m);
-      return _daysFromCivil(y, m, r.monthDay < len ? r.monthDay : len);
-    case 'lastDay':
-      return _daysFromCivil(y, m, _monthLen(y, m));
-    case 'workday':
-      return _workdayOf(y, m, r.ordinal);
-    case 'nthWeekday':
-      return _nthWeekdayOf(y, m, r.ordinal, r.weekday);
-    default:
-      throw ArgumentError('recurrence: not a month pattern');
-  }
-}
-
-/// The Monday of z's ISO week.
-int _weekStart(int z) => z - (_isoWeekday(z) - 1);
-
-/// For `every N weeks on <days>`: the first of its days strictly after z in a week
-/// a multiple of N weeks from anchor's ISO week (Monday to Sunday).
-int _inPhaseAfter(Rule r, int anchor, int z) {
-  final a = _weekStart(anchor);
-  var x = z + 1;
+/// A weekday list at k ("Mon, Wed and Fri") as the rule's English list, or null.
+({int n, String days})? _weekdayListAt(List<Token> tokens, int k, Vocabulary v) {
+  final days = <int>[];
+  var j = k;
   while (true) {
-    final rem = ((_floorDiv(_weekStart(x) - a, 7) % r.interval) + r.interval) % r.interval;
-    if (rem != 0) {
-      x = _weekStart(x) + 7 * (r.interval - rem);
+    final wd = _weekdayPluralAt(tokens, j, v);
+    if (wd < 0) break;
+    days.add(wd);
+    j += 1;
+    final and = phraseAt(tokens, j, v.andWords, '${v.code}:and');
+    if (and != 0 && _weekdayPluralAt(tokens, j + and, v) >= 0) {
+      j += and;
       continue;
     }
-    if (r.days & (1 << _isoWeekday(x)) != 0) return x;
-    x++;
+    // "mon, wed": the comma was folded off by normalize; a following weekday continues the list.
+    if (_tok(tokens, j - 1)!.text.endsWith(',') && _weekdayPluralAt(tokens, j, v) >= 0) continue;
+    break;
   }
+  return days.isNotEmpty ? (n: j - k, days: days.map((d) => _weekdayEn[d]).join(', ')) : null;
 }
 
-/// First date matching the pattern strictly after day z.
-int _firstAfter(Rule r, int z) {
-  switch (r.kind) {
-    case 'interval':
-      return _step(r, z, 1);
-    case 'weekday':
-    case 'weekdays':
-      if (r.kind == 'weekdays' && r.interval > 1) return _inPhaseAfter(r, z, z);
-      for (var i = 1; i <= 7; i++) {
-        if (r.days & (1 << _isoWeekday(z + i)) != 0) return z + i;
-      }
-      return z + 7;
-    default:
-      final p = _civilFromDays(z);
-      final y = p[0], m = p[1];
-      if (r.kind == 'nthWeekday' && r.month != 0) {
-        final c = _nthWeekdayOf(y, r.month, r.ordinal, r.weekday);
-        return c > z ? c : _nthWeekdayOf(y + 1, r.month, r.ordinal, r.weekday);
-      }
-      final c = _inMonth(r, y, m);
-      if (c > z) return c;
-      return m == 12 ? _inMonth(r, y + 1, 1) : _inMonth(r, y, m + 1);
+/// "on Saturday", "am Samstag", "le samedi" after a week count: the weekdays the
+/// rule keeps.
+({int n, String days})? _weeksOnAt(List<Token> tokens, int k, Vocabulary v) {
+  final on = phraseAt(tokens, k, v.weekOnWords, '${v.code}:weekon');
+  if (on == 0) return null;
+  final list = _weekdayListAt(tokens, k + on, v);
+  return list == null ? null : (n: on + list.n, days: list.days);
+}
+
+/// A bare count between the "every" word and a weekday ("every 2 Mondays"): a
+/// count the grammar cannot express, so a literal match keeps it whole.
+int _countWeekdayAt(List<Token> tokens, int k, Vocabulary v) {
+  final t = _tok(tokens, k);
+  if (t == null || t.quoted || !RegExp(r'^\d{1,3}$').hasMatch(t.norm)) return 0;
+  return _weekdayPluralAt(tokens, k + 1, v) >= 0 ? 2 : 0;
+}
+
+/// "every other" with a unit or a weekday at token i: "every other week" is every
+/// 2 weeks; "every other friday" is every 2 weeks on Friday. Also the French form
+/// around the noun, "une semaine sur deux", "un vendredi sur deux".
+({int n, String pattern})? _everyOtherAt(List<Token> tokens, int i, Vocabulary v) {
+  ({int n, String pattern})? noun(int k) {
+    final unit = _recUnitAt(tokens, k, v);
+    if (unit != null) return (n: unit.n, pattern: '2 ${unit.unit}s');
+    final wd = _weekdayPluralAt(tokens, k, v);
+    if (wd >= 0) return (n: 1, pattern: '2 weeks on ${_weekdayEn[wd]}');
+    return null;
   }
+
+  final ev = phraseAt(tokens, i, v.everyOther, '${v.code}:other');
+  if (ev != 0) {
+    final m = noun(i + ev);
+    return m == null ? null : (n: ev + m.n, pattern: m.pattern);
+  }
+  final pre = phraseAt(tokens, i, v.everyOtherAround.before, '${v.code}:otherb');
+  if (pre == 0) return null;
+  final m = noun(i + pre);
+  final post = m != null ? phraseAt(tokens, i + pre + m.n, v.everyOtherAround.after, '${v.code}:othera') : 0;
+  return m != null && post != 0 ? (n: pre + m.n + post, pattern: m.pattern) : null;
 }
 
-Rule _asRule(String rule) {
-  final p = parseRule(rule);
-  if (!p.ok) throw ArgumentError('recurrence: ${p.error}');
-  return p.rule!;
+/// The longest phrase of a vocabulary list at token k across the active languages.
+int _anyPhraseAt(List<Token> tokens, int k, DateContext ctx, String field) {
+  var n = 0;
+  for (final w in ctx.vocabs) {
+    final m = phraseAt(tokens, k, w.listFor(field), '${w.code}:$field');
+    if (m > n) n = m;
+  }
+  return n;
 }
 
-/// First occurrence on or after `from`: the due date given to an undated task
-/// that gets a rule.
-String firstOccurrence(String rule, String from) {
-  final r = _asRule(rule);
-  final z = _mustDate(from, 'from');
-  if (r.kind == 'interval') return from;
-  // `every 2 weeks on saturday`: the nearest Saturday, which then sets the week phase.
-  final probe = r.kind == 'weekdays' ? (r.copy()..interval = 1) : r;
-  return _formatDate(_firstAfter(probe, z - 1));
+/// A start phrase at k ("starting tomorrow", "ab Montag"): its date and the token
+/// after it.
+({String date, int to})? _startAt(List<Token> tokens, int k, DateContext ctx) {
+  final sw = _anyPhraseAt(tokens, k, ctx, 'startWords');
+  final dm = sw != 0 ? matchDateAt(tokens, k + sw, ctx) : null;
+  return dm == null ? null : (date: dm.date, to: dm.to);
 }
 
-/// The rule a writer stores for a task due on `due`: `every N weeks on <day>`
-/// whose due date falls on that day is stored as `every N weeks`, which the due
-/// date anchors (recurrence-1-0-compatible). A rule that does not parse is
-/// returned as given.
-String compatibleRule(String rule, String? due) {
-  final p = parseRule(rule);
-  if (!p.ok) return rule;
-  final r = p.rule!;
-  final z = due == null ? null : _dayNumberIso(due);
-  if (r.kind != 'weekdays' || r.interval <= 1 || z == null || r.days != 1 << _isoWeekday(z)) return p.canonical!;
-  return canonicalOf(Rule(
-    kind: 'interval',
-    interval: r.interval,
-    unit: 'week',
-    until: r.until,
-    count: r.count,
-  ));
+/// The longest recurrence phrase at token i, with what may surround it: a
+/// connector before it ("and repeat", "und dann") and a start phrase before or
+/// after it ("every day from Monday"), which go with the rule only when a rule
+/// follows or precedes them, so "Repeat the test" keeps its words.
+RecurrenceMatch? matchRecurrenceAt(List<Token> tokens, int i, DateContext ctx) {
+  final t = _tok(tokens, i);
+  if (t == null || t.quoted) return null;
+  var k = i + _anyPhraseAt(tokens, i, ctx, 'repeatWords');
+  final lead = _startAt(tokens, k, ctx);
+  if (lead != null) k = lead.to + _anyPhraseAt(tokens, lead.to, ctx, 'repeatWords');
+  if (k == i) return _ruleAt(tokens, i, ctx);
+  final m = _ruleAt(tokens, k, ctx);
+  if (m == null || m.literal) return _ruleAt(tokens, i, ctx);
+  return RecurrenceMatch(
+    rule: m.rule,
+    from: i,
+    to: m.to,
+    literal: m.literal,
+    start: lead != null && m.start == null ? lead.date : m.start,
+  );
+}
+
+/// The longest rule at token i across the active vocabularies, with its optional
+/// tails: of the month (after a monthly pattern), after completion, until <date
+/// phrase>, for N times, and a start phrase.
+RecurrenceMatch? _ruleAt(List<Token> tokens, int i, DateContext ctx) {
+  final t = _tok(tokens, i);
+  if (t == null || t.quoted) return null;
+  RecurrenceMatch? best;
+  // Tails are tried in every active language: "every monday until 31 Dec" works with any vocabulary.
+  int tail(int k, String field) => _anyPhraseAt(tokens, k, ctx, field);
+
+  /// A head (the pattern after "every", ending before token k) with its tails;
+  /// kept when longer than the best so far.
+  void consider(String pattern, int end) {
+    var k = end;
+    String? start;
+    void startTail() {
+      final st = start == null ? _startAt(tokens, k, ctx) : null;
+      if (st != null) {
+        start = st.date;
+        k = st.to;
+      }
+    }
+
+    var rule = 'every $pattern';
+    final ac = tail(k, 'afterCompletion');
+    if (ac != 0 && parseRule('$rule after completion').ok) {
+      rule += ' after completion';
+      k += ac;
+    }
+    startTail();
+    final until = tail(k, 'untilWords');
+    if (until != 0) {
+      final dm = matchDateAt(tokens, k + until, ctx);
+      if (dm != null && parseRule('$rule until ${dm.date}').ok) {
+        rule += ' until ${dm.date}';
+        k = dm.to;
+      }
+    } else {
+      for (final w in ctx.vocabs) {
+        final pre = phraseAt(tokens, k, w.timesWords.before, '${w.code}:tb4');
+        final count = countAt(tokens, k + pre, w);
+        final countTok = _tok(tokens, k + pre);
+        if (count == null || countTok == null || !RegExp(r'^\d+$').hasMatch(countTok.norm)) continue;
+        final post = phraseAt(tokens, k + pre + count.n, w.timesWords.after, '${w.code}:taft');
+        if (post != 0 && parseRule('$rule for ${count.count} times').ok) {
+          rule += ' for ${count.count} times';
+          k += pre + count.n + post;
+          break;
+        }
+      }
+    }
+    startTail();
+    final parsed = parseRule(rule);
+    if (!parsed.ok) return;
+    if (best == null || k > best!.to) {
+      best = RecurrenceMatch(rule: parsed.canonical!, from: i, to: k, start: start);
+    }
+  }
+
+  for (final v in ctx.vocabs) {
+    // "every other" first: on a tie it wins over the ordinal reading of "jeden zweiten Freitag".
+    final other = _everyOtherAt(tokens, i, v);
+    if (other != null) consider(other.pattern, i + other.n);
+    final one = lookupAt(tokens, i, v.everyOne, '${v.code}:every1');
+    if (one != null) {
+      consider(one.value, i + one.n);
+      continue;
+    }
+    final ev = phraseAt(tokens, i, v.every, '${v.code}:every');
+    if (ev == 0) continue;
+    final p = _patternAt(tokens, i + ev, v);
+    if (p == null) {
+      final literal = _countWeekdayAt(tokens, i + ev, v);
+      if (literal != 0 && (best == null || i + ev + literal > best!.to)) {
+        best = RecurrenceMatch(rule: '', from: i, to: i + ev + literal, literal: true);
+      }
+      continue;
+    }
+    consider(p.pattern, i + ev + p.n + (p.monthly ? ofMonthAt(tokens, i + ev + p.n, ctx) : 0));
+  }
+  return best;
 }

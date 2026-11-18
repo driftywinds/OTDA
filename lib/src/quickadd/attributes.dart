@@ -140,7 +140,7 @@ String? matchEnergy(String token) {
 }
 
 const String _spentPart = r'(\d+(?:[.,]\d+)?h(?:\d{1,2}(?:m|min)?)?|\d+(?:m|min|mins|minutes))';
-final RegExp _spentRe = RegExp('^' + _spentPart + '/' + _spentPart + r'$');
+final RegExp _spentRe = RegExp('^$_spentPart/$_spentPart\$');
 final RegExp _spentHours = RegExp(r'^(\d+(?:[.,]\d+)?)h(?:(\d{1,2})(?:m|min)?)?$');
 final RegExp _spentMinutes = RegExp(r'^(\d+)(?:m|min|mins|minutes)$');
 
@@ -184,7 +184,7 @@ int? matchDuration(String token, {required bool bareHourIsTime}) {
   final body = plus ? t.substring(1) : t;
   if (body.isEmpty) return null;
   int? minutes;
-  var m = _durationHours.firstMatch(body);
+  final m = _durationHours.firstMatch(body);
   if (m != null) {
     // 2h, 1.5h, 1h30, 1h30m
     final hours = double.parse(m[1]!.replaceAll(',', '.'));
@@ -192,11 +192,15 @@ int? matchDuration(String token, {required bool bareHourIsTime}) {
     if (mins > 59) return null;
     if (!plus && (bareHourIsTime || m[2] != null)) return null;
     minutes = (hours * 60 + mins).round();
-  } else if ((m = _durationMinutes.firstMatch(body)) != null) {
-    if (!plus && m[2] == 'm') return null; // bare "30m" could be metres
-    minutes = int.parse(m[1]!);
-  } else if (plus && (m = _durationBare.firstMatch(body)) != null) {
-    minutes = int.parse(m[1]!);
+  } else {
+    final mins = _durationMinutes.firstMatch(body);
+    if (mins != null) {
+      if (!plus && mins[2] == 'm') return null; // bare "30m" could be metres
+      minutes = int.parse(mins[1]!);
+    } else if (plus) {
+      final bare = _durationBare.firstMatch(body);
+      if (bare != null) minutes = int.parse(bare[1]!);
+    }
   }
   if (minutes == null || minutes < 1 || minutes > maxEstimateMinutes) return null;
   return minutes;
