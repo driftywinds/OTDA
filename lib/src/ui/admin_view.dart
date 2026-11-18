@@ -225,8 +225,9 @@ class _AdminViewState extends State<AdminView> {
           switch (choice) {
             case 'admin':
             case 'member':
-            case 'owner':
               _run(() => _api.setRole(id, choice), 'Role changed');
+            case 'owner':
+              _run(() => _api.transferOwnership(id), 'Ownership transferred');
             case 'deactivate':
               _run(() => _api.deactivate(id), 'Account deactivated');
             case 'reactivate':

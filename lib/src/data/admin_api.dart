@@ -49,6 +49,10 @@ class AdminApi {
   Future<void> sendPasswordReset(String userId) =>
       _withStepUp(() => client.post('/api/v1/users/$userId/password-reset'));
 
+  /// Ownership is not a role change: the server has its own route for it.
+  Future<void> transferOwnership(String userId) =>
+      _withStepUp(() => client.post('/api/v1/users/$userId/transfer-ownership'));
+
   // ---- invitations -------------------------------------------------------
 
   Future<List<Map<String, Object?>>> invitations() async {
