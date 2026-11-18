@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app is a client for the user's own OpenTodo server: every screen
+         needs the network. Flutter only puts this in the debug and profile
+         manifests, so a release build without it here cannot reach anything. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="OTDA"
         android:name="${applicationName}"
