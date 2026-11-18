@@ -23,6 +23,15 @@ class Repo {
   Future<List<Label>> labels() async =>
       (await db.entities('label')).map((e) => Label(e['id'] as String, e)).toList();
 
+  /// The account's own preferences: one synced row per account under `me`
+  /// (`date_format`, `week_start`, `language`, `row_layout`, …). Absent fields
+  /// mean "follow the device", as the server's defaults do.
+  Future<Map<String, Object?>> userPrefs() async =>
+      await db.entity('user_prefs', 'me') ?? <String, Object?>{'id': 'me'};
+
+  Future<void> setUserPref(String field, Object? value) =>
+      setField('user_prefs', 'me', field, value);
+
   /// The id of the label with this name (case-insensitive), creating it when it
   /// does not exist yet — what the web app does when a quick-add line names a
   /// label that is not there.

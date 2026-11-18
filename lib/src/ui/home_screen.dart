@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../data/models.dart';
 import '../data/views.dart';
 import 'new_task_sheet.dart';
+import 'settings_screen.dart';
 import 'task_sheet.dart';
 import 'format.dart';
 import 'theme.dart';
@@ -179,6 +180,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: _refresh,
                     icon: const Icon(Icons.sync_rounded),
                   ),
+                IconButton(
+                  tooltip: 'Settings',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => SettingsScreen(state: widget.state)),
+                  ),
+                  icon: const Icon(Icons.tune_rounded),
+                ),
                 _AccountMenu(state: widget.state),
                 const SizedBox(width: 8),
               ],
