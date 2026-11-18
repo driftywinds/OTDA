@@ -137,11 +137,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text('OTDA', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2)),
-                    const SizedBox(height: 4),
                     Text(
                       connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
-                      style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 28),
                     Container(

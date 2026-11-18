@@ -161,12 +161,8 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverAppBar(
               pinned: true,
               title: Text(
-                'OTDA',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  letterSpacing: 2.4,
-                  fontWeight: FontWeight.w800,
-                  color: scheme.primary,
-                ),
+                _titles[_view]!,
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               actions: [
                 if (widget.state.isSyncing)
@@ -193,7 +189,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SliverToBoxAdapter(
               child: _Header(
-                title: _titles[_view]!,
                 subtitle: _view == TaskView.today ? longToday(DateTime.now()) : null,
                 state: widget.state,
                 shown: tasks.length,
@@ -305,9 +300,8 @@ class _AccountMenu extends StatelessWidget {
 
 /// The big title, with the date or count and the sync state beneath it.
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.state, required this.shown, this.subtitle});
+  const _Header({required this.state, required this.shown, this.subtitle});
 
-  final String title;
   final String? subtitle;
   final AppState state;
   final int shown;
@@ -330,8 +324,6 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2)),
-          const SizedBox(height: 2),
           Text(subtitle == null ? count : '$subtitle · $count', style: muted),
           const SizedBox(height: 8),
           Row(

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
 import '../data/repo.dart';
+import 'admin_view.dart';
 
 /// The account's settings: the synced preferences that follow the person to every
 /// device, plus who they are signed in as and how.
@@ -55,11 +56,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final account = widget.state.account;
     final server = widget.state.server;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
+    final isAdmin = const {'owner', 'admin'}.contains(widget.state.account?.userRole);
+    final client = widget.state.client;
+
+    return DefaultTabController(
+      length: isAdmin ? 2 : 1,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Settings'),
+          bottom: isAdmin
+              ? const TabBar(tabs: [Tab(text: 'You'), Tab(text: 'Server')])
+              : null,
+        ),
+        body: TabBarView(
+          children: [
+            _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 _Section(
@@ -154,6 +167,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            if (isAdmin)
+              client == null
+                  ? const Center(child: Text('Not signed in.'))
+                  : AdminView(state: widget.state),
+          ],
+        ),
+      ),
     );
   }
 }

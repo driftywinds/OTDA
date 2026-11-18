@@ -1,0 +1,4 @@
+# Tests tagged `integration` talk to a real OpenTodo server and are excluded from
+# CI: `flutter test --exclude-tags integration`.
+tags:
+  integration:

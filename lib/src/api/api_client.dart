@@ -75,11 +75,18 @@ class ApiClient {
     String? idempotencyKey,
     Map<String, String> extraHeaders = const {},
   }) async {
+    // A cookie write with no `Origin` and no `Sec-Fetch-Site` is only accepted by
+    // the server when it declares a JSON body; a bodiless DELETE or POST is
+    // refused with 403 `bad_origin`. A native client has neither header, so every
+    // write carries a body — `{}` when the route takes none.
+    final isWrite = const {'POST', 'PUT', 'PATCH', 'DELETE'}.contains(method);
+    final payload = body ?? (isWrite ? const <String, Object?>{} : null);
+
     final request = http.Request(method, _uri(path, query))
-      ..headers.addAll({..._headers(json: body != null), ...extraHeaders})
+      ..headers.addAll({..._headers(json: payload != null), ...extraHeaders})
       // A redirect could carry the credential to another host.
       ..followRedirects = false;
-    if (body != null) request.body = jsonEncode(body);
+    if (payload != null) request.body = jsonEncode(payload);
 
     final http.StreamedResponse streamed;
     try {
