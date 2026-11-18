@@ -123,26 +123,31 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
-                        width: 56,
-                        height: 56,
+                        width: 64,
+                        height: 64,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
-                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: theme.colorScheme.brandGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: Icon(Icons.check_rounded, size: 32, color: theme.colorScheme.onPrimary),
+                        child: Icon(Icons.check_rounded, size: 36, color: theme.colorScheme.onPrimary),
                       ),
                     ),
                     const SizedBox(height: 20),
                     Text(
                       connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: connected
+                          ? theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            )
+                          : theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSurface),
                     ),
                     const SizedBox(height: 28),
                     Container(
@@ -150,6 +155,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
                       decoration: BoxDecoration(
                         color: theme.colorScheme.card,
                         borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: theme.colorScheme.cardBorder),
+                        boxShadow: theme.colorScheme.softShadow,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -313,9 +320,12 @@ class _Spinner extends StatelessWidget {
   const _Spinner();
 
   @override
-  Widget build(BuildContext context) => const SizedBox(
+  Widget build(BuildContext context) => SizedBox(
         width: 16,
         height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       );
 }

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
+import 'theme.dart';
 
 const _monthNames = [
   'January',
@@ -102,6 +103,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
             IconButton(
               onPressed: () => _move(-1),
               tooltip: 'Previous month',
+              style: IconButton.styleFrom(backgroundColor: scheme.field),
               icon: const Icon(Icons.chevron_left),
             ),
             Expanded(
@@ -109,13 +111,14 @@ class _MonthCalendarState extends State<MonthCalendar> {
                 onPressed: _showThisMonth,
                 child: Text(
                   '${_monthNames[_month.month - 1]} ${_month.year}',
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
             ),
             IconButton(
               onPressed: () => _move(1),
               tooltip: 'Next month',
+              style: IconButton.styleFrom(backgroundColor: scheme.field),
               icon: const Icon(Icons.chevron_right),
             ),
           ],
@@ -129,7 +132,8 @@ class _MonthCalendarState extends State<MonthCalendar> {
                     label,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ),
@@ -203,16 +207,27 @@ class _MonthCalendarState extends State<MonthCalendar> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: selected ? scheme.primary : null,
+                color: selected
+                    ? scheme.primary
+                    : (isToday ? scheme.primary.withValues(alpha: 0.1) : null),
                 border: isToday && !selected
                     ? Border.all(color: scheme.primary, width: 1.4)
+                    : null,
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: scheme.primary.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
                     : null,
               ),
               child: Text(
                 '${day.day}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: numberColor,
-                  fontWeight: pending > 0 ? FontWeight.w700 : FontWeight.w400,
+                  fontWeight: (pending > 0 || selected || isToday) ? FontWeight.w700 : FontWeight.w400,
                 ),
               ),
             ),

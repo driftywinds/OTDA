@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../app_state.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
+import 'theme.dart';
 
 /// The account's settings: the synced preferences that follow the person to every
 /// device, plus who they are signed in as and how.
@@ -198,14 +199,28 @@ class _Section extends StatelessWidget {
               title.toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
                 letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Column(children: children),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: theme.colorScheme.softShadow,
+            ),
+            child: Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (var i = 0; i < children.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                    children[i],
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -289,7 +304,10 @@ class _ChoiceRow extends StatelessWidget {
             Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
             Text(
               options[value] ?? value,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(width: 6),
             Icon(Icons.chevron_right_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),

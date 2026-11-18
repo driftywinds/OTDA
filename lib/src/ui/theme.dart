@@ -1,13 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 
-/// OTDA's look: a calm indigo on soft neutral surfaces, white cards that float
-/// just above the page, generous radii, quiet type. Material 3, light and dark.
+/// OTDA's look: a calm indigo on soft neutral surfaces, cards outlined by a
+/// hairline and lifted by a barely-there shadow, generous radii, tight type.
+/// Material 3, light and dark.
 const _seed = Color(0xFF5B5BD6);
 
-const _lightPage = Color(0xFFF6F6F9);
+const _lightPage = Color(0xFFF4F4F8);
 const _lightCard = Color(0xFFFFFFFF);
-const _darkPage = Color(0xFF111114);
-const _darkCard = Color(0xFF1C1C21);
+const _darkPage = Color(0xFF0F0F13);
+const _darkCard = Color(0xFF1A1A20);
 
 /// Surface tokens the stock [ColorScheme] has no good slot for.
 extension OtdaColors on ColorScheme {
@@ -23,7 +24,25 @@ extension OtdaColors on ColorScheme {
   Color get hairline => outlineVariant.withValues(alpha: _isDark ? 0.5 : 0.7);
 
   /// A fill for inputs and unselected controls, slightly off the card.
-  Color get field => _isDark ? const Color(0xFF26262D) : const Color(0xFFEFEFF4);
+  Color get field => _isDark ? const Color(0xFF25252D) : const Color(0xFFEDEDF3);
+
+  /// The outline that separates a card from the page.
+  Color get cardBorder => _isDark ? const Color(0xFF2A2A33) : const Color(0xFFE7E7EE);
+
+  /// A soft lift for cards; dark surfaces separate by outline alone.
+  List<BoxShadow> get softShadow => _isDark
+      ? const []
+      : const [
+          BoxShadow(color: Color(0x0D1B1B3A), blurRadius: 14, offset: Offset(0, 4)),
+          BoxShadow(color: Color(0x08000000), blurRadius: 2, offset: Offset(0, 1)),
+        ];
+
+  /// The brand wash used on the logo, avatars and the workspace tile.
+  LinearGradient get brandGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [primary, Color.lerp(primary, tertiary, 0.75)!],
+      );
 }
 
 /// Priority colours: P1 red, P2 amber, P3 blue, P4 neutral. Fixed hues so a
@@ -39,6 +58,10 @@ ThemeData buildTheme(Brightness brightness) {
   final base = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
   final scheme = base.copyWith(surface: brightness == Brightness.dark ? _darkPage : _lightPage);
   final radius = BorderRadius.circular(14);
+  final cardShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(18),
+    side: BorderSide(color: scheme.cardBorder),
+  );
 
   OutlineInputBorder fieldBorder([Color color = Colors.transparent, double width = 1]) =>
       OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: color, width: width));
@@ -66,12 +89,17 @@ ThemeData buildTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
       centerTitle: false,
+      titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface),
+      iconTheme: IconThemeData(color: scheme.onSurfaceVariant),
+      actionsIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
     ),
     inputDecorationTheme: InputDecorationTheme(
       isDense: true,
       filled: true,
       fillColor: scheme.field,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      hintStyle: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
+      prefixIconColor: scheme.onSurfaceVariant,
       border: fieldBorder(),
       enabledBorder: fieldBorder(),
       focusedBorder: fieldBorder(scheme.primary, 1.6),
@@ -82,11 +110,45 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 0,
       color: scheme.card,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: cardShape,
     ),
+    listTileTheme: ListTileThemeData(
+      iconColor: scheme.onSurfaceVariant,
+      selectedColor: scheme.primary,
+      selectedTileColor: scheme.primary.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      titleTextStyle: textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500, color: scheme.onSurface),
+    ),
+    drawerTheme: DrawerThemeData(
+      backgroundColor: scheme.card,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(28)),
+      ),
+    ),
+    tabBarTheme: TabBarThemeData(
+      indicatorSize: TabBarIndicatorSize.label,
+      indicatorColor: scheme.primary,
+      labelColor: scheme.primary,
+      unselectedLabelColor: scheme.onSurfaceVariant,
+      labelStyle: textTheme.labelLarge,
+      unselectedLabelStyle: textTheme.labelLarge,
+      dividerColor: scheme.hairline,
+      overlayColor: WidgetStatePropertyAll(scheme.primary.withValues(alpha: 0.06)),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: scheme.primary),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(64, 52),
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        textStyle: textTheme.labelLarge?.copyWith(fontSize: 15),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(64, 52),
+        foregroundColor: scheme.onSurface,
+        side: BorderSide(color: scheme.cardBorder, width: 1.2),
         shape: RoundedRectangleBorder(borderRadius: radius),
         textStyle: textTheme.labelLarge?.copyWith(fontSize: 15),
       ),
@@ -108,11 +170,11 @@ ThemeData buildTheme(Brightness brightness) {
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      elevation: 2,
-      highlightElevation: 3,
+      elevation: 4,
+      highlightElevation: 6,
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 68,
@@ -146,8 +208,12 @@ ThemeData buildTheme(Brightness brightness) {
     popupMenuTheme: PopupMenuThemeData(
       color: scheme.card,
       surfaceTintColor: Colors.transparent,
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 8,
+      shadowColor: const Color(0x331B1B3A),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: scheme.cardBorder),
+      ),
     ),
     dividerTheme: DividerThemeData(color: scheme.hairline, thickness: 1, space: 1),
     snackBarTheme: SnackBarThemeData(

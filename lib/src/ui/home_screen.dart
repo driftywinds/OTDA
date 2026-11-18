@@ -351,7 +351,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     )
                   : Text(
                       _title,
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                      ),
                     ),
               actions: [
                 if (widget.state.isSyncing)
@@ -481,12 +484,14 @@ class _AccountMenu extends StatelessWidget {
           child: Row(children: [Icon(Icons.logout_rounded, size: 20), SizedBox(width: 12), Text('Sign out')]),
         ),
       ],
-      child: CircleAvatar(
-        radius: 16,
-        backgroundColor: scheme.primary.withValues(alpha: 0.14),
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(gradient: scheme.brandGradient, shape: BoxShape.circle),
         child: Text(
           initial,
-          style: theme.textTheme.labelLarge?.copyWith(color: scheme.primary, fontWeight: FontWeight.w700),
+          style: theme.textTheme.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -513,7 +518,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final muted = theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    final muted = theme.textTheme.bodyMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontWeight: FontWeight.w500,
+    );
     final last = state.lastSync;
     final error = state.syncError;
     final sync = [
@@ -589,11 +597,22 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Two soft rings round the icon so the empty page still has a focal point.
           Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(color: scheme.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(icon, size: 32, color: scheme.primary),
+            width: 104,
+            height: 104,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: scheme.primary.withValues(alpha: 0.06), shape: BoxShape.circle),
+            child: Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: scheme.primary.withValues(alpha: 0.18)),
+              ),
+              child: Icon(icon, size: 32, color: scheme.primary),
+            ),
           ),
           const SizedBox(height: 16),
           Text(title, style: theme.textTheme.titleMedium),
@@ -645,44 +664,54 @@ class _TaskRow extends StatelessWidget {
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-      child: Material(
-        color: scheme.card,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 14, 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                TaskCheck(done: task.isCompleted, priority: task.priority, onChanged: onToggle),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          task.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                            color: task.isCompleted ? scheme.onSurfaceVariant : scheme.onSurface,
+          boxShadow: scheme.softShadow,
+        ),
+        child: Material(
+          color: scheme.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: scheme.cardBorder),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onOpen,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 14, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  TaskCheck(done: task.isCompleted, priority: task.priority, onChanged: onToggle),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                              decorationColor: scheme.onSurfaceVariant,
+                              color: task.isCompleted ? scheme.onSurfaceVariant : scheme.onSurface,
+                            ),
                           ),
-                        ),
-                        if (meta.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Wrap(spacing: 14, runSpacing: 2, children: meta),
+                          if (meta.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Wrap(spacing: 6, runSpacing: 4, children: meta),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -730,14 +759,26 @@ class _AppDrawer extends StatelessWidget {
     final workspaceName = current?.name ?? 'Workspace';
     final canSwitch = workspaces.length > 1;
 
-    Widget destination(TaskView target, IconData icon, String label) => ListTile(
-          dense: true,
-          leading: Icon(icon, size: 20),
-          title: Text(label),
-          selected: view == target,
-          selectedColor: scheme.primary,
-          onTap: () => onOpen(target),
-        );
+    // Rows are inset from the drawer edge and highlighted as rounded pills.
+    Widget inset(Widget child) =>
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1), child: child);
+
+    Widget destination(TaskView target, IconData icon, String label) {
+      final selected = view == target;
+      return inset(ListTile(
+        dense: true,
+        leading: Icon(icon, size: 20),
+        title: Text(
+          label,
+          style: TextStyle(fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
+        ),
+        selected: selected,
+        selectedColor: scheme.primary,
+        onTap: () => onOpen(target),
+      ));
+    }
+
+    const rule = Divider(height: 16, indent: 20, endIndent: 20);
 
     return Drawer(
       child: SafeArea(
@@ -751,39 +792,51 @@ class _AppDrawer extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: 30,
-                      height: 30,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        color: scheme.primary.withValues(alpha: 0.16),
-                        shape: BoxShape.circle,
+                        gradient: scheme.brandGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: scheme.primary.withValues(alpha: 0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.spa_outlined, size: 16, color: scheme.primary),
+                      child: Icon(Icons.spa_outlined, size: 18, color: scheme.onPrimary),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         workspaceName,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (canSwitch) Icon(Icons.expand_more_rounded, color: scheme.onSurfaceVariant),
+                    if (canSwitch)
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(color: scheme.field, shape: BoxShape.circle),
+                        child: Icon(Icons.expand_more_rounded, size: 20, color: scheme.onSurfaceVariant),
+                      ),
                   ],
                 ),
               ),
             ),
-            const Divider(height: 1),
+            rule,
             destination(TaskView.search, Icons.search, 'Search'),
             destination(TaskView.upcoming, Icons.date_range_outlined, 'Upcoming'),
             destination(TaskView.calendar, Icons.calendar_month_outlined, 'Calendar'),
-            const Divider(height: 1),
+            rule,
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              padding: const EdgeInsets.fromLTRB(24, 8, 20, 6),
               child: Text(
                 'PROJECTS (${projects.length})',
                 style: theme.textTheme.labelSmall?.copyWith(
                   letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: scheme.onSurfaceVariant,
                 ),
               ),
@@ -793,7 +846,7 @@ class _AppDrawer extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 children: [
                   for (final entry in projects.entries)
-                    ListTile(
+                    inset(ListTile(
                       dense: true,
                       selected: view == TaskView.project && projectId == entry.key,
                       leading: Container(
@@ -802,34 +855,57 @@ class _AppDrawer extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: projectColors[entry.key] ?? scheme.primary,
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: (projectColors[entry.key] ?? scheme.primary).withValues(alpha: 0.4),
+                              blurRadius: 5,
+                            ),
+                          ],
                         ),
                       ),
-                      title: Text(entry.value, overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        entry.value,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: view == TaskView.project && projectId == entry.key
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
                       trailing: projectCounts[entry.key] == 0
                           ? null
-                          : Text('${projectCounts[entry.key]}', style: theme.textTheme.labelMedium),
+                          : Text(
+                              '${projectCounts[entry.key]}',
+                              style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
                       onTap: () => onProject(entry.key),
-                    ),
+                    )),
                   destination(TaskView.anytime, Icons.layers_outlined, 'Anytime'),
                   destination(TaskView.someday, Icons.bedtime_outlined, 'Someday'),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            rule,
             ListTile(
               dense: true,
-              leading: CircleAvatar(
-                radius: 14,
+              leading: Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(gradient: scheme.brandGradient, shape: BoxShape.circle),
                 child: Text(
                   (state.account?.displayName.isNotEmpty == true
                           ? state.account!.displayName
                           : '?')
                       .substring(0, 1)
                       .toUpperCase(),
-                  style: theme.textTheme.labelSmall,
+                  style: theme.textTheme.labelMedium?.copyWith(color: scheme.onPrimary),
                 ),
               ),
-              title: Text(state.account?.displayName ?? 'Signed in'),
+              title: Text(
+                state.account?.displayName ?? 'Signed in',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               subtitle: Text('OpenTodo v${state.server?.version ?? '?'}'),
             ),
           ],
@@ -858,38 +934,59 @@ class _BottomBar extends StatelessWidget {
       (TaskView.search, Icons.search_outlined, Icons.search, 'Search'),
     ];
 
-    return Material(
-      color: scheme.surfaceContainer,
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 62,
-          child: Row(
-            children: [
-              for (final item in items)
-                Expanded(
-                  child: InkWell(
-                    onTap: () => onSelect(item.$1),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          view == item.$1 ? item.$3 : item.$2,
-                          size: 22,
-                          color: view == item.$1 ? scheme.primary : scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.$4,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: view == item.$1 ? scheme.primary : scheme.onSurfaceVariant,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.card,
+        border: Border(top: BorderSide(color: scheme.cardBorder)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 62,
+            child: Row(
+              children: [
+                for (final item in items)
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => onSelect(item.$1),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // The selected destination sits in a soft pill.
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
+                            width: 52,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: view == item.$1
+                                  ? scheme.primary.withValues(alpha: 0.14)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              view == item.$1 ? item.$3 : item.$2,
+                              size: 22,
+                              color: view == item.$1 ? scheme.primary : scheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            item.$4,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: view == item.$1 ? FontWeight.w700 : FontWeight.w500,
+                              color: view == item.$1 ? scheme.primary : scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../auth/auth_service.dart';
 import '../data/admin_api.dart';
+import 'theme.dart';
 
 /// The Server tab: everyone on this instance, invitations, the audit log and
 /// backups. Owner and admins only.
@@ -193,12 +194,29 @@ class _AdminViewState extends State<AdminView> {
                 title.toUpperCase(),
                 style: theme.textTheme.labelSmall?.copyWith(
                   letterSpacing: 1.2,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
-            Card(margin: EdgeInsets.zero, child: Column(children: children)),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: theme.colorScheme.softShadow,
+              ),
+              child: Card(
+                margin: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (var i = 0; i < children.length; i++) ...[
+                      if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                      children[i],
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       );

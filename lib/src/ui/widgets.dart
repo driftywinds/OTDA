@@ -42,8 +42,8 @@ class TaskCheck extends StatelessWidget {
             height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: done ? color : color.withValues(alpha: priority < 4 ? 0.08 : 0),
-              border: Border.all(color: color, width: 2),
+              color: done ? color : color.withValues(alpha: priority < 4 ? 0.1 : 0),
+              border: Border.all(color: color.withValues(alpha: done ? 1 : 0.85), width: 2),
             ),
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 140),
@@ -73,31 +73,39 @@ class MetaPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tint = color ?? theme.colorScheme.onSurfaceVariant;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (dot != null)
-          Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 5),
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          )
-        else if (icon != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Icon(icon, size: 14, color: tint),
+    final scheme = theme.colorScheme;
+    final tint = color ?? scheme.onSurfaceVariant;
+    // A coloured pill (due today, overdue) gets a wash of its own colour; the
+    // neutral ones sit on the quiet field fill.
+    final wash = color != null ? color!.withValues(alpha: 0.12) : scheme.field;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dot != null)
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+            )
+          else if (icon != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(icon, size: 13, color: tint),
+            ),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(color: tint, fontWeight: FontWeight.w600),
+            ),
           ),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(color: tint, fontWeight: FontWeight.w500),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -133,7 +141,10 @@ class PropChip extends StatelessWidget {
     final shape = BorderRadius.circular(12);
     return Material(
       color: active ? accent.withValues(alpha: 0.12) : scheme.field,
-      borderRadius: shape,
+      shape: RoundedRectangleBorder(
+        borderRadius: shape,
+        side: BorderSide(color: active ? accent.withValues(alpha: 0.35) : Colors.transparent),
+      ),
       child: InkWell(
         onTap: onTap,
         onLongPress: onClear,
@@ -185,13 +196,20 @@ class SectionLabel extends StatelessWidget {
             text.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
               color: tint,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
             ),
           ),
           if (count != null) ...[
             const SizedBox(width: 8),
-            Text('$count', style: theme.textTheme.labelSmall?.copyWith(color: tint.withValues(alpha: 0.7))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: tint.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('$count', style: theme.textTheme.labelSmall?.copyWith(color: tint)),
+            ),
           ],
         ],
       ),
