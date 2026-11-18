@@ -122,8 +122,8 @@ class AuthService {
   }) async {
     final json = await client.post('/api/v1/auth/mfa', body: {
       'challenge': challenge,
-      if (code != null) 'code': code,
-      if (recoveryCode != null) 'recoveryCode': recoveryCode,
+      'code': ?code,
+      'recoveryCode': ?recoveryCode,
       'remember': remember,
     }) as Map<String, dynamic>;
     return SignedIn(client: client, user: _user(json));
@@ -145,8 +145,8 @@ class AuthService {
   /// secret-holding settings.
   Future<void> reauth(ApiClient client, {String? password, String? code}) async {
     await client.post('/api/v1/auth/reauth', body: {
-      if (password != null) 'password': password,
-      if (code != null) 'code': code,
+      'password': ?password,
+      'code': ?code,
     });
   }
 

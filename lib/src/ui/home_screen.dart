@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../app_state.dart';
 import '../data/models.dart';
 import '../data/views.dart';
+import 'task_sheet.dart';
 
 enum TaskView { today, inbox, anytime, someday }
 
@@ -76,6 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _toggle(Task task) async {
     await widget.state.repo?.setCompleted(task, !task.isCompleted);
+    await _load();
+  }
+
+  Future<void> _open(Task task) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final projects = await repo.projects();
+    if (!mounted) return;
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => TaskSheet(task: task, repo: repo, projects: projects),
+    );
     await _load();
   }
 
@@ -184,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? null
                                 : _projectNames[tasks[index].projectId],
                             onToggle: () => _toggle(tasks[index]),
+                            onOpen: () => _open(tasks[index]),
                           ),
                         ),
                       ),
@@ -201,10 +217,11 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TaskRow extends StatelessWidget {
-  const _TaskRow({required this.task, required this.onToggle, this.projectName});
+  const _TaskRow({required this.task, required this.onToggle, required this.onOpen, this.projectName});
 
   final Task task;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
   final String? projectName;
 
   @override
@@ -212,7 +229,7 @@ class _TaskRow extends StatelessWidget {
     final theme = Theme.of(context);
     final subtitle = <String>[
       if (task.dueDate != null) [task.dueDate, if (task.dueTime != null) task.dueTime].join(' '),
-      if (projectName != null) projectName!,
+      ?projectName,
     ].join(' · ');
     return ListTile(
       leading: Checkbox(
@@ -225,7 +242,7 @@ class _TaskRow extends StatelessWidget {
       trailing: task.priority < 4
           ? Icon(Icons.flag, size: 18, color: task.priority == 1 ? theme.colorScheme.error : theme.colorScheme.primary)
           : null,
-      onTap: onToggle,
+      onTap: onOpen,
     );
   }
 }
@@ -245,7 +262,7 @@ class _StatusBar extends StatelessWidget {
       '$open shown',
       when,
       if (state.pending > 0) '${state.pending} waiting to send',
-      if (state.syncError != null) state.syncError!,
+      ?state.syncError,
     ].join(' · ');
     return SafeArea(
       top: false,

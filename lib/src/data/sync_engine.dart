@@ -216,4 +216,96 @@ class SyncEngine {
     final mix = (stamp * 31 + random.elapsedMicroseconds) & 0xFFFFFFFFFFFF;
     return '${stamp.toRadixString(16)}${mix.toRadixString(16).padLeft(12, '0')}';
   }
+
+  // ---- live updates ------------------------------------------------------
+
+  StreamSubscription<String>? _liveSubscription;
+  Timer? _reconnect;
+  bool _live = false;
+  bool _liveStopped = false;
+  int _backoffSeconds = 1;
+
+  bool get isLive => _live;
+
+  /// Subscribes to `GET /api/v1/sync/events?device=…`. The stream carries only a
+  /// cursor, so a wake-up costs one exchange; a lost event is harmless because
+  /// polling continues.
+  Future<void> startLive() async {
+    if (_liveSubscription != null) return;
+    _liveStopped = false;
+    if (_deviceId.isEmpty) _deviceId = await _loadDeviceId();
+    try {
+      final response = await client.openStream('/api/v1/sync/events', query: {'device': _deviceId});
+      if (response.statusCode != 200) {
+        _scheduleReconnect();
+        return;
+      }
+      _live = true;
+      _backoffSeconds = 1;
+      var event = '';
+      final buffer = StringBuffer();
+      _liveSubscription = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (line) {
+          if (line.startsWith('event:')) {
+            event = line.substring(6).trim();
+          } else if (line.startsWith('data:')) {
+            buffer.write(line.substring(5).trim());
+          } else if (line.isEmpty) {
+            final data = buffer.toString();
+            buffer.clear();
+            if (event == 'ops' && data.isNotEmpty) _onWake(data);
+            event = '';
+          }
+        },
+        onError: (_) => _closeLive(),
+        onDone: _closeLive,
+        cancelOnError: true,
+      );
+      _status.add(null);
+    } on Object {
+      _scheduleReconnect();
+    }
+  }
+
+  void _onWake(String data) {
+    int? cursor;
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map) cursor = (decoded['cursor'] as num?)?.toInt();
+    } on FormatException {
+      // a malformed wake-up still means "something changed"
+    }
+    if (cursor != null && cursor <= _cursor) return; // already read past it
+    unawaited(exchange().catchError((Object _) => const SyncResult(
+        applied: 0, pulled: 0, rejected: 0, pending: 0, pages: 0)));
+  }
+
+  void _closeLive() {
+    _liveSubscription?.cancel();
+    _liveSubscription = null;
+    _live = false;
+    _scheduleReconnect();
+    _status.add(null);
+  }
+
+  void _scheduleReconnect() {
+    if (_liveStopped) return;
+    _reconnect?.cancel();
+    _reconnect = Timer(Duration(seconds: _backoffSeconds), () {
+      _backoffSeconds = (_backoffSeconds * 2).clamp(1, 30);
+      startLive();
+    });
+  }
+
+  void stopLive() {
+    _liveStopped = true;
+    _reconnect?.cancel();
+    _reconnect = null;
+    _liveSubscription?.cancel();
+    _liveSubscription = null;
+    _live = false;
+  }
 }

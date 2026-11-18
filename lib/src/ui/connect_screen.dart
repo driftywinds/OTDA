@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../api/api_exception.dart';
@@ -80,13 +81,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
         final client = widget.state.newClient(_origin!);
         final outcome = await widget.state.signInWithPassword(client, _email.text, _password.text);
         final challenge = outcome.challenge;
-        if (challenge != null) setState(() => _challenge = challenge);
+        if (challenge != null) {
+          setState(() => _challenge = challenge);
+        } else {
+          // Let the platform's password manager offer to save the credential.
+          TextInput.finishAutofillContext();
+        }
       });
 
   Future<void> _submitCode() => _run(() async {
         final client = widget.state.newClient(_origin!);
         await widget.state.finishMfa(client, _challenge!.challenge,
             code: _code.text.trim(), remember: _remember);
+        TextInput.finishAutofillContext();
       });
 
   Future<void> _signInToken() => _run(() async {
@@ -106,22 +113,26 @@ class _ConnectScreenState extends State<ConnectScreen> {
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('OTDA', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(
-                    connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 24),
-                  if (!connected) ..._serverStep() else ..._credentialStep(),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+              // One group so a password manager sees the address, the email and
+              // the password as one credential and offers to save it.
+              child: AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('OTDA', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(
+                      connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 24),
+                    if (!connected) ..._serverStep() else ..._credentialStep(),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -136,6 +147,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.go,
+          autofillHints: const [AutofillHints.url],
           decoration: const InputDecoration(labelText: 'Server address', hintText: 'todo.example.com'),
           onSubmitted: (_) => _connect(),
         ),
@@ -191,13 +203,20 @@ class _ConnectScreenState extends State<ConnectScreen> {
         TextField(
           controller: _email,
           autocorrect: false,
+          enableSuggestions: false,
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
           decoration: const InputDecoration(labelText: 'Email'),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _password,
           obscureText: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.password],
           decoration: const InputDecoration(labelText: 'Password'),
           onSubmitted: (_) => _signInPassword(),
         ),
@@ -210,6 +229,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         TextField(
           controller: _token,
           autocorrect: false,
+          enableSuggestions: false,
           obscureText: true,
           decoration: const InputDecoration(
             labelText: 'API token',

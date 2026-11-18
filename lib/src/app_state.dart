@@ -147,6 +147,7 @@ class AppState extends ChangeNotifier {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
     await _syncQuietly();
+    await engine.startLive();
   }
 
   /// Runs an exchange and folds the outcome into the UI state.
@@ -179,6 +180,7 @@ class AppState extends ChangeNotifier {
   Future<void> signOut() async {
     _timer?.cancel();
     _timer = null;
+    _engine?.stopLive();
     final client = _client;
     if (client != null) await _auth.logout(client);
     await _store.clear();
@@ -197,6 +199,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _engine?.stopLive();
     _db?.close();
     super.dispose();
   }
