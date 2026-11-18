@@ -6,6 +6,8 @@ import '../data/models.dart';
 import '../data/repo.dart';
 import '../quickadd_bridge.dart';
 import 'composer_state.dart';
+import 'theme.dart';
+import 'widgets.dart';
 
 /// The composer behind the plus button: one line to type, a preview of what the
 /// line was understood to mean, and the date, time, duration, repeat, priority
@@ -33,6 +35,12 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   ParsedLine _parsed = const ParsedLine(title: '');
   bool _saving = false;
 
+  // `showMenu` opens against a position, so each menu chip needs its own anchor.
+  final _durationKey = GlobalKey();
+  final _repeatKey = GlobalKey();
+  final _priorityKey = GlobalKey();
+  final _projectKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -48,17 +56,13 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   }
 
   /// Parses after a pause, the way the web app does, so the preview follows the
-  /// typing without working on every keystroke. The parse is local, so this
-  /// costs nothing but arithmetic.
+  /// typing without a request per keystroke.
   void _onChanged() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 150), () {
-      final parsed = parseLine(
-        _input.text,
-        today: todayString(),
-        now: nowString(),
-        projects: widget.projects,
-      );
+    _debounce = Timer(const Duration(milliseconds: 180), () {
+      final line = _input.text;
+      final parsed = parseLine(line,
+          today: todayString(), now: nowString(), projects: widget.projects);
       if (!mounted) return;
       setState(() {
         _parsed = parsed;
@@ -67,55 +71,14 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  Future<void> _save() async {
-    final title = _parsed.title.isNotEmpty ? _parsed.title : _input.text.trim();
-    if (title.isEmpty || _saving) return;
-    setState(() => _saving = true);
-    final fields = composeTaskFields(
-      parsed: _parsed,
-      priority: _values.priority,
-      dueDate: _values.dueDate,
-      dueTime: _values.dueTime,
-      estimate: _values.estimate,
-      recurrence: _values.recurrence,
-      projectId: _values.projectId,
-    );
-    // A quick-add line names labels; a task stores ids.
-    final named = fields.remove('labels');
-    if (named is List && named.isNotEmpty) {
-      final ids = await widget.repo.resolveLabelNames(named);
-      if (ids.isNotEmpty) fields['labels'] = ids;
-    }
-    if (!mounted) return;
-    await widget.repo.createTask(title, projectId: _values.projectId, extra: fields);
-    if (mounted) Navigator.of(context).pop(true);
-  }
-
-  String get _estimateText {
-    final minutes = _values.estimate;
-    if (minutes == null) return 'Duration';
-    if (minutes < 60) return '${minutes}m';
-    final hours = minutes ~/ 60;
-    final rest = minutes % 60;
-    return rest == 0 ? '${hours}h' : '${hours}h ${rest}m';
-  }
-
-  String get _projectName {
-    final id = _values.projectId;
-    if (id == null) return 'Inbox';
-    for (final project in widget.projects) {
-      if (project.id == id) return project.name;
-    }
-    return 'Project';
-  }
-
-  /// Where a menu should open: anchored to the control that asked for it.
+  /// Where a menu opens: anchored to the chip that asked for it.
   ///
-  /// `showMenu` requires exactly one of `position`/`positionBuilder`; without
-  /// one it dereferences a null position and the screen goes blank.
-  RelativeRect _menuPosition(BuildContext anchorContext) {
-    final box = anchorContext.findRenderObject()! as RenderBox;
-    final overlay = Overlay.of(anchorContext).context.findRenderObject()! as RenderBox;
+  /// `showMenu` requires exactly one of `position`/`positionBuilder`. Passing
+  /// neither asserts in debug and dereferences a null position in release, which
+  /// is the blank screen this used to show.
+  RelativeRect _menuPosition(GlobalKey anchor) {
+    final box = anchor.currentContext!.findRenderObject()! as RenderBox;
+    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
     final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
     final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
     return RelativeRect.fromRect(
@@ -124,181 +87,11 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     );
   }
 
-  /// The line under the input: what the line was understood to mean.
-  List<Widget> _preview(ThemeData theme) {
-    Widget chip(String label, IconData icon, {bool muted = false}) => Chip(
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          avatar: Icon(icon, size: 14, color: muted ? theme.colorScheme.onSurfaceVariant : null),
-          label: Text(label),
-          labelStyle: muted
-              ? theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)
-              : null,
-          side: muted ? BorderSide(color: theme.colorScheme.outlineVariant) : null,
-        );
-
-    final recognised = [
-      for (final label in _parsed.chips) chip(label, Icons.auto_awesome),
-      // A `#name` that matched no project stays in the title; say so instead of
-      // silently ignoring it.
-      for (final miss in _parsed.unmatched) chip('$miss — no match', Icons.help_outline, muted: true),
-    ];
-    if (recognised.isNotEmpty) {
-      return [Wrap(spacing: 6, runSpacing: 4, children: recognised)];
-    }
-
-    final chosen = <Widget>[
-      if (_values.dueDate != null) chip([_values.dueDate, ?_values.dueTime].join(' '), Icons.event),
-      if (_values.estimate != null) chip(_estimateText, Icons.timelapse),
-      if (_values.recurrence != null) chip(_values.recurrence!, Icons.repeat),
-      if (_values.priority < 4) chip('P${_values.priority}', Icons.flag),
-      if (_values.projectId != null) chip(_projectName, Icons.folder),
-    ];
-    if (chosen.isNotEmpty) return [Wrap(spacing: 6, runSpacing: 4, children: chosen)];
-
-    return [
-      Text(
-        _input.text.trim().isEmpty
-            ? 'Type a task — "call Sam tomorrow 3pm p1 +30"'
-            : 'No date, repeat or project understood yet',
-        style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-      ),
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(hintText: 'New task', border: InputBorder.none),
-                      style: theme.textTheme.titleMedium,
-                      onSubmitted: (_) => _save(),
-                    ),
-                  ),
-                  IconButton.filled(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.arrow_upward),
-                    tooltip: 'Add task',
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 2, bottom: 10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _preview(theme)),
-              ),
-              const Divider(height: 1),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _ChipButton(
-                    icon: Icons.event,
-                    label: _values.dueDate ?? 'Date',
-                    active: _values.dueDate != null,
-                    onTap: (_) => _pickDate(),
-                    onClear: _values.dueDate == null
-                        ? null
-                        : () => setState(() {
-                              _values.dueDate = null;
-                              _values.dueTime = null;
-                              _values.release('due');
-                            }),
-                  ),
-                  _ChipButton(
-                    icon: Icons.schedule,
-                    label: _values.dueTime ?? 'Time',
-                    active: _values.dueTime != null,
-                    onTap: (_) => _pickTime(),
-                    onClear: _values.dueTime == null
-                        ? null
-                        : () => setState(() {
-                              _values.dueTime = null;
-                              _values.release('due');
-                            }),
-                  ),
-                  _ChipButton(
-                    icon: Icons.timelapse,
-                    label: _estimateText,
-                    active: _values.estimate != null,
-                    onTap: (anchor) => _showDurationMenu(anchor),
-                    onClear: _values.estimate == null
-                        ? null
-                        : () => setState(() {
-                              _values.estimate = null;
-                              _values.release('estimate');
-                            }),
-                  ),
-                  _ChipButton(
-                    icon: Icons.repeat,
-                    label: _values.recurrence ?? 'Repeat',
-                    active: _values.recurrence != null,
-                    onTap: (anchor) => _showRepeatMenu(anchor),
-                    onClear: _values.recurrence == null
-                        ? null
-                        : () => setState(() {
-                              _values.recurrence = null;
-                              _values.release('recurrence');
-                            }),
-                  ),
-                  _ChipButton(
-                    icon: Icons.flag,
-                    label: _values.priority < 4 ? 'P${_values.priority}' : 'Priority',
-                    active: _values.priority < 4,
-                    onTap: (anchor) => _showPriorityMenu(anchor),
-                    onClear: _values.priority < 4
-                        ? () => setState(() {
-                              _values.priority = 4;
-                              _values.release('priority');
-                            })
-                        : null,
-                  ),
-                  _ChipButton(
-                    icon: Icons.folder,
-                    label: _projectName,
-                    active: _values.projectId != null,
-                    onTap: (anchor) => _showProjectMenu(anchor),
-                    onClear: _values.projectId == null
-                        ? null
-                        : () => setState(() {
-                              _values.projectId = null;
-                              _values.release('project');
-                            }),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final current = _values.dueDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: current == null ? now : DateTime.tryParse(current) ?? now,
+      initialDate: _values.dueDate == null ? now : DateTime.tryParse(_values.dueDate!) ?? now,
       firstDate: DateTime(now.year - 5),
       lastDate: DateTime(now.year + 20),
     );
@@ -348,7 +141,232 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     setState(() => apply(value.trim()));
   }
 
-  Future<void> _showDurationMenu(BuildContext anchor) async {
+  Future<void> _save() async {
+    final title = _parsed.title.isNotEmpty ? _parsed.title : _input.text.trim();
+    if (title.isEmpty || _saving) return;
+    setState(() => _saving = true);
+    final fields = composeTaskFields(
+      parsed: _parsed,
+      dueDate: _values.dueDate,
+      dueTime: _values.dueTime,
+      estimate: _values.estimate,
+      recurrence: _values.recurrence,
+      priority: _values.priority,
+      projectId: _values.projectId,
+    );
+    // A quick-add line names labels; a task stores ids.
+    final named = fields.remove('labels');
+    if (named is List && named.isNotEmpty) {
+      final ids = await widget.repo.resolveLabelNames(named);
+      if (ids.isNotEmpty) fields['labels'] = ids;
+    }
+    if (!mounted) return;
+    await widget.repo.createTask(title, projectId: _values.projectId, extra: fields);
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  String get _estimateText {
+    final minutes = _values.estimate;
+    if (minutes == null) return 'Duration';
+    if (minutes < 60) return '${minutes}m';
+    final hours = minutes ~/ 60;
+    final rest = minutes % 60;
+    return rest == 0 ? '${hours}h' : '${hours}h ${rest}m';
+  }
+
+  String get _projectName {
+    if (_values.projectId == null) return 'Inbox';
+    for (final project in widget.projects) {
+      if (project.id == _values.projectId) return project.name;
+    }
+    return 'Project';
+  }
+
+  /// The line under the input: what the line was understood to mean.
+  List<Widget> _preview(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    Widget chip(String label, IconData icon, {bool muted = false}) => Chip(
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          side: muted ? BorderSide(color: scheme.outlineVariant) : BorderSide.none,
+          backgroundColor: muted ? null : scheme.primary.withValues(alpha: 0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          avatar: Icon(icon, size: 14, color: muted ? scheme.onSurfaceVariant : scheme.primary),
+          label: Text(label),
+          labelStyle: theme.textTheme.labelMedium
+              ?.copyWith(color: muted ? scheme.onSurfaceVariant : scheme.primary),
+        );
+
+    final recognised = <Widget>[
+      for (final label in _parsed.chips) chip(label, Icons.auto_awesome),
+      // A `#name` that matched no project stays in the title; say so rather than
+      // ignoring it silently.
+      for (final miss in _parsed.unmatched) chip('$miss — no match', Icons.help_outline, muted: true),
+    ];
+    if (recognised.isNotEmpty) {
+      return [Wrap(spacing: 6, runSpacing: 4, children: recognised)];
+    }
+
+    final chosen = <Widget>[
+      if (_values.dueDate != null) chip([_values.dueDate, ?_values.dueTime].join(' '), Icons.event),
+      if (_values.estimate != null) chip(_estimateText, Icons.timelapse),
+      if (_values.recurrence != null) chip(_values.recurrence!, Icons.repeat),
+      if (_values.priority < 4) chip('P${_values.priority}', Icons.flag),
+      if (_values.projectId != null) chip(_projectName, Icons.folder),
+    ];
+    if (chosen.isNotEmpty) return [Wrap(spacing: 6, runSpacing: 4, children: chosen)];
+
+    return [
+      Text(
+        _input.text.trim().isEmpty
+            ? 'Type a task — "call Sam tomorrow 3pm p1 +#work 30m"'
+            : 'No date, repeat or project understood yet',
+        style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        hintText: 'What needs doing?',
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                      onSubmitted: (_) => _save(),
+                    ),
+                  ),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.arrow_upward),
+                    tooltip: 'Add task',
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _preview(theme)),
+              ),
+              const Divider(),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  PropChip(
+                    icon: Icons.event_rounded,
+                    label: _values.dueDate ?? 'Date',
+                    active: _values.dueDate != null,
+                    onTap: _pickDate,
+                    onClear: _values.dueDate == null
+                        ? null
+                        : () => setState(() {
+                              _values.dueDate = null;
+                              _values.dueTime = null;
+                              _values.release('due');
+                            }),
+                  ),
+                  PropChip(
+                    icon: Icons.schedule,
+                    label: _values.dueTime ?? 'Time',
+                    active: _values.dueTime != null,
+                    onTap: _pickTime,
+                    onClear: _values.dueTime == null
+                        ? null
+                        : () => setState(() {
+                              _values.dueTime = null;
+                              _values.release('due');
+                            }),
+                  ),
+                  PropChip(
+                    key: _durationKey,
+                    icon: Icons.timelapse,
+                    label: _estimateText,
+                    active: _values.estimate != null,
+                    onTap: () => _showDurationMenu(_durationKey),
+                    onClear: _values.estimate == null
+                        ? null
+                        : () => setState(() {
+                              _values.estimate = null;
+                              _values.release('estimate');
+                            }),
+                  ),
+                  PropChip(
+                    key: _repeatKey,
+                    icon: Icons.repeat,
+                    label: _values.recurrence ?? 'Repeat',
+                    active: _values.recurrence != null,
+                    onTap: () => _showRepeatMenu(_repeatKey),
+                    onClear: _values.recurrence == null
+                        ? null
+                        : () => setState(() {
+                              _values.recurrence = null;
+                              _values.release('recurrence');
+                            }),
+                  ),
+                  PropChip(
+                    key: _priorityKey,
+                    icon: Icons.flag_rounded,
+                    label: _values.priority < 4 ? 'P${_values.priority}' : 'Priority',
+                    active: _values.priority < 4,
+                    color: priorityColor(_values.priority, theme.colorScheme),
+                    onTap: () => _showPriorityMenu(_priorityKey),
+                    onClear: _values.priority < 4
+                        ? () => setState(() {
+                              _values.priority = 4;
+                              _values.release('priority');
+                            })
+                        : null,
+                  ),
+                  PropChip(
+                    key: _projectKey,
+                    icon: Icons.folder_outlined,
+                    label: _projectName,
+                    active: _values.projectId != null,
+                    onTap: () => _showProjectMenu(_projectKey),
+                    onClear: _values.projectId == null
+                        ? null
+                        : () => setState(() {
+                              _values.projectId = null;
+                              _values.release('project');
+                            }),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDurationMenu(GlobalKey anchor) async {
     const presets = [15, 30, 45, 60, 90, 120, 180, 240];
     final choice = await showMenu<int>(
       context: context,
@@ -369,7 +387,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   static String _durationLabel(int minutes) =>
       minutes < 60 ? '${minutes}m' : (minutes % 60 == 0 ? '${minutes ~/ 60}h' : '${minutes ~/ 60}h ${minutes % 60}m');
 
-  Future<void> _showRepeatMenu(BuildContext anchor) async {
+  Future<void> _showRepeatMenu(GlobalKey anchor) async {
     const presets = ['every day', 'every weekday', 'every week', 'every month', 'every year'];
     final choice = await showMenu<String>(
       context: context,
@@ -394,7 +412,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     }
   }
 
-  Future<void> _showPriorityMenu(BuildContext anchor) async {
+  Future<void> _showPriorityMenu(GlobalKey anchor) async {
     final choice = await showMenu<int>(
       context: context,
       position: _menuPosition(anchor),
@@ -413,7 +431,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  Future<void> _showProjectMenu(BuildContext anchor) async {
+  Future<void> _showProjectMenu(GlobalKey anchor) async {
     final choice = await showMenu<String?>(
       context: context,
       position: _menuPosition(anchor),
@@ -475,59 +493,4 @@ Map<String, Object?> composeTaskFields({
       }.contains(entry.key))
         entry.key: entry.value,
   };
-}
-
-/// A control that shows its value, opens a menu anchored to itself, and clears
-/// when long-pressed.
-class _ChipButton extends StatelessWidget {
-  const _ChipButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.onClear,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final void Function(BuildContext anchor) onTap;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Builder(
-      // A context whose render object is the chip itself, so an opened menu is
-      // placed against the control that asked for it.
-      builder: (anchor) => InkWell(
-        onTap: () => onTap(anchor),
-        onLongPress: onClear,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: active ? theme.colorScheme.secondaryContainer : null,
-            border: Border.all(
-              color: active ? Colors.transparent : theme.colorScheme.outlineVariant,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: active ? theme.colorScheme.onSecondaryContainer : null),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: active ? theme.colorScheme.onSecondaryContainer : theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
