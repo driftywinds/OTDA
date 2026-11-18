@@ -2,6 +2,9 @@ import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
+import 'format.dart';
+import 'theme.dart';
+import 'widgets.dart';
 
 /// One task, editable: the fields the API takes, written as ops as you change
 /// them, so the sheet works offline and never blocks on the network.
@@ -85,134 +88,166 @@ class _TaskSheetState extends State<TaskSheet> {
     setState(() => _due = null);
   }
 
+  String get _projectName {
+    if (_projectId == null) return 'Inbox';
+    for (final project in widget.projects) {
+      if (project.id == _projectId) return project.name;
+    }
+    return 'Project';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dueText = _due == null
-        ? 'No date'
-        : [_due!['date'], if (_due!['time'] != null) _due!['time']].join(' ');
+    final scheme = theme.colorScheme;
+    final now = DateTime.now();
+    final today = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final date = _due?['date']?.toString();
+    final time = _due?['time']?.toString();
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(12, 0, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Checkbox(
-                    value: _completed,
-                    shape: const CircleBorder(),
-                    onChanged: (value) async {
-                      setState(() => _completed = value ?? false);
+                  TaskCheck(
+                    done: _completed,
+                    priority: _priority,
+                    onChanged: () async {
+                      setState(() => _completed = !_completed);
                       await widget.repo.setCompleted(widget.task, _completed);
                     },
                   ),
                   Expanded(
                     child: TextField(
                       controller: _title,
-                      style: theme.textTheme.titleMedium,
-                      decoration: const InputDecoration(border: InputBorder.none, hintText: 'Title'),
+                      minLines: 1,
+                      maxLines: 4,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        decoration: _completed ? TextDecoration.lineThrough : null,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        hintText: 'Title',
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
                       onSubmitted: (_) => _saveTitle(),
                       onTapOutside: (_) => _saveTitle(),
                     ),
                   ),
                 ],
               ),
-              const Divider(),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ActionChip(
-                    avatar: const Icon(Icons.event, size: 16),
-                    label: Text(dueText),
-                    onPressed: _pickDate,
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.schedule, size: 16),
-                    label: const Text('Time'),
-                    onPressed: _pickTime,
-                  ),
-                  if (_due != null)
-                    ActionChip(
-                      avatar: const Icon(Icons.close, size: 16),
-                      label: const Text('Clear date'),
-                      onPressed: _clearDue,
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    PropChip(
+                      icon: Icons.event_rounded,
+                      label: date == null ? 'Date' : friendlyDate(date, today),
+                      active: date != null,
+                      onTap: _pickDate,
+                      onClear: date == null ? null : _clearDue,
                     ),
-                  PopupMenuButton<int>(
-                    initialValue: _priority,
-                    onSelected: (value) async {
-                      setState(() => _priority = value);
-                      await widget.repo.setField('task', widget.task.id, 'priority', value);
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 1, child: Text('Priority 1')),
-                      PopupMenuItem(value: 2, child: Text('Priority 2')),
-                      PopupMenuItem(value: 3, child: Text('Priority 3')),
-                      PopupMenuItem(value: 4, child: Text('Priority 4 (default)')),
-                    ],
-                    child: Chip(
-                      avatar: const Icon(Icons.flag, size: 16),
-                      label: Text('P$_priority'),
+                    PropChip(
+                      icon: Icons.schedule_rounded,
+                      label: time ?? 'Time',
+                      active: time != null,
+                      onTap: _pickTime,
                     ),
-                  ),
-                  PopupMenuButton<String?>(
-                    initialValue: _projectId,
-                    onSelected: (value) async {
-                      setState(() => _projectId = value);
-                      await widget.repo.setField('task', widget.task.id, 'project_id', value);
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
-                      for (final project in widget.projects)
-                        if (!project.isDeleted && !project.isArchived)
-                          PopupMenuItem<String?>(value: project.id, child: Text(project.name)),
-                    ],
-                    child: Chip(
-                      avatar: const Icon(Icons.folder, size: 16),
-                      label: Text(_projectId == null
-                          ? 'Inbox'
-                          : widget.projects
-                              .where((p) => p.id == _projectId)
-                              .map((p) => p.name)
-                              .firstOrNull ??
-                              'Project'),
+                    PopupMenuButton<int>(
+                      initialValue: _priority,
+                      tooltip: 'Priority',
+                      onSelected: (value) async {
+                        setState(() => _priority = value);
+                        await widget.repo.setField('task', widget.task.id, 'priority', value);
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 1, child: Text('Priority 1')),
+                        PopupMenuItem(value: 2, child: Text('Priority 2')),
+                        PopupMenuItem(value: 3, child: Text('Priority 3')),
+                        PopupMenuItem(value: 4, child: Text('Priority 4 (default)')),
+                      ],
+                      child: PropChip(
+                        icon: Icons.flag_rounded,
+                        label: _priority < 4 ? 'P$_priority' : 'Priority',
+                        active: _priority < 4,
+                        color: priorityColor(_priority, scheme),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _notes,
-                minLines: 3,
-                maxLines: 12,
-                decoration: const InputDecoration(labelText: 'Notes', alignLabelWithHint: true),
-                onTapOutside: (_) => _saveNotes(),
+                    PopupMenuButton<String?>(
+                      initialValue: _projectId,
+                      tooltip: 'Project',
+                      onSelected: (value) async {
+                        setState(() => _projectId = value);
+                        await widget.repo.setField('task', widget.task.id, 'project_id', value);
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
+                        for (final project in widget.projects)
+                          if (!project.isDeleted && !project.isArchived)
+                            PopupMenuItem<String?>(value: project.id, child: Text(project.name)),
+                      ],
+                      child: PropChip(
+                        icon: Icons.folder_outlined,
+                        label: _projectName,
+                        active: _projectId != null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () async {
-                      await widget.repo.trash(widget.task);
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    },
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: TextField(
+                  controller: _notes,
+                  minLines: 3,
+                  maxLines: 12,
+                  decoration: const InputDecoration(
+                    hintText: 'Notes',
+                    alignLabelWithHint: true,
+                    contentPadding: EdgeInsets.all(16),
                   ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: () async {
-                      await _saveTitle();
-                      await _saveNotes();
-                      if (context.mounted) Navigator.of(context).pop(true);
-                    },
-                    child: const Text('Done'),
-                  ),
-                ],
+                  onTapOutside: (_) => _saveNotes(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Row(
+                  children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(foregroundColor: scheme.error),
+                      onPressed: () async {
+                        await widget.repo.trash(widget.task);
+                        if (context.mounted) Navigator.of(context).pop(true);
+                      },
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('Delete'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () async {
+                        await _saveTitle();
+                        await _saveNotes();
+                        if (context.mounted) Navigator.of(context).pop(true);
+                      },
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

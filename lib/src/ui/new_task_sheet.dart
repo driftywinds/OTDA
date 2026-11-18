@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
 import '../quickadd_bridge.dart';
+import 'theme.dart';
+import 'widgets.dart';
 
 /// The composer behind the plus button: one line to type, a preview of what the
 /// line was understood to mean, and the date, time, duration, repeat, priority
@@ -175,11 +177,16 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
 
   /// The line under the input: what the line was understood to mean.
   List<Widget> _preview(ThemeData theme) {
+    final scheme = theme.colorScheme;
     Widget chip(String label, IconData icon) => Chip(
           visualDensity: VisualDensity.compact,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          avatar: Icon(icon, size: 14),
+          side: BorderSide.none,
+          backgroundColor: scheme.primary.withValues(alpha: 0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          avatar: Icon(icon, size: 14, color: scheme.primary),
           label: Text(label),
+          labelStyle: theme.textTheme.labelMedium?.copyWith(color: scheme.primary),
         );
 
     if (_parsed.chips.isNotEmpty) {
@@ -218,7 +225,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -233,14 +240,19 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                       textInputAction: TextInputAction.done,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
-                        hintText: 'New task',
+                        hintText: 'What needs doing?',
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
                       ),
-                      style: theme.textTheme.titleMedium,
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                       onSubmitted: (_) => _save(),
                     ),
                   ),
                   IconButton.filled(
+                    style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
                     onPressed: _saving ? null : _save,
                     icon: _saving
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -250,17 +262,17 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.only(left: 2, bottom: 10),
+                padding: const EdgeInsets.only(bottom: 14),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _preview(theme)),
               ),
-              const Divider(height: 1),
-              const SizedBox(height: 10),
+              const Divider(),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _ChipButton(
-                    icon: Icons.event,
+                  PropChip(
+                    icon: Icons.event_rounded,
                     label: _dueDate ?? 'Date',
                     active: _dueDate != null,
                     onTap: _pickDate,
@@ -269,36 +281,37 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                       _dueTime = null;
                     }),
                   ),
-                  _ChipButton(
+                  PropChip(
                     icon: Icons.schedule,
                     label: _dueTime ?? 'Time',
                     active: _dueTime != null,
                     onTap: _pickTime,
                     onClear: _dueTime == null ? null : () => setState(() => _dueTime = null),
                   ),
-                  _ChipButton(
+                  PropChip(
                     icon: Icons.timelapse,
                     label: _estimateText,
                     active: _estimate != null,
                     onTap: () => _showDurationMenu(context),
                     onClear: _estimate == null ? null : () => setState(() => _estimate = null),
                   ),
-                  _ChipButton(
+                  PropChip(
                     icon: Icons.repeat,
                     label: _recurrence ?? 'Repeat',
                     active: _recurrence != null,
                     onTap: () => _showRepeatMenu(context),
                     onClear: _recurrence == null ? null : () => setState(() => _recurrence = null),
                   ),
-                  _ChipButton(
-                    icon: Icons.flag,
+                  PropChip(
+                    icon: Icons.flag_rounded,
                     label: _priority < 4 ? 'P$_priority' : 'Priority',
                     active: _priority < 4,
+                    color: priorityColor(_priority, theme.colorScheme),
                     onTap: () => _showPriorityMenu(context),
                     onClear: _priority < 4 ? () => setState(() => _priority = 4) : null,
                   ),
-                  _ChipButton(
-                    icon: Icons.folder,
+                  PropChip(
+                    icon: Icons.folder_outlined,
                     label: _projectName,
                     active: _projectId != null,
                     onTap: () => _showProjectMenu(context),
@@ -402,54 +415,4 @@ Map<String, Object?> composeTaskFields({
           .contains(entry.key))
         entry.key: entry.value,
   };
-}
-
-/// A control that shows its value, opens a picker, and clears when long-pressed.
-class _ChipButton extends StatelessWidget {
-  const _ChipButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.onClear,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      onLongPress: onClear,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: active ? theme.colorScheme.secondaryContainer : null,
-          border: Border.all(
-            color: active ? Colors.transparent : theme.colorScheme.outlineVariant,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: active ? theme.colorScheme.onSecondaryContainer : null),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: active ? theme.colorScheme.onSecondaryContainer : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

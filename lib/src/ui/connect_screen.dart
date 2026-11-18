@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../auth/auth_service.dart';
+import 'theme.dart';
 
 /// Server address, then sign-in: password (primary) or an API token.
 class ConnectScreen extends StatefulWidget {
@@ -119,18 +120,63 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('OTDA', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
+                          ),
+                        ),
+                        child: Icon(Icons.check_rounded, size: 32, color: theme.colorScheme.onPrimary),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text('OTDA', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2)),
                     const SizedBox(height: 4),
                     Text(
                       connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
-                    const SizedBox(height: 24),
-                    if (!connected) ..._serverStep() else ..._credentialStep(),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-                    ],
+                    const SizedBox(height: 28),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.card,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (!connected) ..._serverStep() else ..._credentialStep(),
+                          if (_error != null) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.error_outline_rounded, size: 18, color: theme.colorScheme.onErrorContainer),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(_error!, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -148,7 +194,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.go,
           autofillHints: const [AutofillHints.url],
-          decoration: const InputDecoration(labelText: 'Server address', hintText: 'todo.example.com'),
+          decoration: const InputDecoration(
+            labelText: 'Server address',
+            hintText: 'todo.example.com',
+            prefixIcon: Icon(Icons.dns_outlined),
+          ),
           onSubmitted: (_) => _connect(),
         ),
         const SizedBox(height: 12),
@@ -207,7 +257,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
-          decoration: const InputDecoration(labelText: 'Email'),
+          decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_outline_rounded)),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -217,7 +267,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           enableSuggestions: false,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
-          decoration: const InputDecoration(labelText: 'Password'),
+          decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline_rounded)),
           onSubmitted: (_) => _signInPassword(),
         ),
         const SizedBox(height: 12),
@@ -235,6 +285,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
             labelText: 'API token',
             hintText: 'ot_…',
             helperText: 'Settings → Integrations → API tokens',
+            prefixIcon: Icon(Icons.key_rounded),
           ),
           onSubmitted: (_) => _signInToken(),
         ),
