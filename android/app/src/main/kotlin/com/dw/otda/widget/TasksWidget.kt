@@ -231,7 +231,6 @@ private val OnSurface: ColorProvider = dayNightColor(BrandNavy, Color(0xFFE8ECF2
 private val SecondaryText: ColorProvider = dayNightColor(Color(0xFF64748B), Color(0xFF94A3B8))
 private val Accent = ColorProvider(Color(0xFF34D399))
 private val ErrorRed = ColorProvider(Color(0xFFE5484D))
-private val White = ColorProvider(Color(0xFFFFFFFF))
 
 @Composable
 private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: Int) {
@@ -277,15 +276,14 @@ private fun SetupCard() {
 private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
     val compact = LocalSize.current.width < 250.dp
     Column(
-        modifier = GlanceModifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = GlanceModifier.fillMaxSize().padding(top = 6.dp, bottom = 8.dp),
     ) {
         Header(snapshot, projectId, appWidgetId)
-        Spacer(GlanceModifier.height(6.dp))
         if (snapshot.rows.isEmpty()) {
             EmptyState()
             return@Column
         }
-        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = 16.dp)) {
             snapshot.rows.forEach { row ->
                 item {
                     when (row) {
@@ -298,8 +296,8 @@ private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
         if (snapshot.more > 0) {
             Text(
                 text = "+${snapshot.more} more",
-                modifier = GlanceModifier.padding(top = 6.dp),
-                style = TextStyle(color = SecondaryText, fontSize = 14.sp),
+                modifier = GlanceModifier.padding(start = 16.dp, top = 4.dp),
+                style = TextStyle(color = SecondaryText, fontSize = 13.sp),
                 maxLines = 1,
             )
         }
@@ -310,7 +308,7 @@ private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
 private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
     val context = LocalContext.current
     Row(
-        modifier = GlanceModifier.fillMaxWidth().height(48.dp),
+        modifier = GlanceModifier.fillMaxWidth().height(36.dp).padding(start = 16.dp, end = 4.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Row(
@@ -318,23 +316,6 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
                 .clickable(actionStartActivity(configIntent(context, appWidgetId))),
             verticalAlignment = Alignment.Vertical.CenterVertically,
         ) {
-            Box(
-                modifier = GlanceModifier.size(28.dp)
-                    .cornerRadius(8.dp)
-                    .background(ColorProvider(snapshot.tileColor)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = snapshot.glyph,
-                    style = TextStyle(
-                        color = White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    maxLines = 1,
-                )
-            }
-            Spacer(GlanceModifier.width(10.dp))
             Text(
                 text = oneLine(snapshot.name.ifBlank { "OTDA" }),
                 modifier = GlanceModifier.defaultWeight(),
@@ -352,10 +333,10 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
                 colorFilter = ColorFilter.tint(SecondaryText),
             )
         }
-        TapTarget(R.drawable.ic_widget_add, "New task") {
+        TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20) {
             actionStartActivity(newTaskIntent(context, projectId))
         }
-        TapTarget(R.drawable.ic_widget_more, "Refresh") {
+        TapTarget(R.drawable.ic_widget_more, "Refresh", target = 32, icon = 14) {
             actionRunCallback<RefreshAction>()
         }
     }
@@ -365,7 +346,7 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
 private fun SectionLabel(label: String) {
     Text(
         text = oneLine(label, 32),
-        modifier = GlanceModifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        modifier = GlanceModifier.fillMaxWidth().padding(top = 6.dp, bottom = 0.dp),
         style = TextStyle(color = SecondaryText, fontSize = 12.sp, fontWeight = FontWeight.Medium),
         maxLines = 1,
     )
@@ -382,12 +363,12 @@ private fun TaskRow(task: WidgetRow.Task) {
     )
     Row(
         modifier = GlanceModifier.fillMaxWidth()
-            .height(48.dp)
+            .height(40.dp)
             .clickable(actionStartActivity(deepLink(context, taskUri(task)))),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Box(
-            modifier = GlanceModifier.size(48.dp)
+            modifier = GlanceModifier.size(40.dp)
                 .clickable(actionRunCallback<CompleteAction>(completeParameters(task))),
             contentAlignment = Alignment.Center,
         ) {
@@ -455,15 +436,15 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun TapTarget(icon: Int, description: String, action: () -> Action) {
+private fun TapTarget(res: Int, description: String, target: Int, icon: Int, action: () -> Action) {
     Box(
-        modifier = GlanceModifier.size(48.dp).clickable(action()),
+        modifier = GlanceModifier.size(target.dp).clickable(action()),
         contentAlignment = Alignment.Center,
     ) {
         Image(
-            provider = ImageProvider(icon),
+            provider = ImageProvider(res),
             contentDescription = description,
-            modifier = GlanceModifier.size(20.dp),
+            modifier = GlanceModifier.size(icon.dp),
             colorFilter = ColorFilter.tint(OnSurface),
         )
     }

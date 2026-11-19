@@ -84,6 +84,20 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/tasks_widget_info"/>
         </receiver>
+        <!-- home_widget's background path: widget buttons (refresh, complete) broadcast here,
+             and the service starts a Dart isolate to run onWidgetAction. Without these two the
+             taps are dropped silently. -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND"/>
+            </intent-filter>
+        </receiver>
+        <service
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE"/>
         <!-- Project picker for the widget. Plain Views, so it works with the app process dead. -->
         <activity
             android:name=".widget.TasksWidgetConfigActivity"
