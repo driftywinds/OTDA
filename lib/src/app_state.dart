@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -33,6 +34,12 @@ class AppState extends ChangeNotifier {
   Timer? _timer;
   bool _restoring = true;
   String? _syncError;
+
+  /// The font is a device choice, not an account one: it lives in
+  /// shared_preferences so it applies before anyone signs in.
+  static const _fontPref = 'ui.font';
+  bool _useAllo = false;
+  bool get useAllo => _useAllo;
   DateTime? _lastSync;
 
   ApiClient? get client => _client;
@@ -46,6 +53,28 @@ class AppState extends ChangeNotifier {
   DateTime? get lastSync => _lastSync;
   bool get isSyncing => _engine?.isRunning ?? false;
   int get pending => _engine?.pending ?? 0;
+
+  /// Reads the device-only preferences. Called once at start-up.
+  Future<void> loadLocalPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _useAllo = prefs.getString(_fontPref) == 'allo';
+    } on Object {
+      _useAllo = false; // a missing store is the default look, not an error
+    }
+    notifyListeners();
+  }
+
+  Future<void> setUseAllo(bool value) async {
+    _useAllo = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_fontPref, value ? 'allo' : 'system');
+    } on Object {
+      // the choice stays in memory for this run
+    }
+  }
 
   /// Reloads the stored session, checks it still works, opens the replica.
   Future<void> restore() async {

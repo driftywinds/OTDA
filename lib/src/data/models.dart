@@ -81,5 +81,11 @@ class Workspace {
   String get id => raw['id']?.toString() ?? '';
   String get name => raw['name']?.toString() ?? '';
   bool get isDefault => raw['default'] == true;
+
+  /// A name from OpenTodo's icon catalogue, e.g. `briefcase`; empty when unset.
+  String get icon => raw['icon']?.toString() ?? '';
+
+  /// The workspace's accent colour, as the server stores it (`#rrggbb`).
+  String get color => raw['color']?.toString() ?? '';
   int get memberCount => (raw['members'] as List?)?.length ?? 0;
 }

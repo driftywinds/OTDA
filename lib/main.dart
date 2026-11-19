@@ -23,6 +23,7 @@ class _OtdaAppState extends State<OtdaApp> {
   @override
   void initState() {
     super.initState();
+    _state.loadLocalPreferences();
     _state.restore();
   }
 
@@ -39,8 +40,8 @@ class _OtdaAppState extends State<OtdaApp> {
       builder: (context, _) => MaterialApp(
         title: 'OTDA',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
+        theme: buildTheme(Brightness.light, fontFamily: _state.useAllo ? alloFont : null),
+        darkTheme: buildTheme(Brightness.dark, fontFamily: _state.useAllo ? alloFont : null),
         home: _state.isRestoring
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : _state.isSignedIn

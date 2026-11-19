@@ -149,6 +149,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: 'Waiting to send',
                       value: widget.state.pending == 0 ? 'Nothing' : '${widget.state.pending} change(s)',
                     ),
+                    _ChoiceRow(
+                      label: 'Font',
+                      value: widget.state.useAllo ? 'allo' : 'system',
+                      options: const {
+                        'system': 'System',
+                        'allo': 'Allo',
+                      },
+                      onChanged: (value) => widget.state.setUseAllo(value == 'allo'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),

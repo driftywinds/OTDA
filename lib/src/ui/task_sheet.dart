@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
+import '../quickadd/rule.dart' as rules;
 import 'format.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -27,6 +28,10 @@ class _TaskSheetState extends State<TaskSheet> {
   late int _priority = widget.task.priority;
   late String? _projectId = widget.task.projectId;
   late Map<String, Object?>? _due = widget.task.due;
+
+  /// The repeat rule as stored (`every month`, `every 3 days after completion`),
+  /// empty for a one-off task.
+  late String _recurrence = widget.task.raw['recurrence']?.toString() ?? '';
 
   @override
   void dispose() {
@@ -63,6 +68,84 @@ class _TaskSheetState extends State<TaskSheet> {
     final value = <String, Object?>{'date': date, 'time': ?keepTime};
     await widget.repo.setField('task', widget.task.id, 'due', value);
     setState(() => _due = value);
+  }
+
+  static String _recurrenceLabel(String rule) {
+    final parsed = rules.parseRule(rule);
+    return parsed.ok ? (parsed.canonical ?? rule) : rule;
+  }
+
+  /// Presets plus a field for any rule the grammar accepts, the same shapes the
+  /// composer offers: `every month`, `every 3 days after completion`, …
+  Future<void> _pickRepeat() async {
+    const presets = ['every day', 'every weekday', 'every week', 'every month', 'every year'];
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final rule in presets)
+              ListTile(
+                title: Text(rule),
+                trailing: rule == _recurrence ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.of(context).pop(rule),
+              ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: Text(_recurrence.isEmpty ? 'Custom rule…' : 'Edit “$_recurrence”…'),
+              onTap: () => Navigator.of(context).pop('__custom'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == '__custom') {
+      final controller = TextEditingController(text: _recurrence.isEmpty ? 'every week' : _recurrence);
+      final typed = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Repeat'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'every 2nd tuesday'),
+            onSubmitted: (text) => Navigator.of(context).pop(text),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Set')),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (typed == null || !mounted) return;
+      final rule = typed.trim();
+      if (rule.isEmpty) return;
+      if (!rules.parseRule(rule).ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That is not a rule this app understands.')),
+        );
+        return;
+      }
+      await _setRecurrence(rule);
+      return;
+    }
+    await _setRecurrence(choice);
+  }
+
+  Future<void> _setRecurrence(String rule) async {
+    final canonical = rules.parseRule(rule).canonical ?? rule;
+    await widget.repo.setField('task', widget.task.id, 'recurrence', canonical);
+    if (mounted) setState(() => _recurrence = canonical);
+  }
+
+  Future<void> _clearRepeat() async {
+    await widget.repo.setField('task', widget.task.id, 'recurrence', null);
+    if (mounted) setState(() => _recurrence = '');
   }
 
   Future<void> _pickTime() async {
@@ -165,6 +248,13 @@ class _TaskSheetState extends State<TaskSheet> {
                       label: time ?? 'Time',
                       active: time != null,
                       onTap: _pickTime,
+                    ),
+                    PropChip(
+                      icon: Icons.repeat_rounded,
+                      label: _recurrence.isEmpty ? 'Repeat' : _recurrenceLabel(_recurrence),
+                      active: _recurrence.isNotEmpty,
+                      onTap: _pickRepeat,
+                      onClear: _recurrence.isEmpty ? null : _clearRepeat,
                     ),
                     PopupMenuButton<int>(
                       initialValue: _priority,

@@ -9,9 +9,11 @@ import 'new_task_sheet.dart';
 import 'settings_screen.dart';
 import 'task_sheet.dart';
 import 'calendar_month.dart';
+import '../data/recurrence.dart';
 import 'format.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'workspace_icon.dart';
 
 /// Where the shell is showing. The first four are the bottom bar; the rest come
 /// from the sidebar, and none of them highlights a tab.
@@ -43,6 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _calendarDay = '';
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  /// The day each task is listed under in Upcoming: its due date, or the next
+  /// occurrence of a repeating task.
+  Map<String, String> _upcomingDays = const {};
 
   /// The sync line is a flicker on success and stays while there is a problem.
   bool _syncFlash = false;
@@ -118,15 +124,16 @@ class _HomeScreenState extends State<HomeScreen> {
         return _tasks.where((t) => inInboxOf(t.raw, byId)).toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
       case TaskView.upcoming:
-        return _tasks
-            .where((t) =>
-                !t.isCompleted &&
-                !t.isDeleted &&
-                t.dueDate != null &&
-                t.dueDate!.compareTo(today) > 0)
-            .toList()
-          ..sort((a, b) => '${a.dueDate}${a.dueTime ?? '99:99'}'
-              .compareTo('${b.dueDate}${b.dueTime ?? '99:99'}'));
+        // Upcoming is every open task with a day ahead of today, plus a repeating
+        // task whose stored due has passed: it is shown on its next occurrence, so
+        // a monthly or daily task does not sit in the past and vanish from here.
+        final dated = <(String, Task)>[
+          for (final t in _tasks)
+            if (upcomingDay(t, today) case final day?) (day, t),
+        ]..sort((a, b) => '${a.$1}${a.$2.dueTime ?? '99:99'}'
+            .compareTo('${b.$1}${b.$2.dueTime ?? '99:99'}'));
+        _upcomingDays = {for (final e in dated) e.$2.id: e.$1};
+        return [for (final e in dated) e.$2];
       case TaskView.search:
         final needle = _query.trim().toLowerCase();
         if (needle.isEmpty) return const [];
@@ -290,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final out = <Object>[];
       String? last;
       for (final task in tasks) {
-        final day = task.dueDate;
+        final day = _upcomingDays[task.id] ?? task.dueDate;
         if (day == null) continue;
         if (day != last) {
           out.add(friendlyDate(day, today));
@@ -357,17 +364,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
               actions: [
-                if (widget.state.isSyncing)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 14),
-                    child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
-                  )
-                else
-                  IconButton(
-                    tooltip: 'Sync now',
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.sync_rounded),
-                  ),
+                // Both actions sit in equal 48px boxes so the icons are evenly
+                // spaced, and the spinner takes the same box instead of nudging
+                // its neighbour while a sync runs.
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: widget.state.isSyncing
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          tooltip: 'Sync now',
+                          onPressed: _refresh,
+                          icon: const Icon(Icons.sync_rounded),
+                        ),
+                ),
                 IconButton(
                   tooltip: 'Settings',
                   onPressed: () => Navigator.of(context).push(
@@ -375,8 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   icon: const Icon(Icons.tune_rounded),
                 ),
-                _AccountMenu(state: widget.state),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
               ],
             ),
             SliverToBoxAdapter(
@@ -423,6 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       today: _today,
                       projectName: task.projectId == null ? null : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
+                      dueOverride: _view == TaskView.upcoming ? _upcomingDays[task.id] : null,
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                     );
@@ -446,59 +462,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _AccountMenu extends StatelessWidget {
-  const _AccountMenu({required this.state});
-
-  final AppState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final name = (state.account?.displayName ?? '').trim();
-    final email = (state.account?.userEmail ?? '').trim();
-    final seed = name.isNotEmpty ? name : email;
-    final initial = seed.isEmpty ? '?' : seed.substring(0, 1).toUpperCase();
-    return PopupMenuButton<String>(
-      tooltip: 'Account',
-      offset: const Offset(0, 44),
-      onSelected: (value) async {
-        if (value == 'signOut') await state.signOut();
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          enabled: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (name.isNotEmpty)
-                Text(name, style: theme.textTheme.titleSmall?.copyWith(color: scheme.onSurface)),
-              if (email.isNotEmpty)
-                Text(email, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'signOut',
-          child: Row(children: [Icon(Icons.logout_rounded, size: 20), SizedBox(width: 12), Text('Sign out')]),
-        ),
-      ],
-      child: Container(
-        width: 34,
-        height: 34,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(gradient: scheme.brandGradient, shape: BoxShape.circle),
-        child: Text(
-          initial,
-          style: theme.textTheme.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-}
-
-/// The big title, with the date or count and the sync state beneath it.
 class _Header extends StatelessWidget {
   const _Header({
     required this.state,
@@ -633,10 +596,14 @@ class _TaskRow extends StatelessWidget {
     required this.onOpen,
     this.projectName,
     this.projectColor,
+    this.dueOverride,
   });
 
   final Task task;
   final String today;
+
+  /// The day to show instead of `due` (Upcoming projects a repeating task).
+  final String? dueOverride;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final String? projectName;
@@ -646,7 +613,7 @@ class _TaskRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final date = task.dueDate;
+    final date = dueOverride ?? task.dueDate;
     final days = date == null ? null : daysBetween(today, date);
     final overdue = days != null && days < 0;
     final estimate = task.estimateMinutes;
@@ -659,6 +626,8 @@ class _TaskRow extends StatelessWidget {
           color: overdue ? scheme.error : (days == 0 ? scheme.primary : null),
         ),
       if (estimate != null) MetaPill(icon: Icons.timelapse_rounded, label: durationLabel(estimate)),
+      if (isRecurring(task))
+        MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabel(task)),
       if (projectName != null)
         MetaPill(label: projectName!, dot: projectColor ?? scheme.primary),
     ];
@@ -751,6 +720,12 @@ class _AppDrawer extends StatelessWidget {
   final void Function(String projectId) onProject;
   final VoidCallback onWorkspace;
 
+  /// `v1.5.0` reads as `v1.5.0`, not `vv1.5.0`.
+  static String _versionLabel(String? version) {
+    if (version == null || version.isEmpty) return '?';
+    return version.startsWith('v') ? version : 'v$version';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -791,22 +766,20 @@ class _AppDrawer extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 18, 16, 14),
                 child: Row(
                   children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        gradient: scheme.brandGradient,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: scheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Icon(Icons.spa_outlined, size: 18, color: scheme.onPrimary),
-                    ),
+                    Builder(builder: (context) {
+                      // The owner picks an icon and a colour for each workspace;
+                      // show theirs rather than one generic glyph.
+                      final accent = parseHexColor(current?.color) ?? scheme.primary;
+                      return Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(workspaceIcon(current?.icon ?? ''), size: 18, color: accent),
+                      );
+                    }),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -906,7 +879,19 @@ class _AppDrawer extends StatelessWidget {
                 state.account?.displayName ?? 'Signed in',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text('OpenTodo v${state.server?.version ?? '?'}'),
+              subtitle: Text('OpenTodo ${_versionLabel(state.server?.version)}'),
+              trailing: IconButton(
+                tooltip: 'Sign out',
+                icon: const Icon(Icons.logout_rounded, size: 20),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  await state.signOut();
+                },
+              ),
+              onTap: () async {
+                Navigator.of(context).pop();
+                await state.signOut();
+              },
             ),
           ],
         ),

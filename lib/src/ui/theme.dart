@@ -54,7 +54,11 @@ Color priorityColor(int priority, ColorScheme scheme) => switch (priority) {
       _ => scheme.outline,
     };
 
-ThemeData buildTheme(Brightness brightness) {
+/// The bundled faces a person can choose from. A null family is the
+/// platform's own font.
+const alloFont = 'Allo';
+
+ThemeData buildTheme(Brightness brightness, {String? fontFamily}) {
   final base = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
   final scheme = base.copyWith(surface: brightness == Brightness.dark ? _darkPage : _lightPage);
   final radius = BorderRadius.circular(14);
@@ -80,6 +84,7 @@ ThemeData buildTheme(Brightness brightness) {
   return ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
+    fontFamily: fontFamily,
     brightness: brightness,
     scaffoldBackgroundColor: scheme.page,
     textTheme: textTheme,

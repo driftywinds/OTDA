@@ -499,3 +499,29 @@ String compatibleRule(String rule, String? due) {
     count: r.count,
   ));
 }
+
+/// The next occurrence on or after [today], projected from [due]. This is the
+/// `nextCalendar` rule from the web app's `recurrence.ts`: `due` may be in the
+/// past, which is the case this exists for, because a monthly task whose stored
+/// due has passed still has a next date. A rule that does not parse returns
+/// [today].
+String nextOccurrence(String rule, String? due, String today) {
+  final parsed = parseRule(rule);
+  if (!parsed.ok) return today;
+  final r = parsed.rule!;
+  final item = _dayNumberIso(today);
+  if (item == null) return today;
+  final d = due == null ? item : (_dayNumberIso(due) ?? item);
+  var c = _firstAfter(r, d);
+  if (c >= item) return _formatDate(c);
+  if (r.kind == 'weekdays' && r.interval > 1) return _formatDate(_inPhaseAfter(r, d, item));
+  if (r.kind != 'interval') return _formatDate(_firstAfter(r, item));
+  if (r.unit == 'day' || r.unit == 'week') {
+    final size = r.unit == 'week' ? 7 * r.interval : r.interval;
+    return _formatDate(d + size * (_floorDiv(item - d, size) + 1));
+  }
+  for (var k = 2;; k++) {
+    c = _step(r, d, k);
+    if (c > item) return _formatDate(c);
+  }
+}
