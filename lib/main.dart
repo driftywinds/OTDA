@@ -30,6 +30,8 @@ class _OtdaAppState extends State<OtdaApp> {
     _state.restore();
     ReminderService.instance.init();
     HomeWidget.registerInteractivityCallback(onWidgetAction);
+    HomeWidget.initiallyLaunchedFromHomeWidget().then(handleWidgetUri);
+    HomeWidget.widgetClicked.listen(handleWidgetUri);
   }
 
   @override

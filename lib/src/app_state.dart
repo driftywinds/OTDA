@@ -191,6 +191,7 @@ class AppState extends ChangeNotifier {
       }
       _client = client;
       await _openReplica();
+      unawaited(afterDataChanged());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
       unawaited(_loadAvatar());
@@ -296,6 +297,7 @@ class AppState extends ChangeNotifier {
     final projects = await repo.projects();
     final names = {for (final project in projects) project.id: project.name};
     await ReminderService.instance.init();
+    await ReminderService.instance.requestPermissionOnce();
     await ReminderService.instance.rearm(tasks, projectNames: names);
     await pushWidgets(tasks, projects, today: _todayString());
   }

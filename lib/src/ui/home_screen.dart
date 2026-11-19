@@ -11,6 +11,7 @@ import 'settings_screen.dart';
 import 'task_sheet.dart';
 import 'calendar_month.dart';
 import '../data/occurrences.dart';
+import '../reminders/service.dart';
 import '../data/recurrence.dart';
 import 'format.dart';
 import 'theme.dart';
@@ -31,7 +32,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Task> _tasks = const [];
   Map<String, String> _projectNames = const {};
   Map<String, Color> _projectColors = const {};
@@ -66,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
+    ReminderService.instance.pendingTask.addListener(_openPendingFromWidget);
     super.initState();
     _calendarDay = _today;
     _searchField.addListener(() {
@@ -74,6 +77,23 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _query = text);
     });
     _load();
+  }
+
+  /// A widget row was tapped: open that task once the replica has it.
+  Future<void> _openPendingFromWidget() async {
+    final id = ReminderService.instance.pendingTask.value;
+    if (id == null || !mounted) return;
+    ReminderService.instance.pendingTask.value = null;
+    final task = _tasks.where((t) => t.id == id).firstOrNull;
+    if (task != null) await _open(task);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _load();
+      widget.state.afterDataChanged();
+    }
   }
 
   @override

@@ -12,6 +12,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api/api_client.dart';
 import '../api/cookie_jar.dart';
 import '../data/clock.dart';
@@ -192,6 +194,33 @@ class ReminderService {
 
   /// Set by the app so a tap on the body can open the task.
   void Function(String? payload)? onReminderTapped;
+
+  /// A widget row was tapped while the app runs: the shell opens this task.
+  final pendingTask = ValueNotifier<String?>(null);
+
+  /// Whether the person has been asked already, so the prompt is not repeated.
+  static const _askedPref = 'notif.asked';
+
+  Future<bool> notificationsEnabled() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.areNotificationsEnabled() ?? false;
+  }
+
+  /// Asks once, the first time reminders actually matter.
+  Future<bool> requestPermissionOnce() async {
+    await init();
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_askedPref) == true) return notificationsEnabled();
+    if (await notificationsEnabled()) {
+      await prefs.setBool(_askedPref, true);
+      return true;
+    }
+    final granted = await requestPermission();
+    await prefs.setBool(_askedPref, true);
+    return granted;
+  }
+
+  Future<int> armedCount() async => (await pending()).length;
 }
 
 /// Handles a notification action from a background isolate.
@@ -265,6 +294,20 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
     );
   } on Object {
     // No widget placed, or no launcher support: nothing to do.
+  }
+}
+
+/// Routes a link from the widget or a notification. Called with the launching
+/// link at start-up and with every later tap while the app is running.
+Future<void> handleWidgetUri(Uri? uri) async {
+  if (uri == null) return;
+  if (uri.host == 'task' || uri.pathSegments.length == 1 && uri.host.isEmpty) {
+    final id = uri.host == 'task' ? uri.pathSegments.first : uri.pathSegments.first;
+    ReminderService.instance.pendingTask.value = id;
+    return;
+  }
+  if (uri.host == 'complete') {
+    await onWidgetAction(uri);
   }
 }
 

@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../reminders/service.dart';
+
 import '../app_state.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
@@ -181,6 +183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+                const _Section(title: 'Notifications', children: [_NotificationsCard()]),
                 _Section(
                   title: 'Appearance',
                   children: [
@@ -376,6 +379,101 @@ class _AboutCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+/// Reminders, made visible: whether they may fire, whether they are armed, and a
+/// button that proves it. A permission the app never asked for is the first thing
+/// to show here.
+class _NotificationsCard extends StatefulWidget {
+  const _NotificationsCard();
+
+  @override
+  State<_NotificationsCard> createState() => _NotificationsCardState();
+}
+
+class _NotificationsCardState extends State<_NotificationsCard> {
+  bool? _allowed;
+  bool? _exact;
+  int _armed = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final allowed = await ReminderService.instance.notificationsEnabled();
+    final exact = await ReminderService.instance.exactAlarmsAllowed();
+    final armed = await ReminderService.instance.armedCount();
+    if (!mounted) return;
+    setState(() {
+      _allowed = allowed;
+      _exact = exact;
+      _armed = armed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+
+    Widget row(String label, String value, {bool good = true}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(child: Text(label, style: style)),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style?.copyWith(color: good ? scheme.onSurfaceVariant : scheme.error),
+                ),
+              ),
+              const SizedBox(width: 24),
+            ],
+          ),
+        );
+
+    return Column(
+      children: [
+        row('Permission', _allowed == null ? '…' : (_allowed! ? 'Allowed' : 'Not allowed'),
+            good: _allowed ?? true),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        row('Exact alarms', _exact == null ? '…' : (_exact! ? 'Allowed' : 'Inexact only'),
+            good: _exact ?? true),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        row('Armed reminders', '$_armed'),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        ListTile(
+          dense: true,
+          leading: Icon(Icons.notifications_active_outlined, size: 18, color: scheme.primary),
+          title: Text('Allow notifications', style: style),
+          subtitle: const Text('Needed for a reminder to appear'),
+          onTap: () async {
+            await ReminderService.instance.requestPermission();
+            await _refresh();
+          },
+        ),
+        ListTile(
+          dense: true,
+          leading: Icon(Icons.alarm_outlined, size: 18, color: scheme.primary),
+          title: Text('Send a test reminder', style: style),
+          subtitle: const Text('Lock the phone and watch it arrive'),
+          onTap: () async {
+            await ReminderService.instance.showTest();
+            await _refresh();
+          },
+        ),
+      ],
     );
   }
 }
