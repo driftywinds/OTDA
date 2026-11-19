@@ -71,7 +71,10 @@ ThemeData buildTheme(Brightness brightness, {String? fontFamily}) {
       OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: color, width: width));
 
   // Start from the stock sizes, coloured from this scheme, then tune weights.
-  final text = ThemeData(colorScheme: scheme, useMaterial3: true).textTheme;
+  // The family has to be on the ThemeData the text theme is derived from: a
+  // `textTheme:` passed in explicitly wins over `ThemeData.fontFamily`, so
+  // building these styles without it is why choosing Allo changed nothing.
+  final text = ThemeData(colorScheme: scheme, useMaterial3: true, fontFamily: fontFamily).textTheme;
   final textTheme = text.copyWith(
     headlineMedium: text.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.8),
     titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.4),

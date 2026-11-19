@@ -9,6 +9,7 @@ import 'new_task_sheet.dart';
 import 'settings_screen.dart';
 import 'task_sheet.dart';
 import 'calendar_month.dart';
+import '../data/occurrences.dart';
 import '../data/recurrence.dart';
 import 'format.dart';
 import 'theme.dart';
@@ -50,6 +51,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// occurrence of a repeating task.
   Map<String, String> _upcomingDays = const {};
 
+  /// Every occurrence between the calendar's window edges, so a daily task is
+  /// shown on every day it falls due.
+  ///
+  /// shortcut: the window is today -3 to +9 months; a grid scrolled further than
+  /// that shows no dots. Give MonthCalendar a month callback to make it exact.
+  List<(String, Task)> _calendarOccurrences = const [];
+
   /// The sync line is a flicker on success and stays while there is a problem.
   bool _syncFlash = false;
   Timer? _syncTimer;
@@ -76,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     final repo = widget.state.repo;
     if (repo == null) return;
+    final today = _today;
     final tasks = await repo.tasks();
     final projects = await repo.projects();
     final workspaces = await repo.workspaces();
@@ -97,6 +106,9 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final p in projects)
           if (!p.isDeleted && here(p) && parseHexColor(p.color) != null) p.id: parseHexColor(p.color)!,
       };
+      final from = firstOfMonth(today, -3);
+      final to = lastOfMonth(today, 9);
+      _calendarOccurrences = occurrencesBetween(tasks, from, to);
       _loading = false;
     });
   }
@@ -145,10 +157,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }).toList()
           ..sort((a, b) => (a.isCompleted ? 1 : 0).compareTo(b.isCompleted ? 1 : 0));
       case TaskView.calendar:
-        return _tasks
-            .where((t) => !t.isDeleted && t.dueDate == _calendarDay)
-            .toList()
-          ..sort((a, b) => (a.dueTime ?? '99:99').compareTo(b.dueTime ?? '99:99'));
+        return [
+          for (final entry in _calendarOccurrences)
+            if (entry.$1 == _calendarDay) entry.$2,
+        ]..sort((a, b) => (a.dueTime ?? '99:99').compareTo(b.dueTime ?? '99:99'));
       case TaskView.project:
         return _tasks
             .where((t) => !t.isCompleted && !t.isDeleted && t.projectId == _projectId)
@@ -219,6 +231,30 @@ class _HomeScreenState extends State<HomeScreen> {
     _syncTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _syncFlash = false);
     });
+  }
+
+  Future<void> _createProject(String name) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final created = await repo.createProject(name);
+    await _load();
+    if (!mounted) return;
+    _go(TaskView.project, projectId: created.id);
+  }
+
+  /// Projects are tombstoned one by one; the tasks keep their project id, which is
+  /// what the server does with a deleted project too.
+  Future<void> _deleteProjects(List<String> projectIds) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    for (final id in projectIds) {
+      await repo.trashProject(id);
+    }
+    if (_projectId != null && projectIds.contains(_projectId)) {
+      _projectId = null;
+      _view = TaskView.today;
+    }
+    await _load();
   }
 
   void _go(TaskView view, {String? projectId}) {
@@ -333,6 +369,8 @@ class _HomeScreenState extends State<HomeScreen> {
         projectId: _projectId,
         onOpen: _go,
         onProject: (id) => _go(TaskView.project, projectId: id),
+        onCreateProject: _createProject,
+        onDeleteProjects: _deleteProjects,
         onWorkspace: _chooseWorkspace,
       ),
       body: RefreshIndicator(
@@ -407,7 +445,15 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_view == TaskView.calendar)
               SliverToBoxAdapter(
                 child: MonthCalendar(
-                  tasks: _tasks,
+                  // A repeating task appears once per occurrence, so the grid's
+                  // dots count what actually falls on each day.
+                  tasks: [
+                    for (final entry in _calendarOccurrences)
+                      Task(entry.$2.id, {
+                        ...entry.$2.raw,
+                        'due': {'date': entry.$1},
+                      }),
+                  ],
                   initialMonth: DateTime.now(),
                   onDaySelected: (day) => setState(() {
                     _calendarDay = '${day.year.toString().padLeft(4, '0')}-'
@@ -438,7 +484,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       today: _today,
                       projectName: task.projectId == null ? null : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
-                      dueOverride: _view == TaskView.upcoming ? _upcomingDays[task.id] : null,
+                      dueOverride: switch (_view) {
+                        TaskView.upcoming => _upcomingDays[task.id],
+                        TaskView.calendar => _calendarDay,
+                        _ => null,
+                      },
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                     );
@@ -703,6 +753,8 @@ class _AppDrawer extends StatelessWidget {
     required this.projectId,
     required this.onOpen,
     required this.onProject,
+    required this.onCreateProject,
+    required this.onDeleteProjects,
     required this.onWorkspace,
   });
 
@@ -718,6 +770,8 @@ class _AppDrawer extends StatelessWidget {
   final String? projectId;
   final void Function(TaskView) onOpen;
   final void Function(String projectId) onProject;
+  final void Function(String name) onCreateProject;
+  final void Function(List<String> projectIds) onDeleteProjects;
   final VoidCallback onWorkspace;
 
   /// `v1.5.0` reads as `v1.5.0`, not `vv1.5.0`.
@@ -803,56 +857,20 @@ class _AppDrawer extends StatelessWidget {
             destination(TaskView.upcoming, Icons.date_range_outlined, 'Upcoming'),
             destination(TaskView.calendar, Icons.calendar_month_outlined, 'Calendar'),
             rule,
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 20, 6),
-              child: Text(
-                'PROJECTS (${projects.length})',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  letterSpacing: 1.2,
-                  fontWeight: FontWeight.w800,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  for (final entry in projects.entries)
-                    inset(ListTile(
-                      dense: true,
-                      selected: view == TaskView.project && projectId == entry.key,
-                      leading: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: projectColors[entry.key] ?? scheme.primary,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: (projectColors[entry.key] ?? scheme.primary).withValues(alpha: 0.4),
-                              blurRadius: 5,
-                            ),
-                          ],
-                        ),
-                      ),
-                      title: Text(
-                        entry.value,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: view == TaskView.project && projectId == entry.key
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
-                      ),
-                      trailing: projectCounts[entry.key] == 0
-                          ? null
-                          : Text(
-                              '${projectCounts[entry.key]}',
-                              style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                      onTap: () => onProject(entry.key),
-                    )),
+                  _ProjectSection(
+                    projects: projects,
+                    colors: projectColors,
+                    counts: projectCounts,
+                    currentId: view == TaskView.project ? projectId : null,
+                    onOpen: onProject,
+                    onCreate: onCreateProject,
+                    onDelete: onDeleteProjects,
+                    inset: inset,
+                  ),
                   destination(TaskView.anytime, Icons.layers_outlined, 'Anytime'),
                   destination(TaskView.someday, Icons.bedtime_outlined, 'Someday'),
                 ],
@@ -975,6 +993,203 @@ class _BottomBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The project list in the sidebar: open one, add one, or select several and
+/// delete them together (with a confirmation, because a tombstone is a delete).
+class _ProjectSection extends StatefulWidget {
+  const _ProjectSection({
+    required this.projects,
+    required this.colors,
+    required this.counts,
+    required this.currentId,
+    required this.onOpen,
+    required this.onCreate,
+    required this.onDelete,
+    required this.inset,
+  });
+
+  final Map<String, String> projects;
+  final Map<String, Color> colors;
+  final Map<String, int> counts;
+  final String? currentId;
+  final void Function(String projectId) onOpen;
+  final void Function(String name) onCreate;
+  final void Function(List<String> projectIds) onDelete;
+  final Widget Function(Widget child) inset;
+
+  @override
+  State<_ProjectSection> createState() => _ProjectSectionState();
+}
+
+class _ProjectSectionState extends State<_ProjectSection> {
+  bool _selecting = false;
+  final Set<String> _selected = {};
+
+  Future<void> _create() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New project'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (text) => Navigator.of(context).pop(text),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Create')),
+        ],
+      ),
+    );
+    controller.dispose();
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) return;
+    setState(() => _selecting = false);
+    widget.onCreate(trimmed);
+  }
+
+  Future<void> _confirmDelete() async {
+    final names = [
+      for (final id in _selected)
+        if (widget.projects[id] != null) widget.projects[id]!,
+    ];
+    if (names.isEmpty) return;
+    final shown = names.take(5).join(', ');
+    final more = names.length > 5 ? ' and ${names.length - 5} more' : '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(names.length == 1 ? 'Delete this project?' : 'Delete ${names.length} projects?'),
+        content: Text(
+          '$shown$more',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ids = _selected.toList();
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+    });
+    widget.onDelete(ids);
+  }
+
+  void _toggle(String id) => setState(() {
+        if (!_selected.remove(id)) _selected.add(id);
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 12, 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'PROJECTS (${widget.projects.length})',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: _selecting ? 'Done selecting' : 'Delete projects',
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.projects.isEmpty
+                    ? null
+                    : () => setState(() {
+                          _selecting = !_selecting;
+                          _selected.clear();
+                        }),
+                icon: Icon(_selecting ? Icons.close_rounded : Icons.delete_outline_rounded, size: 18),
+              ),
+              IconButton(
+                tooltip: 'New project',
+                visualDensity: VisualDensity.compact,
+                onPressed: _create,
+                icon: const Icon(Icons.add_rounded, size: 18),
+              ),
+            ],
+          ),
+        ),
+        if (_selecting && _selected.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 2, 20, 6),
+            child: FilledButton.tonalIcon(
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.errorContainer,
+                foregroundColor: scheme.onErrorContainer,
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: _confirmDelete,
+              icon: const Icon(Icons.delete_rounded, size: 16),
+              label: Text('Delete ${_selected.length}'),
+            ),
+          ),
+        for (final entry in widget.projects.entries)
+          widget.inset(ListTile(
+            dense: true,
+            selected: !_selecting && widget.currentId == entry.key,
+            leading: _selecting
+                ? Checkbox(
+                    value: _selected.contains(entry.key),
+                    onChanged: (_) => _toggle(entry.key),
+                    visualDensity: VisualDensity.compact,
+                  )
+                : Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: widget.colors[entry.key] ?? scheme.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (widget.colors[entry.key] ?? scheme.primary).withValues(alpha: 0.4),
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                  ),
+            title: Text(
+              entry.value,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: widget.currentId == entry.key ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+            trailing: widget.counts[entry.key] == 0
+                ? null
+                : Text(
+                    '${widget.counts[entry.key]}',
+                    style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+            onTap: () => _selecting ? _toggle(entry.key) : widget.onOpen(entry.key),
+          )),
+      ],
     );
   }
 }

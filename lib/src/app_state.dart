@@ -35,9 +35,15 @@ class AppState extends ChangeNotifier {
   bool _restoring = true;
   String? _syncError;
 
+  /// Consecutive exchanges that failed to reach the server. A phone that just
+  /// came out of sleep resolves nothing for a moment; one such attempt is not
+  /// something to show.
+  int _unreachable = 0;
+
   /// The font is a device choice, not an account one: it lives in
   /// shared_preferences so it applies before anyone signs in.
   static const _fontPref = 'ui.font';
+  static const _serversPref = 'servers.recent';
   bool _useAllo = false;
   bool get useAllo => _useAllo;
   DateTime? _lastSync;
@@ -53,6 +59,27 @@ class AppState extends ChangeNotifier {
   DateTime? get lastSync => _lastSync;
   bool get isSyncing => _engine?.isRunning ?? false;
   int get pending => _engine?.pending ?? 0;
+
+  /// The servers this device has signed in to, most recent first.
+  Future<List<String>> recentServers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(_serversPref) ?? const [];
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Keeps the address that just worked, newest first, without duplicates.
+  Future<void> _rememberServer(String url) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = [...?prefs.getStringList(_serversPref)]..remove(url);
+      await prefs.setStringList(_serversPref, [url, ...list].take(5).toList());
+    } on Object {
+      // remembering is a convenience, never a failure
+    }
+  }
 
   /// Reads the device-only preferences. Called once at start-up.
   Future<void> loadLocalPreferences() async {
@@ -147,6 +174,7 @@ class AppState extends ChangeNotifier {
       userRole: signed.role,
     );
     await _store.write(account);
+    await _rememberServer(account.serverUrl);
     _client = client;
     _account = account;
     _server = await _auth.health(client);
@@ -188,10 +216,24 @@ class AppState extends ChangeNotifier {
       final result = await engine.exchange();
       _lastSync = DateTime.now();
       _syncError = null;
+      _unreachable = 0;
       return result;
     } on ApiException catch (e) {
-      _syncError = e.message;
-      if (e.isUnauthenticated) await signOut();
+      if (e.isUnauthenticated) {
+        await signOut();
+        return null;
+      }
+      final unreachable = e.code == 'network' || e.code == 'timeout';
+      _unreachable++;
+      if (!unreachable) {
+        // The server answered and said no: that is worth showing at once and in
+        // its own words.
+        _syncError = e.message;
+      } else if (_unreachable >= 2) {
+        // Still unreachable after a retry: say so plainly. The raw socket text
+        // ("failed host lookup") is a developer's sentence, not a person's.
+        _syncError = 'Offline — your changes are saved on this phone';
+      }
       return null;
     } finally {
       notifyListeners();

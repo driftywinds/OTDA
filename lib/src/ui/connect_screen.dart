@@ -31,6 +31,25 @@ class _ConnectScreenState extends State<ConnectScreen> {
   String? _error;
   MfaChallenge? _challenge;
 
+  /// Servers this device has signed in to before, newest first.
+  List<String> _recent = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentServers();
+  }
+
+  Future<void> _loadRecentServers() async {
+    final recent = await widget.state.recentServers();
+    if (!mounted) return;
+    setState(() {
+      _recent = recent;
+      // The address that worked last time is almost always the one wanted.
+      if (_server.text.isEmpty && recent.isNotEmpty) _server.text = recent.first;
+    });
+  }
+
   @override
   void dispose() {
     for (final c in [_server, _email, _password, _token, _code]) {
@@ -209,6 +228,26 @@ class _ConnectScreenState extends State<ConnectScreen> {
           ),
           onSubmitted: (_) => _connect(),
         ),
+        if (_recent.length > 1) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final server in _recent)
+                ActionChip(
+                  avatar: const Icon(Icons.history_rounded, size: 14),
+                  label: Text(Uri.parse(server).host, overflow: TextOverflow.ellipsis),
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() {
+                            _server.text = server;
+                            _error = null;
+                          }),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         FilledButton(
           onPressed: _busy ? null : _connect,

@@ -126,6 +126,14 @@ class Repo {
     await db.putField('task', task.id, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
   }
 
+  /// A project delete is a tombstone, like a task's: the row stays so every
+  /// other device learns it is gone.
+  Future<void> trashProject(String projectId) async {
+    final ts = await clock.next();
+    await db.putField(
+        'project', projectId, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
+  }
+
   Future<Project> createProject(String name) async {
     final id = newId();
     final ts = await clock.next();

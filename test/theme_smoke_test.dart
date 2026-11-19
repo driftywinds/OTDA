@@ -58,4 +58,17 @@ void main() {
     expect(buildTheme(Brightness.light).colorScheme.brightness, Brightness.light);
     expect(buildTheme(Brightness.dark).colorScheme.brightness, Brightness.dark);
   });
+
+  testWidgets('the chosen font reaches the text theme', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.light, fontFamily: alloFont),
+      home: Builder(builder: (context) {
+        expect(Theme.of(context).textTheme.bodyMedium?.fontFamily, alloFont);
+        expect(Theme.of(context).textTheme.titleLarge?.fontFamily, alloFont);
+        return const SizedBox();
+      }),
+    ));
+    // Without a family the platform face is used.
+    expect(buildTheme(Brightness.light).textTheme.bodyMedium?.fontFamily, isNot(alloFont));
+  });
 }
