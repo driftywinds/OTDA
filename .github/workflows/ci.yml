@@ -58,13 +58,42 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Gradle resolves its own plugin classpath (Kotlin DSL, the Flutter plugin
+      # loader) from Maven Central on every cold run, and Maven Central rate-limits
+      # shared runner IPs with HTTP 429. Caching the resolution means most runs do
+      # not ask at all; the retry below covers the cold one.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties', 'pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Build release APK
         shell: bash
+        env:
+          # Gradle's own repository retries; harmless if a future version drops them.
+          GRADLE_OPTS: >-
+            -Dorg.gradle.internal.repository.max.retries=6
+            -Dorg.gradle.internal.repository.initial.backoff=2000
         run: |
           set -o pipefail
-          flutter build apk --release 2>&1 | tee /tmp/android-build.log || {
+          for attempt in 1 2 3; do
+            if flutter build apk --release 2>&1 | tee /tmp/android-build.log; then
+              exit 0
+            fi
+            if grep -qiE '429|Too Many Requests|Could not resolve|Could not GET' /tmp/android-build.log && [ "$attempt" -lt 3 ]; then
+              echo "::warning title=Dependency download throttled::attempt $attempt hit a repository error; retrying in $((attempt * 30))s"
+              sleep $((attempt * 30))
+              continue
+            fi
             grep -nE '(^e: |error:|FAILURE:|What went wrong)' /tmp/android-build.log | while IFS= read -r line; do
               echo "::error title=Android build::$line"
             done
             exit 1
-          }
+          done
+          echo "::error title=Android build::gave up after 3 attempts"
+          exit 1
