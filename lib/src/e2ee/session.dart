@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:isolate';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -10,6 +11,7 @@ import '../data/db.dart';
 import 'crypto.dart';
 import 'fields.dart';
 import 'keys.dart' as k;
+import 'log.dart';
 
 /// The account is encrypted and this device holds no key: syncing must stop
 /// before anything is applied, and the app asks for the passphrase.
@@ -35,6 +37,9 @@ class E2eeSession {
 
   k.KeyRecord? record;
   Uint8List? _accountKey;
+
+  /// 0..1 while the stored ciphertext is decrypted after an unlock, null otherwise.
+  final progress = ValueNotifier<double?>(null);
 
   bool get enabled => record != null;
   bool get unlocked => _accountKey != null;
@@ -158,7 +163,12 @@ class E2eeSession {
     final key = _accountKey;
     if (key == null) return 0;
     var opened = 0;
-    for (final row in await db.allFields()) {
+    var total = 0;
+    final rows = await db.allFields();
+    progress.value = 0;
+    for (var index = 0; index < rows.length; index++) {
+      if (index % 25 == 0) progress.value = rows.isEmpty ? 1 : index / rows.length;
+      final row = rows[index];
       final entity = row['entity']?.toString() ?? '';
       final entityId = row['entity_id']?.toString() ?? '';
       final field = row['field']?.toString() ?? '';
@@ -171,6 +181,7 @@ class E2eeSession {
         continue;
       }
       if (value is! String || !isEnvelope(value)) continue;
+      total++;
       try {
         final plain = decryptValue(key: key, entity: entity, entityId: entityId, field: field, value: value);
         await db.setLocalValue(entity, entityId, field, plain);
@@ -180,6 +191,8 @@ class E2eeSession {
         continue;
       }
     }
+    progress.value = null;
+    e2eeLog('local replica: opened $opened of $total ciphertext field(s) in ${rows.length} rows');
     return opened;
   }
 

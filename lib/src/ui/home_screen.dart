@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show SystemNavigator;
 import '../app_state.dart';
 import '../data/models.dart';
 import '../data/views.dart';
+import '../e2ee/session.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'settings_screen.dart';
@@ -133,11 +134,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _askingForPassphrase = true;
     try {
       final unlocked = await showE2eeUnlockSheet(context);
+      if (!mounted) return;
       if (unlocked) {
-        await widget.state.afterUnlock();
+        await _decryptWithProgress();
+      } else {
+        // Dismissed on purpose is not the end of it: a banner keeps the way back
+        // until the vault is unlocked or the app is signed out.
+        ScaffoldMessenger.of(context).showMaterialBanner(
+          MaterialBanner(
+            content: const Text('Encryption locked: nothing syncs until you unlock.'),
+            actions: [
+              TextButton(onPressed: _askForPassphrase, child: const Text('Unlock')),
+            ],
+          ),
+        );
       }
     } finally {
       _askingForPassphrase = false;
+    }
+  }
+
+  /// The first unlock decrypts every stored field, so it gets a real bar rather
+  /// than a spinner that looks stuck.
+  Future<void> _decryptWithProgress() async {
+    final progress = E2eeSession.instance.progress;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ValueListenableBuilder<double?>(
+        valueListenable: progress,
+        builder: (context, value, _) => AlertDialog(
+          title: const Text('Unlocking your tasks'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value == null ? 'Starting…' : 'Decrypting ${(value * 100).round()}%'),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(value: value),
+            ],
+          ),
+        ),
+      ),
+    );
+    try {
+      await widget.state.afterUnlock();
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
     }
   }
 
