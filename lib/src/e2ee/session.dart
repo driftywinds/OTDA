@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -73,13 +74,25 @@ class E2eeSession {
   }
 
   Future<void> unlockWithPassphrase(k.KeyRecord fromServer, String passphrase) async {
-    final key = k.unlockWithPassphrase(fromServer, passphrase);
+    // 600,000 PBKDF2 rounds is seconds of pure-Dart hashing: on the UI isolate that
+    // is long enough for Android to call the app dead, which is the crash after
+    // "Unlock". It runs in its own isolate and only the result comes back.
+    final key = await _offUiIsolate(() => k.unlockWithPassphrase(fromServer, passphrase));
     await _adopt(fromServer, key);
   }
 
   Future<void> unlockWithRecoveryKey(k.KeyRecord fromServer, String text) async {
-    final key = k.unlockWithRecoveryKey(fromServer, text);
+    final key = await _offUiIsolate(() => k.unlockWithRecoveryKey(fromServer, text));
     await _adopt(fromServer, key);
+  }
+
+  Future<Uint8List> _offUiIsolate(Uint8List Function() work) async {
+    try {
+      return await Isolate.run(work);
+    } on Object {
+      // A platform without isolates (or a send that cannot be copied): derive here.
+      return work();
+    }
   }
 
   Future<void> _adopt(k.KeyRecord fromServer, Uint8List key) async {
