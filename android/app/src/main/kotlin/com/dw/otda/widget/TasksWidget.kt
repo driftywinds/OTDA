@@ -49,6 +49,7 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.dw.otda.MainActivity
+import com.dw.otda.QuickAddActivity
 import com.dw.otda.R
 import org.json.JSONArray
 import org.json.JSONObject
@@ -334,10 +335,10 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
             )
         }
         TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20) {
-            actionStartActivity(newTaskIntent(context, projectId))
+            actionStartActivity(quickAddIntent(context, projectId))
         }
-        TapTarget(R.drawable.ic_widget_more, "Refresh", target = 32, icon = 14) {
-            actionRunCallback<RefreshAction>()
+        TapTarget(R.drawable.ic_widget_open, "Open OTDA", target = 32, icon = 18) {
+            actionStartActivity(appIntent(context))
         }
     }
 }
@@ -461,6 +462,13 @@ private fun configIntent(context: Context, appWidgetId: Int): Intent =
     Intent(context, TasksWidgetConfigActivity::class.java)
         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
 
+/** The popup composer over the current app; `project` pre-selects the widget's project. */
+private fun quickAddIntent(context: Context, projectId: String?): Intent =
+    Intent(context, QuickAddActivity::class.java).apply {
+        if (!projectId.isNullOrBlank() && projectId != "all") putExtra(QuickAddActivity.EXTRA_PROJECT, projectId)
+    }
+
+@Suppress("unused")
 private fun newTaskIntent(context: Context, projectId: String?): Intent {
     val uri = Uri.parse("otda://new").buildUpon().apply {
         if (!projectId.isNullOrBlank() && projectId != "all") appendQueryParameter("project", projectId)

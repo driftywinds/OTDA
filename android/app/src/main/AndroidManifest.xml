@@ -49,6 +49,17 @@
                 <data android:scheme="otda" android:host="complete"/>
             </intent-filter>
         </activity>
+        <!-- The widget's "+" popup. Not in Recents, and not part of the app's task. -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@style/QuickAddTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize|stateVisible"/>
         <!-- flutter_local_notifications: the alarm receiver fires scheduled reminders,
              the boot receiver restores them after a reboot or an app update, and the
              action receiver runs the Complete / Snooze buttons without opening the app. -->

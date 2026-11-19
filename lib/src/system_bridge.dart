@@ -57,4 +57,27 @@ class SystemBridge {
   static Future<bool> openBatterySettings() => _call('openBatterySettings');
   static Future<bool> openAutostart() => _call('openAutostart');
   static Future<bool> openAppSettings() => _call('openAppSettings');
+
+  // ---- the widget's quick-add popup (QuickAddActivity) --------------------
+
+  static const _quick = MethodChannel('com.dw.otda/quickadd');
+
+  /// The project the widget was showing, or null for "all projects".
+  static Future<String?> quickAddProject() async {
+    try {
+      final id = await _quick.invokeMethod<String>('project');
+      return id == null || id.isEmpty ? null : id;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Closes the popup window.
+  static Future<void> closeQuickAdd() async {
+    try {
+      await _quick.invokeMethod<bool>('close');
+    } on Object {
+      // not running inside the popup
+    }
+  }
 }

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'src/app_state.dart';
+import 'src/quick_add_app.dart';
 import 'src/reminders/service.dart';
 import 'src/system_bridge.dart';
 import 'src/ui/connect_screen.dart';
@@ -12,6 +13,14 @@ import 'src/ui/theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const OtdaApp());
+}
+
+/// Entry point of QuickAddActivity, the widget's "+" popup. It must live in this
+/// library: the Android side looks the function up by name in main.dart.
+@pragma('vm:entry-point')
+void quickAddMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const QuickAddApp());
 }
 
 class OtdaApp extends StatefulWidget {
