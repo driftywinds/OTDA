@@ -333,7 +333,49 @@ class _TaskSheetState extends State<TaskSheet> {
                     TextButton.icon(
                       style: TextButton.styleFrom(foregroundColor: scheme.error),
                       onPressed: () async {
-                        await widget.repo.trash(widget.task);
+                        if (_recurrence.isEmpty) {
+                          await widget.repo.trash(widget.task);
+                        } else {
+                          final scope = await showModalBottomSheet<SeriesScope>(
+                            context: context,
+                            showDragHandle: true,
+                            builder: (context) => SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListTile(
+                                    title: Text(
+                                      'This is a repeating task',
+                                      style: Theme.of(context).textTheme.titleSmall,
+                                    ),
+                                    subtitle: Text(_recurrenceLabel(_recurrence)),
+                                  ),
+                                  const Divider(height: 1),
+                                  ListTile(
+                                    leading: const Icon(Icons.event_busy_outlined),
+                                    title: const Text('This occurrence'),
+                                    subtitle: const Text('Skip today; it comes round again'),
+                                    onTap: () => Navigator.of(context).pop(SeriesScope.occurrence),
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(Icons.event_repeat_outlined),
+                                    title: const Text('This and future occurrences'),
+                                    subtitle: const Text('The past stays as history'),
+                                    onTap: () => Navigator.of(context).pop(SeriesScope.future),
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(Icons.delete_forever_outlined),
+                                    title: const Text('All occurrences, past and future'),
+                                    onTap: () => Navigator.of(context).pop(SeriesScope.all),
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (scope == null) return;
+                          await widget.repo.deleteSeries(widget.task, scope);
+                        }
                         if (context.mounted) Navigator.of(context).pop(true);
                       },
                       icon: const Icon(Icons.delete_outline_rounded),

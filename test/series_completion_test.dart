@@ -139,4 +139,57 @@ void main() {
     final expected = DateTime(DateTime.parse(today).year, DateTime.parse(today).month + 1, DateTime.parse(today).day);
     expect(iso(due), iso(expected));
   });
+
+  test('deleting this occurrence skips it and keeps the series going', () async {
+    final (repo, db, clock) = await buildRepo();
+    final id = await addTask(db, clock, 'del-1', {
+      'title': 'Post e paper',
+      'due': {'date': today},
+      'recurrence': 'every day',
+    });
+
+    await repo.deleteSeries(await taskById(repo, id), SeriesScope.occurrence);
+
+    final series = await taskById(repo, id);
+    expect(series.isCompleted, isFalse);
+    expect(series.dueDate, tomorrow);
+    final record = (await repo.tasks()).firstWhere((task) => task.raw['series_id'] == id);
+    expect(record.raw['skipped'], isTrue);
+    expect(record.isCompleted, isTrue);
+  });
+
+  test('deleting this and future ends the series and keeps the past', () async {
+    final (repo, db, clock) = await buildRepo();
+    final id = await addTask(db, clock, 'del-2', {
+      'title': 'Post e paper',
+      'due': {'date': today},
+      'recurrence': 'every day',
+    });
+    await repo.setCompleted(await taskById(repo, id), true); // one past occurrence
+    final rolled = await taskById(repo, id);
+
+    await repo.deleteSeries(rolled, SeriesScope.future);
+
+    final series = await taskById(repo, id);
+    expect(series.isCompleted, isTrue, reason: 'nothing of it remains');
+    expect(series.raw['recurrence'], contains('until'));
+    // The occurrence finished before the truncation is still history.
+    expect((await repo.tasks()).where((t) => t.raw['series_id'] == id && !t.isDeleted), hasLength(1));
+  });
+
+  test('deleting all occurrences tombstones the series and its records', () async {
+    final (repo, db, clock) = await buildRepo();
+    final id = await addTask(db, clock, 'del-3', {
+      'title': 'Post e paper',
+      'due': {'date': today},
+      'recurrence': 'every day',
+    });
+    await repo.setCompleted(await taskById(repo, id), true);
+
+    await repo.deleteSeries(await taskById(repo, id), SeriesScope.all);
+
+    final rows = await db.entities('task', includeDeleted: true);
+    expect(rows.firstWhere((row) => row['id'] == id)['deleted_at'], isNotNull);
+    expect(rows.where((row) => row['series_id'] == id && row['deleted_at'] == null), isEmpty);
+  });
 }

@@ -124,7 +124,7 @@ class Repo {
   /// client writes) and the series moves to its next date, so a daily task comes
   /// back tomorrow instead of disappearing. Only when the series has run out does
   /// the series itself complete, which is what the web does too.
-  Future<void> setCompleted(Task task, bool completed) async {
+  Future<void> setCompleted(Task task, bool completed, {bool skipped = false}) async {
     final raw = task.raw['recurrence']?.toString() ?? '';
     final recurring = raw.isNotEmpty && rules.parseRule(raw).ok;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -176,11 +176,46 @@ class Repo {
 
     final ts = await clock.next();
     final recordId = occurrenceIdOf(task.id, date);
-    for (final entry in occurrenceFields(task, date, now, today).entries) {
+    final fields = occurrenceFields(task, date, now, today);
+    if (skipped) fields['skipped'] = true;
+    for (final entry in fields.entries) {
       await db.putField('task', recordId, entry.key, entry.value, ts, engine.device);
     }
     for (final entry in movedDates(task, next, today).entries) {
       await db.putField('task', task.id, entry.key, entry.value, ts, engine.device);
+    }
+  }
+
+  /// Deletes a series in one of the three scopes the model supports.
+  ///
+  /// One occurrence is a skip: the record says so and the series moves on, exactly
+  /// as the web client's delete does for an open occurrence of a live series.
+  /// Everything from here on is a truncation: the rule ends the day before, and
+  /// the series itself completes because nothing of it remains. Deleting every
+  /// occurrence tombstones the series and the records it wrote.
+  Future<void> deleteSeries(Task task, SeriesScope scope) async {
+    switch (scope) {
+      case SeriesScope.occurrence:
+        await setCompleted(task, true, skipped: true);
+      case SeriesScope.future:
+        final ts = await clock.next();
+        final date = occurrenceDateOf(task, _todayString());
+        final raw = task.raw['recurrence']?.toString() ?? '';
+        await db.putField('task', task.id, 'recurrence', rules.ruleWithUntil(raw, addDays(date, -1)), ts,
+            engine.device);
+        if (task.isCompleted == false) {
+          await db.putField('task', task.id, 'completed_at', DateTime.now().millisecondsSinceEpoch, ts,
+              engine.device);
+        }
+      case SeriesScope.all:
+        final ts = await clock.next();
+        final now = DateTime.now().millisecondsSinceEpoch;
+        await db.putField('task', task.id, 'deleted_at', now, ts, engine.device);
+        for (final row in await db.entities('task')) {
+          if (row['series_id']?.toString() == task.id && row['deleted_at'] == null) {
+            await db.putField('task', row['id'] as String, 'deleted_at', now, ts, engine.device);
+          }
+        }
     }
   }
 
@@ -239,3 +274,6 @@ class Repo {
   /// A fresh entity id: a v4 UUID, the same shape the server makes.
   static String newId() => const Uuid().v4();
 }
+
+/// How much of a repeating task a delete covers.
+enum SeriesScope { occurrence, future, all }

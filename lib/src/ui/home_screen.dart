@@ -160,7 +160,12 @@ class _HomeScreenState extends State<HomeScreen> {
           final notes = t.raw['description']?.toString().toLowerCase() ?? '';
           return notes.contains(needle);
         }).toList()
-          ..sort((a, b) => (a.isCompleted ? 1 : 0).compareTo(b.isCompleted ? 1 : 0));
+          // Most recent first: a search is nearly always for something just made.
+          ..sort((a, b) {
+            final open = (a.isCompleted ? 1 : 0).compareTo(b.isCompleted ? 1 : 0);
+            if (open != 0) return open;
+            return (b.createdAt ?? 0).compareTo(a.createdAt ?? 0);
+          });
       case TaskView.calendar:
         return [
           for (final entry in _calendarOccurrences)

@@ -526,6 +526,17 @@ String nextOccurrence(String rule, String? due, String today) {
   }
 }
 
+/// The same rule ending on [until], with no count: a count and an end date are
+/// the same end condition, and an end date is what truncating a series needs.
+String ruleWithUntil(String rule, String until) {
+  final parsed = parseRule(rule);
+  if (!parsed.ok) return rule;
+  final r = parsed.rule!
+    ..until = until
+    ..count = 0;
+  return canonicalOf(r);
+}
+
 /// The next occurrence of a completion-relative interval rule, counted from the
 /// day it was finished (the web app's `nextAfterCompletion`).
 String nextAfterCompletion(String rule, String completedOn) {

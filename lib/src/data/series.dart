@@ -31,6 +31,16 @@ String occurrenceIdOf(String seriesId, String date) {
       '${hex.substring(16, 20)}-${hex.substring(20)}';
 }
 
+/// [day] moved by [days] calendar days.
+String addDays(String day, int days) {
+  final parsed = DateTime.tryParse(day);
+  if (parsed == null) return day;
+  final moved = DateTime.utc(parsed.year, parsed.month, parsed.day).add(Duration(days: days));
+  return '${moved.year.toString().padLeft(4, '0')}-'
+      '${moved.month.toString().padLeft(2, '0')}-'
+      '${moved.day.toString().padLeft(2, '0')}';
+}
+
 /// `date` moved by as many calendar days as [from] is from [to].
 String shiftDate(String date, String from, String to) {
   final d = DateTime.tryParse(date);

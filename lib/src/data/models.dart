@@ -9,6 +9,9 @@ class Task {
   final Map<String, Object?> raw;
 
   String get title => raw['title']?.toString() ?? '';
+
+  /// When the task was made, for ordering search results.
+  int? get createdAt => (raw['created_at'] as num?)?.toInt();
   bool get isCompleted => raw['completed_at'] != null;
   bool get isDeleted => raw['deleted_at'] != null;
   int get priority => (raw['priority'] as num?)?.toInt() ?? 4;
