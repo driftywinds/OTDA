@@ -331,18 +331,7 @@ class _AboutCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // The logo's white tray needs a dark tile to sit on, whatever
-                  // theme is chosen.
-                  Container(
-                    width: 56,
-                    height: 56,
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Image.asset('assets/logo.png', fit: BoxFit.contain),
-                  ),
+                  const BrandMark(size: 64),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(

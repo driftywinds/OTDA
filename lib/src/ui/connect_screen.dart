@@ -5,6 +5,7 @@ import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../auth/auth_service.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 /// Server address, then sign-in: password (primary) or an API token.
 class ConnectScreen extends StatefulWidget {
@@ -141,22 +142,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          gradient: theme.colorScheme.brandGradient,
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.35),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.check_rounded, size: 36, color: theme.colorScheme.onPrimary),
-                      ),
+                      child: const BrandMark(size: 72),
                     ),
                     const SizedBox(height: 20),
                     Text(

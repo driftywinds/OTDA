@@ -265,3 +265,37 @@ class AccountAvatar extends StatelessWidget {
     );
   }
 }
+
+/// The OTDA mark on its own dark tile. The logo's tray is white, so it needs
+/// the tile to sit on whatever theme is chosen; the artwork carries its own
+/// margin, so it is drawn edge to edge inside the tile. This is the same
+/// picture as the launcher icon.
+class BrandMark extends StatelessWidget {
+  const BrandMark({super.key, this.size = 64});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(size * 0.22),
+        border: Border.all(color: const Color(0x1FFFFFFF)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x330F172A), blurRadius: 16, offset: Offset(0, 6)),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/logo.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'OTDA logo',
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
