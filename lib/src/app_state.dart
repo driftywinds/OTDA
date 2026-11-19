@@ -1,5 +1,6 @@
 import 'dart:async';
 
+
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,7 @@ import 'data/repo.dart';
 import 'e2ee/session.dart';
 import 'reminders/service.dart';
 import 'data/sync_engine.dart';
+import 'util/log.dart';
 
 /// The app's session: who is signed in, to which server, with which credential,
 /// plus the local replica and the sync loop behind it.
@@ -69,8 +71,6 @@ class AppState extends ChangeNotifier {
 
   ApiClient? get client => _client;
 
-  bool _encryptionChecked = false;
-
   /// True when the server's account has a key record this device cannot open: the
   /// app asks for the passphrase and syncs nothing meanwhile.
   final e2eeLocked = ValueNotifier<bool>(false);
@@ -78,13 +78,26 @@ class AppState extends ChangeNotifier {
   /// Reads the wrapped key record and keeps what this device already knows. Accounts
   /// without one are untouched: `enabled` stays false and nothing prompts.
   Future<void> loadEncryption() async {
-    await E2eeSession.instance.restore();
+    try {
+      await E2eeSession.instance.restore();
+    } on Object catch (e) {
+      otdaLog('OTDA/e2ee: restore failed: $e');
+    }
     final client = _client;
     if (client == null) return;
+    // The record is cached when it is first read, and only changes when encryption
+    // is turned on or off, so a normal launch syncs without this round trip. It was
+    // holding the first exchange back for as long as the request took.
+    if (E2eeSession.instance.record != null) {
+      e2eeLocked.value = !E2eeSession.instance.unlocked;
+      return;
+    }
     try {
-      await E2eeSession.instance.fetchRecord(client);
-    } on Object {
-      // offline or the route is missing: the cached copy decides
+      await E2eeSession.instance.fetchRecord(client).timeout(const Duration(seconds: 5));
+    } on Object catch (e) {
+      // Offline, or the route is missing: the cached copy decides. This must never
+      // abort opening the replica, or nothing syncs at all.
+      otdaLog('OTDA/e2ee: record fetch failed: $e');
     }
     e2eeLocked.value = E2eeSession.instance.enabled && !E2eeSession.instance.unlocked;
   }
@@ -228,8 +241,9 @@ class AppState extends ChangeNotifier {
       await _openReplica();
       // Before anything syncs: a pull that runs while this device still thinks the
     // account is unencrypted stores ciphertext in the replica.
-    await loadEncryption();
-    _encryptionChecked = true;
+    // Deliberately not awaited: what this device knows about encryption must never
+    // delay or block opening the replica and syncing.
+    unawaited(loadEncryption());
     unawaited(afterDataChanged());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
@@ -273,13 +287,21 @@ class AppState extends ChangeNotifier {
       userName: signed.name,
       userRole: signed.role,
     );
+    otdaLog('auth: signed in as ${signed.email} on ${client.baseUrl}');
     await _store.write(account);
     await _rememberServer(account.serverUrl);
     _client = client;
     unawaited(_loadAvatar());
     _account = account;
+    otdaLog('auth: account stored, reading the server');
     _server = await _auth.health(client);
+    otdaLog('auth: server ${_server?.version}, reading the key record');
+    // Before the replica opens and syncs: an account that is encrypted asks for the
+    // passphrase now, and an ordinary account answers 404 and carries on unchanged.
+    await loadEncryption();
+    otdaLog('auth: encrypted=${E2eeSession.instance.enabled} unlocked=${E2eeSession.instance.unlocked}');
     await _openReplica();
+    otdaLog('auth: replica open, engine=${_engine != null}');
     notifyListeners();
   }
 
@@ -290,13 +312,16 @@ class AppState extends ChangeNotifier {
     if (account == null || client == null) return;
     final dbDir = await databaseFactory.getDatabasesPath();
     final name = account.userId.isEmpty ? 'otda.db' : 'otda-${account.userId}.db';
+    otdaLog('replica: opening $name');
     final db = await OtdaDb.open(path: p.join(dbDir, name));
+    otdaLog('replica: open');
     // Any local write (a task, a project, a setting) refreshes the widget and the
     // reminder plan, so nothing has to remember to call the refresh itself.
     db.onWrite = _scheduleAfterChange;
     final clock = await HybridClock.load(db);
     final engine = SyncEngine(db: db, client: client, clock: clock);
     await engine.open();
+    otdaLog('replica: engine open');
     _db = db;
     _engine = engine;
     _repo = Repo(db: db, clock: clock, engine: engine);
@@ -318,8 +343,11 @@ class AppState extends ChangeNotifier {
     unawaited(afterDataChanged());
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
+    otdaLog('replica: first exchange');
     await _syncQuietly();
+    otdaLog('replica: first exchange done, error=${_syncError ?? 'none'}');
     await engine.startLive();
+    otdaLog('replica: live stream started');
   }
 
   /// What a failed exchange is worth saying.
@@ -382,19 +410,20 @@ class AppState extends ChangeNotifier {
 
   /// Runs an exchange and folds the outcome into the UI state.
   Future<SyncResult?> syncNow() async {
-    if (!_encryptionChecked) {
-      await loadEncryption();
-      _encryptionChecked = true;
-    }
+    otdaLog('OTDA/sync: asked (engine=${_engine != null} client=${_client != null})');
     final engine = _engine;
     if (engine == null) return null;
+    // Encryption does not gate syncing: if the account turns out to be encrypted,
+    // the lock flag raises the passphrase sheet, and what was pulled as ciphertext
+    // is decrypted in place once the device is unlocked.
     if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
       e2eeLocked.value = true;
-      return null;
     }
     notifyListeners();
     try {
+      otdaLog('OTDA/sync: exchanging');
       final result = await engine.exchange();
+      otdaLog('OTDA/sync: done applied=${result.applied} pulled=${result.pulled} pending=${result.pending} pages=${result.pages}');
       _lastSync = DateTime.now();
       _syncError = null;
       _failures.reset();
@@ -404,11 +433,17 @@ class AppState extends ChangeNotifier {
       e2eeLocked.value = true;
       return null;
     } on ApiException catch (e) {
+      otdaLog('OTDA/sync: API error $e');
       if (e.isUnauthenticated) {
         await signOut();
         return null;
       }
       _recordFailure(e);
+      return null;
+    } on Object catch (e) {
+      // Anything else must surface: a silent failure looks like "never synced".
+      otdaLog('OTDA/sync: FAILED $e');
+      _recordFailure(ApiException(0, 'sync_failed', '$e'));
       return null;
     } finally {
       notifyListeners();

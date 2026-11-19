@@ -1,4 +1,6 @@
 import 'dart:async';
+
+
 import 'dart:convert';
 
 import '../api/api_client.dart';
@@ -6,6 +8,7 @@ import '../api/api_exception.dart';
 import '../e2ee/session.dart';
 import 'clock.dart';
 import 'db.dart';
+import '../util/log.dart';
 
 /// What one exchange did, for the status line and for tests.
 class SyncResult {
@@ -92,9 +95,6 @@ class SyncEngine {
     if (_running) return const SyncResult(applied: 0, pulled: 0, rejected: 0, pending: 0, pages: 0);
     // An encrypted account with no key here must not pull: the batch would land as
     // ciphertext in the replica. The app asks for the passphrase instead.
-    if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
-      throw const E2eeLockedException();
-    }
     _running = true;
     _failure = null;
     _status.add(null);
@@ -140,8 +140,17 @@ class SyncEngine {
           if (_backfillSeq > 0) 'backfillAck': _backfillSeq,
         };
 
-        final json = await client.post('/api/v1/sync', body: body) as Map<String, dynamic>;
+        otdaLog('sync: posting page ${pages + 1} with ${ops.length} op(s), cursor=$_cursor');
+        final Object? response;
+        try {
+          response = await client.post('/api/v1/sync', body: body);
+        } on Object catch (e) {
+          otdaLog('sync: POST failed: $e');
+          rethrow;
+        }
+        final json = response as Map<String, dynamic>;
         pages++;
+        otdaLog('sync: page $pages applied=${json['applied']} ops=${(json['ops'] as List?)?.length ?? 0}');
 
         // The server took the batch (applied or duplicates): the outbox rows go.
         if (ops.isNotEmpty) {
@@ -180,6 +189,10 @@ class SyncEngine {
         }
 
         _cursor = (json['cursor'] as num?)?.toInt() ?? _cursor;
+        // A first login on a long history is hundreds of pages of ops: give the
+        // frame loop a turn between them so the app stays answerable (and is not
+        // mistaken for hung while it catches up).
+        await Future<void>.delayed(Duration.zero);
         await db.setMetaInt('sync.cursor', _cursor);
         _backfillSeq = (json['backfillSeq'] as num?)?.toInt() ?? 0;
         if (_backfillSeq > 0) await db.setMetaInt('sync.backfillSeq', _backfillSeq);

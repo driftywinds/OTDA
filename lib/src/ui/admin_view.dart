@@ -6,6 +6,7 @@ import '../auth/auth_service.dart';
 import '../data/admin_api.dart';
 import '../util/numbers.dart';
 import 'theme.dart';
+import '../util/log.dart';
 
 /// The Server tab: everyone on this instance, invitations, the audit log and
 /// backups. Owner and admins only.
@@ -44,11 +45,20 @@ class _AdminViewState extends State<AdminView> {
       _error = null;
     });
     try {
-      final users = await _api.users();
-      final invitations = await _api.invitations();
-      final audit = await _api.audit();
-      final backups = await _api.backups();
-      final storage = await _api.storage();
+      // One round trip instead of five: the tab used to take seconds because every
+      // request waited for the previous one.
+      final results = await Future.wait<Object>([
+        _api.users(),
+        _api.invitations(),
+        _api.audit(),
+        _api.backups(),
+        _api.storage(),
+      ]);
+      final users = results[0] as List<Map<String, Object?>>;
+      final invitations = results[1] as List<Map<String, Object?>>;
+      final audit = results[2] as List<Map<String, Object?>>;
+      final backups = results[3] as Map<String, Object?>;
+      final storage = results[4] as Map<String, Object?>;
       if (!mounted) return;
       setState(() {
         _users = users;
@@ -63,6 +73,15 @@ class _AdminViewState extends State<AdminView> {
       setState(() {
         _loading = false;
         _error = e.isForbidden ? 'Your account cannot manage this server.' : e.message;
+      });
+    } on Object catch (e) {
+      // Anything else used to escape this method, leaving the spinner up for ever,
+      // which reads as "the tab is slow" rather than "it failed".
+      otdaLog('OTDA/admin: loading the server tab failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not read the server: $e';
       });
     }
   }

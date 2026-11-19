@@ -47,8 +47,9 @@ class E2eeSession {
   /// Reads the wrapped record. A 404 (or no record) means the account is not
   /// encrypted, which is the usual case.
   Future<k.KeyRecord?> fetchRecord(ApiClient client) async {
+    e2eeLog('record: asking the server');
     try {
-      final json = await client.get('/api/v1/encryption/keys');
+      final json = await client.get('/api/v1/encryption/keys').timeout(const Duration(seconds: 8));
       final map = json is Map ? json['keys'] : null;
       final fetched = map is Map ? k.KeyRecord.fromJson(map.cast<String, Object?>()) : null;
       record = fetched;

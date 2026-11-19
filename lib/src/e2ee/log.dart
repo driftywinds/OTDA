@@ -1,4 +1,4 @@
-import 'dart:developer' as developer;
+import '../util/log.dart';
 
-/// Logs to logcat under one tag, in release too, so a device run explains itself.
-void e2eeLog(String message) => developer.log('e2ee: $message', name: 'OTDA');
+/// e2ee diagnostics, on the shared device log.
+void e2eeLog(String message) => otdaLog('e2ee: $message');

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:home_widget/home_widget.dart';
 
+import 'src/util/log.dart';
 import 'src/app_state.dart';
 import 'src/headless_action_app.dart';
 import 'src/quick_add_app.dart';
@@ -12,6 +13,7 @@ import 'src/ui/home_screen.dart';
 import 'src/ui/theme.dart';
 
 void main() {
+  otdaLog('--- app start ---');
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const OtdaApp());
 }
