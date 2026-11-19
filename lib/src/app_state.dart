@@ -91,8 +91,14 @@ class AppState extends ChangeNotifier {
   /// exchange decrypts and the UI can load everything the pull brings.
   Future<void> afterUnlock() async {
     e2eeLocked.value = false;
+    final db = _db;
+    if (db != null) {
+      // What synced before this device was unlocked is ciphertext in the replica.
+      await E2eeSession.instance.openLocalReplica(db);
+    }
     notifyListeners();
     await syncNow();
+    unawaited(afterDataChanged());
   }
   StoredAccount? get account => _account;
   ServerInfo? get server => _server;

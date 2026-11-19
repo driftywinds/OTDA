@@ -213,6 +213,20 @@ class OtdaDb {
     onWrite?.call();
   }
 
+  /// Every stored field, for the one-time decrypt after an unlock.
+  Future<List<Map<String, Object?>>> allFields() => _db.query('fields');
+
+  /// Replaces a stored value **without** queueing an operation: the server already
+  /// holds the ciphertext, so a local plaintext is a rendering change, not an edit.
+  Future<void> setLocalValue(String entity, String entityId, String field, Object? value) async {
+    await _db.update(
+      'fields',
+      {'value': jsonEncode(value)},
+      where: 'entity = ? AND entity_id = ? AND field = ?',
+      whereArgs: [entity, entityId, field],
+    );
+  }
+
   Future<List<Map<String, Object?>>> pendingOps({int limit = 1000}) =>
       _db.query('outbox', orderBy: 'ts ASC', limit: limit);
 

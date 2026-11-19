@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../data/db.dart';
 import 'crypto.dart';
 import 'fields.dart';
 import 'keys.dart' as k;
@@ -145,6 +146,41 @@ class E2eeSession {
     } on E2eeError {
       return '[Cannot decrypt]';
     }
+  }
+
+  /// Decrypts the content already stored on this device. A replica that synced
+  /// before this device was unlocked holds ciphertext, and the pull path only
+  /// decrypts new operations, so without this the lists keep showing `enc:v1:`.
+  ///
+  /// Only the local `fields` rows change: no operation is queued, because the
+  /// server's copy is already the ciphertext and must stay that way.
+  Future<int> openLocalReplica(OtdaDb db) async {
+    final key = _accountKey;
+    if (key == null) return 0;
+    var opened = 0;
+    for (final row in await db.allFields()) {
+      final entity = row['entity']?.toString() ?? '';
+      final entityId = row['entity_id']?.toString() ?? '';
+      final field = row['field']?.toString() ?? '';
+      if (!isContentField(entity, field)) continue;
+      final raw = row['value']?.toString() ?? '';
+      Object? value;
+      try {
+        value = jsonDecode(raw);
+      } on Object {
+        continue;
+      }
+      if (value is! String || !isEnvelope(value)) continue;
+      try {
+        final plain = decryptValue(key: key, entity: entity, entityId: entityId, field: field, value: value);
+        await db.setLocalValue(entity, entityId, field, plain);
+        opened++;
+      } on E2eeError {
+        // "[Cannot decrypt]" is a display problem, not a reason to stop the rest.
+        continue;
+      }
+    }
+    return opened;
   }
 
   Map<String, dynamic> sealOp(Map<String, dynamic> op) {
