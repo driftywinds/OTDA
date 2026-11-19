@@ -76,7 +76,10 @@ class _UnlockSheetState extends State<_UnlockSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
+    // The keyboard shrinks the sheet, and the fixed copy below it used to overflow by
+    // 25 px (the yellow bar). Scrolling the content outranks clipping it: on a short
+    // screen the "Not now" button would otherwise be unreachable with the keyboard up.
+    return SingleChildScrollView(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,

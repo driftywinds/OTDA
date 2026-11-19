@@ -343,9 +343,13 @@ class AppState extends ChangeNotifier {
     unawaited(afterDataChanged());
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
-    otdaLog('replica: first exchange');
-    await _syncQuietly();
-    otdaLog('replica: first exchange done, error=${_syncError ?? 'none'}');
+    // Not awaited: the first exchange on a long history is tens of thousands of
+    // ops, and login used to sit on it (the app was swiped away as hung). The UI
+    // opens now and the catch-up runs behind it.
+    otdaLog('replica: first exchange (background)');
+    unawaited(_syncQuietly().then((_) {
+      otdaLog('replica: first exchange done, error=${_syncError ?? 'none'}');
+    }));
     await engine.startLive();
     otdaLog('replica: live stream started');
   }

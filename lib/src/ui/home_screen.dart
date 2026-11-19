@@ -71,6 +71,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     widget.state.e2eeLocked.addListener(_askForPassphrase);
+    // The account can already be locked when this screen is built (the record is
+    // read during sign-in, before the shell exists). Listening alone would wait for
+    // a change that already happened, so ask on the first frame.
+    if (widget.state.e2eeLocked.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askForPassphrase());
+    }
     ReminderService.instance.pendingTask.addListener(_openPendingFromWidget);
     ReminderService.instance.pendingNewTask.addListener(_openPendingNewTask);
     super.initState();
