@@ -52,15 +52,18 @@ class E2eeSession {
       final map = json is Map ? json['keys'] : null;
       final fetched = map is Map ? k.KeyRecord.fromJson(map.cast<String, Object?>()) : null;
       record = fetched;
+      e2eeLog('record: ${fetched == null ? 'none' : 'present, ${fetched.iterations} iterations'}');
       if (fetched != null) {
         await _storage.write(key: _recordSlot, value: jsonEncode(fetched.toJson()));
       }
       return fetched;
     } on ApiException catch (e) {
       if (e.status == 404) {
+        e2eeLog('record: 404, not encrypted');
         record = null;
         return null;
       }
+      e2eeLog('record FAILED: $e');
       rethrow;
     }
   }
@@ -83,7 +86,9 @@ class E2eeSession {
     // 600,000 PBKDF2 rounds is seconds of pure-Dart hashing: on the UI isolate that
     // is long enough for Android to call the app dead, which is the crash after
     // "Unlock". It runs in its own isolate and only the result comes back.
+    e2eeLog('unlock: deriving');
     final key = await _offUiIsolate(() => k.unlockWithPassphrase(fromServer, passphrase));
+    e2eeLog('unlock: unwrapped ${key.length} bytes');
     await _adopt(fromServer, key);
   }
 

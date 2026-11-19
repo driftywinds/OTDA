@@ -179,6 +179,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     try {
       await widget.state.afterUnlock();
+      // The lists were built from the ciphertext the replica held before the
+      // unlock; read them again now that the rows are plaintext.
+      await _load();
     } finally {
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
     }
