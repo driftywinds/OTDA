@@ -814,11 +814,16 @@ class _AppDrawer extends StatelessWidget {
     Widget inset(Widget child) =>
         Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1), child: child);
 
+    // Every leading is the same 24px box: a project dot, a project icon, a
+    // destination icon and the selection checkbox then all start their title at
+    // the same x.
+    Widget mark(Widget child) => SizedBox(width: 24, height: 24, child: Center(child: child));
+
     Widget destination(TaskView target, IconData icon, String label) {
       final selected = view == target;
       return inset(ListTile(
         dense: true,
-        leading: Icon(icon, size: 20),
+        leading: mark(Icon(icon, size: 20)),
         title: Text(
           label,
           style: TextStyle(fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
@@ -1214,14 +1219,30 @@ class _ProjectSectionState extends State<_ProjectSection> {
             dense: true,
             selected: !_selecting && widget.currentId == entry.key,
             leading: _selecting
-                ? Checkbox(
-                    value: _selected.contains(entry.key),
-                    onChanged: (_) => _toggle(entry.key),
-                    visualDensity: VisualDensity.compact,
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Center(
+                      child: Transform.scale(
+                        scale: 0.85,
+                        child: Checkbox(
+                          value: _selected.contains(entry.key),
+                          onChanged: (_) => _toggle(entry.key),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
                   )
-                : _ProjectMark(
-                    color: widget.colors[entry.key] ?? scheme.primary,
-                    icon: widget.icons[entry.key] ?? '',
+                : SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Center(
+                      child: _ProjectMark(
+                        color: widget.colors[entry.key] ?? scheme.primary,
+                        icon: widget.icons[entry.key] ?? '',
+                      ),
+                    ),
                   ),
             title: Text(
               entry.value,
@@ -1255,8 +1276,8 @@ class _ProjectMark extends StatelessWidget {
   Widget build(BuildContext context) {
     if (icon.isEmpty) {
       return Container(
-        width: 10,
-        height: 10,
+        width: 11,
+        height: 11,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
@@ -1264,11 +1285,7 @@ class _ProjectMark extends StatelessWidget {
         ),
       );
     }
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: Center(child: Icon(workspaceIcon(icon), size: 17, color: color)),
-    );
+    return Icon(workspaceIcon(icon), size: 18, color: color);
   }
 }
 

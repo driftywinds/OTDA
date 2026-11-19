@@ -48,7 +48,7 @@ class AppState extends ChangeNotifier {
   static const _themePref = 'ui.theme';
 
   /// system, light, dark or amoled.
-  String _themeChoice = 'system';
+  String _themeChoice = 'amoled';
   String get themeChoice => _themeChoice;
   ThemeMode get themeMode => switch (_themeChoice) {
         'light' => ThemeMode.light,
@@ -61,7 +61,7 @@ class AppState extends ChangeNotifier {
   /// mean the account has none, and the avatar falls back to initials.
   Uint8List? _avatarBytes;
   Uint8List? get avatarBytes => _avatarBytes;
-  bool _useAllo = false;
+  bool _useAllo = true;
   bool get useAllo => _useAllo;
   DateTime? _lastSync;
 
@@ -102,10 +102,10 @@ class AppState extends ChangeNotifier {
   Future<void> loadLocalPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _useAllo = prefs.getString(_fontPref) == 'allo';
-      _themeChoice = prefs.getString(_themePref) ?? 'system';
+      _useAllo = (prefs.getString(_fontPref) ?? 'allo') == 'allo';
+      _themeChoice = prefs.getString(_themePref) ?? 'amoled';
     } on Object {
-      _useAllo = false; // a missing store is the default look, not an error
+      _useAllo = true; // a missing store keeps the default look
     }
     notifyListeners();
   }
@@ -120,9 +120,15 @@ class AppState extends ChangeNotifier {
       final profile = await AuthService().me(client);
       final raw = profile['avatarVersion'];
       final version = raw is num ? raw.toInt() : 0;
+      final id = Uri.encodeComponent(account.userId);
+      // The version is omitted when it is 0, and a server that has a picture does
+      // not always report one: ask for the picture anyway and let 404 mean none.
+      final suffix = version > 0 ? '?v=$version' : '';
       Uint8List? bytes;
-      if (version > 0) {
-        bytes = await client.getBytes('/api/v1/users/${Uri.encodeComponent(account.userId)}/avatar?v=$version');
+      try {
+        bytes = await client.getBytes('/api/v1/users/$id/avatar$suffix');
+      } on ApiException catch (e) {
+        if (e.status != 404) rethrow;
       }
       _avatarBytes = bytes;
     } on Object {
@@ -228,8 +234,8 @@ class AppState extends ChangeNotifier {
     );
     await _store.write(account);
     await _rememberServer(account.serverUrl);
-    unawaited(_loadAvatar());
     _client = client;
+    unawaited(_loadAvatar());
     _account = account;
     _server = await _auth.health(client);
     await _openReplica();

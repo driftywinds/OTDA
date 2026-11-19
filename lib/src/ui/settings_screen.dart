@@ -1,8 +1,10 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../app_state.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
+import 'settings_rows.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -108,20 +110,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    _Row(label: 'Email', value: account?.userEmail ?? ''),
-                    _Row(label: 'Role', value: account?.userRole ?? ''),
-                    _Row(
+                    SettingsRow(label: 'Email', value: account?.userEmail ?? ''),
+                    SettingsRow(label: 'Role', value: account?.userRole ?? ''),
+                    SettingsRow(
                       label: 'Signed in with',
                       value: account?.method.name == 'token' ? 'API token' : 'Password (session)',
                     ),
-                    _Row(label: 'Server', value: Uri.parse(account?.serverUrl ?? '').host),
-                    _Row(label: 'Server version', value: server?.version ?? ''),
+                    SettingsRow(label: 'Server', value: Uri.parse(account?.serverUrl ?? '').host),
+                    SettingsRow(label: 'Server version', value: server?.version ?? ''),
                   ],
                 ),
                 _Section(
                   title: 'Dates and times',
                   children: [
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Week starts on',
                       value: _value('week_start', 'system'),
                       options: const {
@@ -132,7 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => _set('week_start', value),
                     ),
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Date format',
                       value: _value('date_format', 'system'),
                       options: const {
@@ -143,7 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => _set('date_format', value),
                     ),
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Time format',
                       value: _value('time_format', 'system'),
                       options: const {
@@ -158,7 +160,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(
                   title: 'Lists',
                   children: [
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Row layout',
                       value: _value('row_layout', 'line'),
                       options: const {
@@ -172,8 +174,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(
                   title: 'This device',
                   children: [
-                    _Row(label: 'Sync', value: widget.state.syncError ?? 'Connected'),
-                    _Row(
+                    SettingsRow(label: 'Sync', value: widget.state.syncError ?? 'Connected'),
+                    SettingsRow(
                       label: 'Waiting to send',
                       value: widget.state.pending == 0 ? 'Nothing' : '${widget.state.pending} change(s)',
                     ),
@@ -182,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(
                   title: 'Appearance',
                   children: [
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Theme',
                       value: widget.state.themeChoice,
                       options: const {
@@ -193,7 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => widget.state.setThemeChoice(value),
                     ),
-                    _ChoiceRow(
+                    SettingsChoiceRow(
                       label: 'Font',
                       value: widget.state.useAllo ? 'allo' : 'system',
                       options: const {
@@ -209,6 +211,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'These preferences are stored on your server with your tasks and reach your other '
                   'devices on the next sync. "Device" means follow this phone.',
                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 8),
+                _Section(
+                  title: 'About',
+                  children: [const _AboutCard()],
                 ),
                 const SizedBox(height: 24),
                 OutlinedButton.icon(
@@ -281,96 +288,105 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.label, required this.value});
-
-  final String label;
-  final String value;
+/// Who this app is, with the logo and the build actually installed.
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // The choice rows end their value before an 18px chevron and a 6px gap;
-          // a plain row reserves the same space so every value lines up.
-          const SizedBox(width: 24),
-        ],
-      ),
-    );
-  }
-}
+    final scheme = theme.colorScheme;
 
-/// A row whose value is picked from a short list.
-class _ChoiceRow extends StatelessWidget {
-  const _ChoiceRow({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final Map<String, String> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: () async {
-        final chosen = await showModalBottomSheet<String>(
-          context: context,
-          showDragHandle: true,
-          builder: (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final entry in options.entries)
-                  ListTile(
-                    title: Text(entry.value),
-                    trailing: entry.key == value
-                        ? Icon(Icons.check_rounded, color: theme.colorScheme.primary)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(entry.key),
-                  ),
-                const SizedBox(height: 8),
-              ],
-            ),
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13)),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ],
           ),
         );
-        if (chosen != null) onChanged(chosen);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-            Text(
-              options[value] ?? value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
+
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        final version = info == null ? '…' : '${info.version} (${info.buildNumber})';
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // The logo's white tray needs a dark tile to sit on, whatever
+                  // theme is chosen.
+                  Container(
+                    width: 56,
+                    height: 56,
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('OTDA', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(
+                          'A client for OpenTodo servers',
+                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
-          ],
-        ),
-      ),
+              const SizedBox(height: 12),
+              row('Version', version),
+              row('Package', info?.packageName ?? 'com.dw.otda'),
+              const Divider(height: 20),
+              InkWell(
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'OTDA',
+                  applicationVersion: info == null ? null : '${info.version} (${info.buildNumber})',
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Open source licences',
+                          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, size: 18, color: scheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
