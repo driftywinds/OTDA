@@ -187,7 +187,11 @@ class OtdaDb {
 
   // ---- write ------------------------------------------------------------
 
-  /// Queues one field write locally and for the next exchange.
+  /// Called after a field write, once the row is durable. The app uses it to
+  /// rebuild the widget and re-arm reminders, so no caller has to remember to.
+  void Function()? onWrite;
+
+
   Future<void> putField(String entity, String entityId, String field, Object? value, int ts, String device) async {
     final json = jsonEncode(value);
     await _db.transaction((txn) async {
@@ -206,6 +210,7 @@ class OtdaDb {
         'device': device,
       });
     });
+    onWrite?.call();
   }
 
   Future<List<Map<String, Object?>>> pendingOps({int limit = 1000}) =>

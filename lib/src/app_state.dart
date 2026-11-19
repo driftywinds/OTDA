@@ -252,6 +252,9 @@ class AppState extends ChangeNotifier {
     final dbDir = await databaseFactory.getDatabasesPath();
     final name = account.userId.isEmpty ? 'otda.db' : 'otda-${account.userId}.db';
     final db = await OtdaDb.open(path: p.join(dbDir, name));
+    // Any local write (a task, a project, a setting) refreshes the widget and the
+    // reminder plan, so nothing has to remember to call the refresh itself.
+    db.onWrite = _scheduleAfterChange;
     final clock = await HybridClock.load(db);
     final engine = SyncEngine(db: db, client: client, clock: clock);
     await engine.open();
@@ -289,6 +292,15 @@ class AppState extends ChangeNotifier {
   /// that one needs action.
   void _recordFailure(ApiException e) {
     _syncError = _failures.add(e);
+  }
+
+  Timer? _changeDebounce;
+
+  void _scheduleAfterChange() {
+    _changeDebounce?.cancel();
+    _changeDebounce = Timer(const Duration(milliseconds: 600), () {
+      unawaited(afterDataChanged());
+    });
   }
 
   /// The one trigger the blueprint allows: every finished sync and every local
@@ -370,6 +382,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _changeDebounce?.cancel();
     _timer?.cancel();
     _engine?.stopLive();
     _db?.close();

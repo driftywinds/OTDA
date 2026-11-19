@@ -22,7 +22,14 @@ Map<String, Object?> buildWidgetSnapshot(
     // would be useless at a glance, so an open one-off falls back to its due day.
     final day = upcomingDay(task, tasks, today) ??
         (task.isCompleted || isRecurring(task) ? null : task.dueDate);
-    if (day == null) continue;
+    if (day == null) {
+      // A task added from the widget's own "+" often has no date yet; hiding it
+      // would make the widget look like the add did nothing.
+      if (!task.isCompleted && !isRecurring(task) && task.dueDate == null) {
+        rows.add(('Later', '', task));
+      }
+      continue;
+    }
     rows.add((_sectionFor(day, today), day, task));
   }
 
@@ -50,7 +57,7 @@ Map<String, Object?> buildWidgetSnapshot(
       'id': task.id,
       'day': day,
       'title': task.title.isEmpty ? 'Task' : task.title,
-      'right': day == today ? (task.dueTime ?? '') : _shortDay(day),
+      'right': day.isEmpty ? '' : (day == today ? (task.dueTime ?? '') : _shortDay(day)),
       'overdue': label == 'Overdue',
       'done': task.isCompleted,
       if (names[task.projectId ?? ''] != null) 'project': names[task.projectId ?? ''],

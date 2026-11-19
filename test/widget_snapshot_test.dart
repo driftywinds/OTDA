@@ -69,4 +69,16 @@ void main() {
     ];
     expect(titles, ['Mine']);
   });
+
+  test('a task added with no date still appears, under Later', () {
+    final snapshot = buildWidgetSnapshot([
+      task('n', {'title': 'Buy milk'}),
+    ], const [], today: today);
+    final rows = (snapshot['rows'] as List).cast<Map>();
+    final section = rows.firstWhere((r) => r['t'] == 'section');
+    final row = rows.firstWhere((r) => r['t'] == 'task');
+    expect(section['label'], 'Later');
+    expect(row['title'], 'Buy milk');
+    expect(row['right'], '');
+  });
 }

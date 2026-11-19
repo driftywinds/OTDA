@@ -1,5 +1,7 @@
 package com.dw.otda.widget
 
+import es.antonborri.home_widget.HomeWidgetBackgroundIntent
+
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Intent
@@ -54,6 +56,14 @@ class TasksWidgetConfigActivity : Activity() {
             prefs.edit().putString(widgetProjectKey(appWidgetId), values[position]).apply()
             updateActiveProjects(prefs)
             requestWidgetUpdate(this)
+            // The snapshot for a project that was just chosen does not exist yet:
+            // wake Dart so it rebuilds them from the replica and redraws the widget.
+            runCatching {
+                HomeWidgetBackgroundIntent.getBroadcast(
+                    this,
+                    android.net.Uri.parse("otda://refresh"),
+                ).send()
+            }
             setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
             finish()
         }

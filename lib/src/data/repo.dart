@@ -129,6 +129,29 @@ class Repo {
     final recurring = raw.isNotEmpty && rules.parseRule(raw).ok;
     final now = DateTime.now().millisecondsSinceEpoch;
 
+    // An occurrence record is not a task of its own: un-ticking it has to put the
+    // series back on that day, or the record becomes an open one-off and Upcoming
+    // shows both it and the series' next occurrence.
+    final seriesId = task.raw['series_id']?.toString();
+    if (seriesId != null && seriesId.isNotEmpty) {
+      final ts = await clock.next();
+      if (completed) {
+        await db.putField('task', task.id, 'completed_at', now, ts, engine.device);
+        await db.putField('task', task.id, 'skipped', false, ts, engine.device);
+        return;
+      }
+      final recordDate = task.raw['occurrence_date']?.toString() ?? occurrenceDateOf(task, _todayString());
+      final rows = await db.entities('task');
+      final seriesRow = rows.where((row) => row['id']?.toString() == seriesId).firstOrNull;
+      await db.putField('task', task.id, 'deleted_at', now, ts, engine.device);
+      if (seriesRow != null) {
+        final series = Task(seriesId, seriesRow);
+        await db.putField('task', seriesId, 'completed_at', null, ts, engine.device);
+        await db.putField('task', seriesId, 'due', movedDue(series, recordDate), ts, engine.device);
+      }
+      return;
+    }
+
     if (!recurring) {
       final ts = await clock.next();
       await db.putField('task', task.id, 'completed_at', completed ? now : null, ts, engine.device);

@@ -213,4 +213,30 @@ void main() {
         reason: 'the skipped day is not offered again');
     expect(recordsOf(id, all).map((r) => r.date), containsAll([today, tomorrow]));
   });
+
+  test('un-ticking an occurrence record puts the series back, not a second task', () async {
+    final (repo, db, clock) = await buildRepo();
+    final id = await addTask(db, clock, 'undo-1', {
+      'title': 'Post e paper',
+      'due': {'date': tomorrow},
+      'recurrence': 'every day',
+    });
+
+    // Ticked from Upcoming: the series rolls to the day after tomorrow.
+    await repo.setCompleted(await taskById(repo, id), true);
+    expect((await taskById(repo, id)).dueDate, shift(today, 2));
+
+    // Un-ticked again: History shows the occurrence record, not the series.
+    final record = (await repo.tasks()).firstWhere((t) => t.raw['series_id'] == id);
+    await repo.setCompleted(record, false);
+
+    final all = await repo.tasks();
+    final series = all.firstWhere((t) => t.id == id);
+    expect(series.dueDate, tomorrow);
+    // The record is gone, so Upcoming has exactly one row for this task.
+    expect(all.where((t) => t.raw['series_id'] == id), isEmpty);
+    final shown = all.where((t) => upcomingDay(t, all, today) != null).toList();
+    expect(shown, hasLength(1));
+    expect(upcomingDay(series, all, today), tomorrow);
+  });
 }

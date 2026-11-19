@@ -297,7 +297,7 @@ const Map<String, String> _compactUnits = {
   'yrs': 'year',
 };
 
-/// "in N <unit>" at token i: the spoken form ("in 4 minutes", "in a week") or the
+/// "in N `<unit>`" at token i: the spoken form ("in 4 minutes", "in a week") or the
 /// compact one ("in 4m", "in 3d"). `n` counts the tokens, the "in" word included.
 ({int n, int count, String unit})? _relativeAt(List<Token> tokens, int i, Vocabulary v) {
   final inN = phraseAt(tokens, i, v.inWords, '${v.code}:in');
