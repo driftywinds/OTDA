@@ -244,25 +244,34 @@ class Repo {
   }
 
   /// Snoozes one occurrence on this device. Never synced: a snooze is a local
-  /// decision, and the plan reads it back through [snoozes].
+  /// decision, and the plan reads it back through [snoozes]. The keys live in one
+  /// index row so they can be listed without scanning every task.
   Future<void> setSnooze(String taskId, String day, DateTime? until) async {
-    await db.setMeta('snooze:$taskId|$day', until == null ? '' : '${until.millisecondsSinceEpoch}');
+    final key = '$taskId|$day';
+    await db.setMeta('snooze:$key', until == null ? '' : '${until.millisecondsSinceEpoch}');
+    final index = await _snoozeIndex();
+    if (until == null) {
+      index.remove(key);
+    } else {
+      index.add(key);
+    }
+    await db.setMeta('snooze_index', index.join('\n'));
   }
+
+  Future<Set<String>> _snoozeIndex() async =>
+      ((await db.meta('snooze_index')) ?? '').split('\n').where((k) => k.isNotEmpty).toSet();
 
   /// The snoozes still in the future, keyed `taskId|day`.
   Future<Map<String, DateTime>> snoozes() async {
     final out = <String, DateTime>{};
     final now = DateTime.now().millisecondsSinceEpoch;
-    for (final row in await db.entities('task')) {
-      final id = row['id'] as String;
-      // The plan only needs snoozes for tasks that exist; the keys are per task and
-      // day, and reading them one by one keeps the schema untouched.
-      for (final day in (row['snooze_days'] as List?) ?? const []) {
-        final value = await db.meta('snooze:$id|$day');
-        final at = int.tryParse(value ?? '');
-        if (at != null && at > now) out['$id|$day'] = DateTime.fromMillisecondsSinceEpoch(at);
-      }
+    final index = await _snoozeIndex();
+    for (final key in index) {
+      final at = int.tryParse(await db.meta('snooze:$key') ?? '');
+      if (at != null && at > now) out[key] = DateTime.fromMillisecondsSinceEpoch(at);
     }
+    // Forget the ones that have passed so the index does not grow for ever.
+    if (out.length != index.length) await db.setMeta('snooze_index', out.keys.join('\n'));
     return out;
   }
 

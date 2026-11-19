@@ -3,6 +3,14 @@
          needs the network. Flutter only puts this in the debug and profile
          manifests, so a release build without it here cannot reach anything. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Reminders. Without POST_NOTIFICATIONS Android 13+ never shows the permission
+         dialog and every notification is dropped silently. RECEIVE_BOOT_COMPLETED lets
+         the plugin re-arm alarms after a reboot, SCHEDULE_EXACT_ALARM lets a reminder
+         fire on the minute (the person grants it in Settings on Android 12+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <application
         android:label="OTDA"
         android:name="${applicationName}"
@@ -41,6 +49,25 @@
                 <data android:scheme="otda" android:host="complete"/>
             </intent-filter>
         </activity>
+        <!-- flutter_local_notifications: the alarm receiver fires scheduled reminders,
+             the boot receiver restores them after a reboot or an app update, and the
+             action receiver runs the Complete / Snooze buttons without opening the app. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false"/>
         <!-- Home-screen widget. Glance renders it; the receiver only binds it. -->
         <receiver
             android:name=".widget.TasksWidgetReceiver"
@@ -48,6 +75,10 @@
             android:label="OTDA">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="android.intent.action.DATE_CHANGED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

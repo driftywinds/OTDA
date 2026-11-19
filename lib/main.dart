@@ -4,6 +4,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'src/app_state.dart';
 import 'src/reminders/service.dart';
+import 'src/system_bridge.dart';
 import 'src/ui/connect_screen.dart';
 import 'src/ui/home_screen.dart';
 import 'src/ui/theme.dart';
@@ -30,8 +31,10 @@ class _OtdaAppState extends State<OtdaApp> {
     _state.restore();
     ReminderService.instance.init();
     HomeWidget.registerInteractivityCallback(onWidgetAction);
-    HomeWidget.initiallyLaunchedFromHomeWidget().then(handleWidgetUri);
-    HomeWidget.widgetClicked.listen(handleWidgetUri);
+    // otda:// links (widget rows, the widget's "+", a notification) arrive from
+    // MainActivity: home_widget only reports its own launch action, which plain
+    // deep-link intents do not use.
+    SystemBridge.listen(handleWidgetUri);
   }
 
   @override

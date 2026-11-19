@@ -271,6 +271,9 @@ class AppState extends ChangeNotifier {
       }
       notifyListeners();
     });
+    // The widget and the reminders come from what is on the device, so they are
+    // written now and not only after a sync that may never succeed (offline).
+    unawaited(afterDataChanged());
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
     await _syncQuietly();
@@ -293,20 +296,21 @@ class AppState extends ChangeNotifier {
   Future<void> afterDataChanged() async {
     final repo = _repo;
     if (repo == null) return;
-    final tasks = await repo.tasks();
-    final projects = await repo.projects();
-    final names = {for (final project in projects) project.id: project.name};
-    await ReminderService.instance.init();
-    await ReminderService.instance.requestPermissionOnce();
-    await ReminderService.instance.rearm(tasks, projectNames: names);
-    await pushWidgets(tasks, projects, today: _todayString());
-  }
-
-  String _todayString() {
-    final now = DateTime.now();
-    return '${now.year.toString().padLeft(4, '0')}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
+    // The widget goes first and on its own: it must never wait on the notification
+    // permission dialog or fail because of it.
+    try {
+      await pushWidgetsFromRepo(repo);
+    } on Object {
+      // nothing to show
+    }
+    try {
+      await ReminderService.instance.rearmFrom(repo);
+      if (ReminderService.instance.lastPlan.isNotEmpty) {
+        await ReminderService.instance.requestPermissionOnce();
+      }
+    } on Object {
+      // the Notifications card in Settings shows the reason
+    }
   }
 
   /// Runs an exchange and folds the outcome into the UI state.

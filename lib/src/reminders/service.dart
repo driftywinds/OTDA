@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show DartPluginRegistrant;
 
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -24,9 +24,15 @@ import '../data/sync_engine.dart';
 import '../widget/snapshot.dart';
 import 'planner.dart';
 
+/// A request, from a widget or a link, to open the new-task sheet.
+class NewTaskRequest {
+  const NewTaskRequest(this.projectId);
+  final String? projectId;
+}
+
 /// Arms reminders with the OS, routes their actions, and keeps the widget fed.
 ///
-/// The blueprint's single trigger lives here: [afterChange] is the only thing that
+/// The blueprint's single trigger lives here: [rearmFrom] is the only thing that
 /// schedules anything, so a tap in the shade, a sync and an edit all land on the
 /// same plan.
 class ReminderService {
@@ -38,25 +44,58 @@ class ReminderService {
   static const channelOverdue = 'overdue';
   static const _accent = Color(0xFF34D399);
 
+  // Ids 1 and 2 are the two test notifications; a plan id is a 31-bit hash and the
+  // diff below never cancels these.
+  static const _testNowId = 1;
+  static const _testLaterId = 2;
+
+  static const _enabledPref = 'notif.enabled';
+  static const _timePref = 'notif.default_time';
+  static const _askedPref = 'notif.asked.v2';
+
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
-  bool _rearming = false;
-  Timer? _debounce;
+  Future<void>? _initFuture;
+  Future<void> _queue = Future.value();
 
-  Future<void> init() async {
-    if (_ready) return;
+  /// What the last re-arm did, for the Notifications card in Settings.
+  List<PlannedReminder> lastPlan = const [];
+  DateTime? lastRearmAt;
+  String? lastError;
+
+  /// A task to open (from a widget row or a notification tap).
+  final pendingTask = ValueNotifier<String?>(null);
+
+  /// The widget's "+" was tapped.
+  final pendingNewTask = ValueNotifier<NewTaskRequest?>(null);
+
+  Future<void> init() => _initFuture ??= _init().catchError((Object e) {
+        lastError = 'init: $e';
+        _initFuture = null;
+      });
+
+  Future<void> _init() async {
     tzdata.initializeTimeZones();
     await _setLocalZone();
     await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('ic_stat_otda'),
-        iOS: DarwinInitializationSettings(),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
       ),
       onDidReceiveNotificationResponse: _onTap,
       onDidReceiveBackgroundNotificationResponse: onReminderAction,
     );
     await _createChannels();
     _ready = true;
+    // The app was started by tapping a reminder: open that task once the UI is up.
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp == true) {
+      _openPayload(launch?.notificationResponse?.payload);
+    }
   }
 
   Future<void> _setLocalZone() async {
@@ -95,49 +134,158 @@ class ReminderService {
     ));
   }
 
-  /// Asks for the notification permission (Android 13+). Call it when a reminder is
-  /// first created, never at launch.
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+  // ---- settings --------------------------------------------------------
+
+  Future<bool> remindersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getBool(_enabledPref) ?? true;
+  }
+
+  Future<void> setRemindersEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enabledPref, value);
+  }
+
+  /// The time a task with a date but no time reminds at, `HH:mm`.
+  Future<String> reminderTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getString(_timePref) ?? defaultReminderTime;
+  }
+
+  Future<void> setReminderTime(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_timePref, value);
+  }
+
+  // ---- permissions -----------------------------------------------------
+
+  /// Whether Android will show this app's notifications at all.
+  Future<bool> notificationsEnabled() async {
+    await init();
+    return await _android?.areNotificationsEnabled() ?? true;
+  }
+
+  /// Shows the system permission dialog (Android 13+). Returns what the person chose;
+  /// false also covers "already refused twice", where Android shows nothing.
   Future<bool> requestPermission() async {
     await init();
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    final granted = await android?.requestNotificationsPermission();
-    return granted ?? true;
+    final android = _android;
+    if (android != null) return await android.requestNotificationsPermission() ?? false;
+    final ios = _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+    return await ios?.requestPermissions(alert: true, badge: true, sound: true) ?? false;
+  }
+
+  /// Asks once, the first time there is something to remind about.
+  Future<bool> requestPermissionOnce() async {
+    await init();
+    if (await notificationsEnabled()) return true;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_askedPref) == true) return false;
+    final granted = await requestPermission();
+    await prefs.setBool(_askedPref, true);
+    return granted;
   }
 
   Future<bool> exactAlarmsAllowed() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    return await android?.canScheduleExactNotifications() ?? true;
+    await init();
+    return await _android?.canScheduleExactNotifications() ?? true;
   }
 
-  /// Rebuilds the plan and diffs it against what the OS holds.
-  Future<void> rearm(List<Task> tasks, {Map<String, String> projectNames = const {}}) async {
-    if (_rearming || !_ready) return;
-    _rearming = true;
+  // ---- arming ----------------------------------------------------------
+
+  /// Reads the replica and re-arms from it. Safe to call from any isolate.
+  Future<void> rearmFrom(Repo repo) async {
+    final tasks = await repo.tasks();
+    final projects = await repo.projects();
+    final snoozes = await repo.snoozes();
+    await rearm(
+      tasks,
+      projectNames: {for (final project in projects) project.id: project.name},
+      snoozes: snoozes,
+    );
+  }
+
+  /// Rebuilds the plan and diffs it against what the OS holds. Calls queue up, so
+  /// a re-arm asked for during another one is not lost.
+  Future<void> rearm(
+    List<Task> tasks, {
+    Map<String, String> projectNames = const {},
+    Map<String, DateTime> snoozes = const {},
+  }) {
+    final run = _queue.then((_) => _rearmNow(tasks, projectNames, snoozes));
+    _queue = run.catchError((Object _) {});
+    return run;
+  }
+
+  Future<void> _rearmNow(
+    List<Task> tasks,
+    Map<String, String> projectNames,
+    Map<String, DateTime> snoozes,
+  ) async {
     try {
-      final plan = planReminders(tasks, now: DateTime.now(), zone: tz.local, projectNames: projectNames);
+      await init();
+      if (!_ready) return;
+      final enabled = await remindersEnabled();
       final pending = await _plugin.pendingNotificationRequests();
+      if (!enabled) {
+        for (final request in pending) {
+          if (request.id != _testNowId && request.id != _testLaterId) await _plugin.cancel(id: request.id);
+        }
+        lastPlan = const [];
+        lastRearmAt = DateTime.now();
+        lastError = null;
+        return;
+      }
+      final plan = planReminders(
+        tasks,
+        now: DateTime.now(),
+        zone: tz.local,
+        defaultTime: await reminderTime(),
+        projectNames: projectNames,
+        snoozedUntil: {
+          for (final entry in snoozes.entries) entry.key: tz.TZDateTime.from(entry.value, tz.local),
+        },
+      );
       final wanted = {for (final reminder in plan) reminder.id};
       for (final request in pending) {
+        if (request.id == _testNowId || request.id == _testLaterId) continue;
         if (!wanted.contains(request.id)) await _plugin.cancel(id: request.id);
       }
       final exact = await exactAlarmsAllowed();
       for (final reminder in plan) {
-        await _plugin.zonedSchedule(
-          id: reminder.id,
-          title: reminder.title,
-          body: reminder.body,
-          scheduledDate: reminder.at,
-          notificationDetails: _details(),
-          androidScheduleMode: exact
-              ? AndroidScheduleMode.exactAllowWhileIdle
-              : AndroidScheduleMode.inexactAllowWhileIdle,
-          payload: reminder.payload,
-        );
+        await _schedule(reminder.id, reminder.title, reminder.body, reminder.at, reminder.payload, exact);
       }
-    } on Object {
-      // A missing permission or a plugin gap must not take the app down.
-    } finally {
-      _rearming = false;
+      lastPlan = plan;
+      lastRearmAt = DateTime.now();
+      lastError = null;
+    } on Object catch (e) {
+      // A missing permission or a plugin gap must not take the app down, but it must
+      // be visible: the Notifications card shows this line.
+      lastError = '$e';
+    }
+  }
+
+  Future<void> _schedule(int id, String title, String body, tz.TZDateTime at, String payload, bool exact) async {
+    Future<void> go(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          scheduledDate: at,
+          notificationDetails: _details(),
+          androidScheduleMode: mode,
+          payload: payload,
+        );
+    if (!exact) return go(AndroidScheduleMode.inexactAllowWhileIdle);
+    try {
+      await go(AndroidScheduleMode.exactAllowWhileIdle);
+    } on PlatformException {
+      // The exact-alarm grant was revoked between the check and the call.
+      await go(AndroidScheduleMode.inexactAllowWhileIdle);
     }
   }
 
@@ -163,64 +311,78 @@ class ReminderService {
         iOS: DarwinNotificationDetails(threadIdentifier: channelReminders),
       );
 
-  /// Every plan rebuild goes through here, debounced so a burst of edits arms once.
-  void afterChange(List<Task> tasks, {Map<String, String> projectNames = const {}}) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      unawaited(rearm(tasks, projectNames: projectNames));
-    });
+  // ---- testing ---------------------------------------------------------
+
+  static const _blocked = 'Notifications are blocked for OTDA. Tap "Allow notifications" first.';
+
+  /// Posts a notification right now. Proves the permission and the channel.
+  Future<String> sendTestNow() async {
+    await init();
+    if (!await notificationsEnabled()) return _blocked;
+    await _plugin.show(
+      id: _testNowId,
+      title: 'Reminder test',
+      body: 'If you can read this, notifications are allowed.',
+      notificationDetails: _details(),
+      payload: 'test',
+    );
+    return 'Sent. Pull down the notification shade.';
   }
 
-  Future<void> showTest() async {
+  /// Hands a notification to AlarmManager for [after] from now, exactly like a real
+  /// reminder. Lock the phone, close the app and wait: this is the realistic check.
+  Future<String> scheduleTest(Duration after) async {
     await init();
-    await _plugin.show(
-      id: 1,
-      title: 'Reminder test',
-      body: 'If this arrived, reminders are working.',
-      notificationDetails: _details(),
-    );
+    if (!await notificationsEnabled()) return _blocked;
+    final at = tz.TZDateTime.now(tz.local).add(after);
+    final exact = await exactAlarmsAllowed();
+    await _schedule(_testLaterId, 'Scheduled reminder test',
+        'This one came from the alarm clock, not from the open app.', at, 'test', exact);
+    final clock = _clock(at);
+    return exact
+        ? 'Scheduled for $clock. Lock the phone, swipe the app away and wait.'
+        : 'Scheduled for about $clock, but exact alarms are off so Android may deliver it late.';
   }
+
+  /// Creates a real task due in [after] and arms it, so the whole path (task, plan,
+  /// alarm, notification, Complete button) is exercised. Delete the task afterwards.
+  Future<String> createRealTest(Repo repo, {Duration after = const Duration(minutes: 2)}) async {
+    final due = DateTime.now().add(after);
+    final date = '${due.year.toString().padLeft(4, '0')}-'
+        '${due.month.toString().padLeft(2, '0')}-'
+        '${due.day.toString().padLeft(2, '0')}';
+    await repo.createTask('Test reminder (safe to delete)', extra: {
+      'due': {'date': date, 'time': '${_two(due.hour)}:${_two(due.minute)}'},
+    });
+    await rearmFrom(repo);
+    if (lastError != null) return 'Task created, but arming failed: $lastError';
+    return 'Task created for ${_two(due.hour)}:${_two(due.minute)}. Lock the phone and wait, '
+        'then try the Complete button.';
+  }
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+  static String _clock(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
   Future<List<PendingNotificationRequest>> pending() async {
     await init();
     return _plugin.pendingNotificationRequests();
   }
 
-  void _onTap(NotificationResponse response) {
-    // The payload is taskId|day; opening the sheet belongs to the UI, which reads
-    // this through the callback the app registers.
-    onReminderTapped?.call(response.payload);
-  }
-
-  /// Set by the app so a tap on the body can open the task.
-  void Function(String? payload)? onReminderTapped;
-
-  /// A widget row was tapped while the app runs: the shell opens this task.
-  final pendingTask = ValueNotifier<String?>(null);
-
-  /// Whether the person has been asked already, so the prompt is not repeated.
-  static const _askedPref = 'notif.asked';
-
-  Future<bool> notificationsEnabled() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    return await android?.areNotificationsEnabled() ?? false;
-  }
-
-  /// Asks once, the first time reminders actually matter.
-  Future<bool> requestPermissionOnce() async {
-    await init();
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_askedPref) == true) return notificationsEnabled();
-    if (await notificationsEnabled()) {
-      await prefs.setBool(_askedPref, true);
-      return true;
-    }
-    final granted = await requestPermission();
-    await prefs.setBool(_askedPref, true);
-    return granted;
-  }
-
   Future<int> armedCount() async => (await pending()).length;
+
+  /// Formats a planned time for the Settings list.
+  static String describe(PlannedReminder reminder) =>
+      '${reminder.day} ${_clock(reminder.at)}  ${reminder.title}';
+
+  // ---- taps ------------------------------------------------------------
+
+  void _onTap(NotificationResponse response) => _openPayload(response.payload);
+
+  /// A payload is `taskId|day`; a test notification carries none and opens nothing.
+  void _openPayload(String? payload) {
+    if (payload == null || !payload.contains('|')) return;
+    pendingTask.value = payload.split('|').first;
+  }
 }
 
 /// Handles a notification action from a background isolate.
@@ -245,13 +407,20 @@ Future<void> onReminderAction(NotificationResponse response) async {
       await repo.setSnooze(taskId, day, DateTime.now().add(const Duration(minutes: 10)));
     case 'snooze_tomorrow':
       final tomorrow = DateTime.now().add(const Duration(days: 1));
-      final at = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9);
+      final time = (await ReminderService.instance.reminderTime()).split(':');
+      final at = DateTime(
+        tomorrow.year,
+        tomorrow.month,
+        tomorrow.day,
+        int.tryParse(time.first) ?? 9,
+        time.length > 1 ? int.tryParse(time[1]) ?? 0 : 0,
+      );
       await repo.setSnooze(taskId, day, at);
     default:
       return;
   }
-  await ReminderService.instance.init();
-  await ReminderService.instance.rearm(await repo.tasks());
+  await ReminderService.instance.rearmFrom(repo);
+  await pushWidgetsFromRepo(repo);
 }
 
 /// Opens the replica without any UI and without a network client.
@@ -272,6 +441,23 @@ Future<Repo> openHeadlessRepo() async {
   return Repo(db: db, clock: clock, engine: engine);
 }
 
+String _todayString() {
+  final now = DateTime.now();
+  return '${now.year.toString().padLeft(4, '0')}-'
+      '${now.month.toString().padLeft(2, '0')}-'
+      '${now.day.toString().padLeft(2, '0')}';
+}
+
+/// Why the last widget push failed, or null. Shown nowhere yet but kept for logs.
+String? lastWidgetError;
+
+/// Reads the replica and pushes every widget snapshot from it. Works with no UI.
+Future<void> pushWidgetsFromRepo(Repo repo) async {
+  final tasks = await repo.tasks();
+  final projects = await repo.projects();
+  await pushWidgets(tasks, projects, today: _todayString());
+}
+
 /// Writes the widget snapshots for the projects that have a widget and asks the
 /// launcher to redraw. The native side never computes anything.
 Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required String today}) async {
@@ -288,12 +474,15 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
       await HomeWidget.saveWidgetData<String>('snapshot_$id', jsonEncode(snapshot));
     }
     await HomeWidget.saveWidgetData<String>('projects_index', jsonEncode(projectsIndex(projects)));
+    await HomeWidget.saveWidgetData<bool>('refreshing', false);
     await HomeWidget.updateWidget(
       androidName: 'TasksWidgetReceiver',
       qualifiedAndroidName: 'com.dw.otda.widget.TasksWidgetReceiver',
     );
-  } on Object {
+    lastWidgetError = null;
+  } on Object catch (e) {
     // No widget placed, or no launcher support: nothing to do.
+    lastWidgetError = '$e';
   }
 }
 
@@ -301,17 +490,22 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
 /// link at start-up and with every later tap while the app is running.
 Future<void> handleWidgetUri(Uri? uri) async {
   if (uri == null) return;
-  if (uri.host == 'task' || uri.pathSegments.length == 1 && uri.host.isEmpty) {
-    final id = uri.host == 'task' ? uri.pathSegments.first : uri.pathSegments.first;
-    ReminderService.instance.pendingTask.value = id;
-    return;
-  }
-  if (uri.host == 'complete') {
-    await onWidgetAction(uri);
+  switch (uri.host) {
+    case 'task':
+      if (uri.pathSegments.isNotEmpty) ReminderService.instance.pendingTask.value = uri.pathSegments.first;
+    case 'new':
+      ReminderService.instance.pendingNewTask.value = NewTaskRequest(uri.queryParameters['project']);
+    case 'complete':
+    case 'refresh':
+      await onWidgetAction(uri);
+    default:
+      // upcoming: the app already opens on it.
+      break;
   }
 }
 
-/// A widget or notification action arrives as a deep link.
+/// A widget button arrives as a deep link, run in a background isolate when the
+/// app is not open.
 @pragma('vm:entry-point')
 Future<void> onWidgetAction(Uri? uri) async {
   if (uri == null) return;
@@ -320,14 +514,12 @@ Future<void> onWidgetAction(Uri? uri) async {
   final repo = await openHeadlessRepo();
   if (uri.host == 'complete') {
     final taskId = uri.queryParameters['id'];
-    final day = uri.queryParameters['day'];
-    if (taskId == null || day == null) return;
+    if (taskId == null) return;
     final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
     if (task != null) await repo.setCompleted(task, true);
-    await ReminderService.instance.init();
-    await ReminderService.instance.rearm(await repo.tasks());
+    await ReminderService.instance.rearmFrom(repo);
   }
+  // Complete, refresh and "no snapshot yet" all end the same way: rewrite every
+  // snapshot from the real data, which also clears a stuck "refreshing" flag.
+  await pushWidgetsFromRepo(repo);
 }
-
-/// iOS launch arguments for home_widget are a no-op on Android; kept for symmetry.
-const homeWidgetUri = 'otda://complete';

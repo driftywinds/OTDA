@@ -69,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     ReminderService.instance.pendingTask.addListener(_openPendingFromWidget);
+    ReminderService.instance.pendingNewTask.addListener(_openPendingNewTask);
     super.initState();
     _calendarDay = _today;
     _searchField.addListener(() {
@@ -76,7 +77,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (text == _query) return;
       setState(() => _query = text);
     });
-    _load();
+    // A link that launched the app arrived before this screen existed, so look once
+    // the tasks are loaded.
+    _load().then((_) {
+      _openPendingFromWidget();
+      _openPendingNewTask();
+    });
+  }
+
+  /// The widget's "+" was tapped: open the new-task sheet on that project.
+  Future<void> _openPendingNewTask() async {
+    final request = ReminderService.instance.pendingNewTask.value;
+    if (request == null || !mounted) return;
+    ReminderService.instance.pendingNewTask.value = null;
+    await _add(projectId: request.projectId);
   }
 
   /// A widget row was tapped: open that task once the replica has it.
@@ -98,6 +112,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    ReminderService.instance.pendingTask.removeListener(_openPendingFromWidget);
+    ReminderService.instance.pendingNewTask.removeListener(_openPendingNewTask);
+    WidgetsBinding.instance.removeObserver(this);
     _syncTimer?.cancel();
     _searchField.dispose();
     super.dispose();
@@ -259,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _load();
   }
 
-  Future<void> _add() async {
+  Future<void> _add({String? projectId}) async {
     final repo = widget.state.repo;
     if (repo == null) return;
     final projects = await repo.projects();
@@ -268,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => NewTaskSheet(repo: repo, projects: projects),
+      builder: (_) => NewTaskSheet(repo: repo, projects: projects, initialProjectId: projectId),
     );
     if (created == true) await _load();
   }

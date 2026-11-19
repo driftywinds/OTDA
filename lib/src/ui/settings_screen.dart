@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../reminders/service.dart';
+import '../system_bridge.dart';
 
 import '../app_state.dart';
 import '../data/repo.dart';
@@ -183,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                const _Section(title: 'Notifications', children: [_NotificationsCard()]),
+                _Section(title: 'Notifications', children: [_NotificationsCard(state: widget.state)]),
                 _Section(
                   title: 'Appearance',
                   children: [
@@ -384,37 +385,100 @@ class _AboutCard extends StatelessWidget {
 }
 
 
-/// Reminders, made visible: whether they may fire, whether they are armed, and a
-/// button that proves it. A permission the app never asked for is the first thing
-/// to show here.
+/// Reminders, made visible: whether they may fire, whether they are armed, and ways
+/// to prove it from a plain notification up to a real task that fires while the
+/// phone is locked.
 class _NotificationsCard extends StatefulWidget {
-  const _NotificationsCard();
+  const _NotificationsCard({required this.state});
+
+  final AppState state;
 
   @override
   State<_NotificationsCard> createState() => _NotificationsCardState();
 }
 
-class _NotificationsCardState extends State<_NotificationsCard> {
+class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBindingObserver {
   bool? _allowed;
   bool? _exact;
+  bool? _battery;
+  bool _enabled = true;
+  String _time = '09:00';
+  String _maker = '';
   int _armed = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
   }
 
-  Future<void> _refresh() async {
-    final allowed = await ReminderService.instance.notificationsEnabled();
-    final exact = await ReminderService.instance.exactAlarmsAllowed();
-    final armed = await ReminderService.instance.armedCount();
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Coming back from a system settings screen: show what changed.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh(rearm: true);
+  }
+
+  Future<void> _refresh({bool rearm = false}) async {
+    final service = ReminderService.instance;
+    if (rearm) await widget.state.afterDataChanged();
+    final allowed = await service.notificationsEnabled();
+    final exact = await service.exactAlarmsAllowed();
+    final armed = await service.armedCount();
+    final battery = await SystemBridge.ignoringBatteryOptimizations();
+    final enabled = await service.remindersEnabled();
+    final time = await service.reminderTime();
+    final maker = await SystemBridge.manufacturer();
     if (!mounted) return;
     setState(() {
       _allowed = allowed;
       _exact = exact;
+      _battery = battery;
+      _enabled = enabled;
+      _time = time;
+      _maker = maker;
       _armed = armed;
     });
+  }
+
+  void _say(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 6)));
+  }
+
+  Future<void> _allow() async {
+    final granted = await ReminderService.instance.requestPermission();
+    if (!granted) {
+      // Refused (or refused before): Android will not show the dialog again, so the
+      // only way left is the system settings page.
+      _say('Turn on notifications for OTDA in the screen that just opened.');
+      await SystemBridge.openNotificationSettings();
+    }
+    await _refresh(rearm: true);
+  }
+
+  Future<void> _pickTime() async {
+    final parts = _time.split(':');
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: int.tryParse(parts.first) ?? 9,
+        minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+      ),
+    );
+    if (picked == null) return;
+    final value = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+    await ReminderService.instance.setReminderTime(value);
+    await widget.state.afterDataChanged();
+    await _refresh();
   }
 
   @override
@@ -422,57 +486,126 @@ class _NotificationsCardState extends State<_NotificationsCard> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+    final service = ReminderService.instance;
 
-    Widget row(String label, String value, {bool good = true}) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(child: Text(label, style: style)),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: style?.copyWith(color: good ? scheme.onSurfaceVariant : scheme.error),
+    Widget status(String label, String value, {bool good = true, VoidCallback? onTap}) => InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(child: Text(label, style: style)),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style?.copyWith(
+                      color: good ? scheme.onSurfaceVariant : scheme.error,
+                      fontWeight: good ? null : FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 24),
-            ],
+                SizedBox(
+                  width: 24,
+                  child: onTap == null
+                      ? null
+                      : Icon(Icons.chevron_right, size: 18, color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
           ),
         );
 
+    Widget action(IconData icon, String title, String subtitle, Future<void> Function() run) => ListTile(
+          dense: true,
+          leading: Icon(icon, size: 18, color: scheme.primary),
+          title: Text(title, style: style),
+          subtitle: Text(subtitle),
+          onTap: run,
+        );
+
+    const divider = Divider(height: 1, indent: 16, endIndent: 16);
+    final repo = widget.state.repo;
+    final next = service.lastPlan.take(5).toList();
+    final xiaomiFamily = _maker.contains('xiaomi') || _maker.contains('redmi') || _maker.contains('poco');
+
     return Column(
       children: [
-        row('Permission', _allowed == null ? '…' : (_allowed! ? 'Allowed' : 'Not allowed'),
-            good: _allowed ?? true),
-        const Divider(height: 1, indent: 16, endIndent: 16),
-        row('Exact alarms', _exact == null ? '…' : (_exact! ? 'Allowed' : 'Inexact only'),
-            good: _exact ?? true),
-        const Divider(height: 1, indent: 16, endIndent: 16),
-        row('Armed reminders', '$_armed'),
-        const Divider(height: 1, indent: 16, endIndent: 16),
-        ListTile(
+        SwitchListTile(
           dense: true,
-          leading: Icon(Icons.notifications_active_outlined, size: 18, color: scheme.primary),
-          title: Text('Allow notifications', style: style),
-          subtitle: const Text('Needed for a reminder to appear'),
-          onTap: () async {
-            await ReminderService.instance.requestPermission();
+          value: _enabled,
+          title: Text('Remind me about tasks', style: style),
+          subtitle: const Text('A notification at each task\'s time'),
+          onChanged: (value) async {
+            setState(() => _enabled = value);
+            await service.setRemindersEnabled(value);
+            await widget.state.afterDataChanged();
             await _refresh();
           },
         ),
-        ListTile(
-          dense: true,
-          leading: Icon(Icons.alarm_outlined, size: 18, color: scheme.primary),
-          title: Text('Send a test reminder', style: style),
-          subtitle: const Text('Lock the phone and watch it arrive'),
-          onTap: () async {
-            await ReminderService.instance.showTest();
-            await _refresh();
-          },
+        divider,
+        status('Time for tasks without one', _time, onTap: _pickTime),
+        divider,
+        status(
+          'Notifications',
+          _allowed == null ? '…' : (_allowed! ? 'Allowed' : 'Blocked, tap to allow'),
+          good: _allowed ?? true,
+          onTap: _allowed == true ? SystemBridge.openNotificationSettings : _allow,
         ),
+        divider,
+        status(
+          'Exact alarms',
+          _exact == null ? '…' : (_exact! ? 'Allowed' : 'Off, reminders may be late'),
+          good: _exact ?? true,
+          onTap: _exact == true ? null : SystemBridge.openExactAlarmSettings,
+        ),
+        divider,
+        status(
+          'Battery',
+          _battery == null ? '…' : (_battery! ? 'Unrestricted' : 'Optimised, may delay reminders'),
+          good: _battery ?? true,
+          onTap: SystemBridge.openBatterySettings,
+        ),
+        if (xiaomiFamily) ...[
+          divider,
+          status('Autostart (Xiaomi)', 'Turn on for OTDA', onTap: SystemBridge.openAutostart),
+        ],
+        divider,
+        status('Sound and pop-up', 'Reminders channel',
+            onTap: () => SystemBridge.openChannelSettings(ReminderService.channelReminders)),
+        divider,
+        status('Armed reminders', '$_armed'),
+        for (final reminder in next) ...[
+          divider,
+          status('Next', ReminderService.describe(reminder)),
+        ],
+        if (service.lastError != null) ...[
+          divider,
+          status('Last error', service.lastError!, good: false),
+        ],
+        divider,
+        action(Icons.notifications_active_outlined, 'Allow notifications',
+            'Shows the system permission dialog', _allow),
+        action(Icons.notification_add_outlined, 'Show a test notification now',
+            'Proves the permission and the sound', () async {
+          _say(await service.sendTestNow());
+          await _refresh();
+        }),
+        action(Icons.alarm_outlined, 'Test in 1 minute',
+            'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
+          _say(await service.scheduleTest(const Duration(minutes: 1)));
+          await _refresh();
+        }),
+        if (repo != null)
+          action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
+              'Creates a task, arms it, and lets you try Complete and Snooze', () async {
+            _say(await service.createRealTest(repo));
+            await widget.state.afterDataChanged();
+            await _refresh();
+          }),
       ],
     );
   }

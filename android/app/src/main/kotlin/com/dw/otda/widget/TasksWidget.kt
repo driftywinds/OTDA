@@ -91,6 +91,18 @@ internal fun requestWidgetUpdate(context: Context) {
     )
 }
 
+/**
+ * Asks Dart (through home_widget's background broadcast) to rebuild the snapshots. Throttled, so a
+ * device with no signed-in account does not loop: Dart answers by writing prefs and redrawing, and
+ * a redraw that still finds nothing must not ask again at once.
+ */
+internal fun requestSnapshot(context: Context, prefs: SharedPreferences) {
+    val now = System.currentTimeMillis()
+    if (now - prefs.getLong("snapshotRequestedAt", 0L) < 60_000L) return
+    prefs.edit().putLong("snapshotRequestedAt", now).apply()
+    sendToDart(context, Uri.parse("otda://refresh"))
+}
+
 class TasksWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Responsive(
@@ -102,6 +114,9 @@ class TasksWidget : GlanceAppWidget() {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val projectId = prefs.getString(widgetProjectKey(appWidgetId), null)
         val snapshot = Snapshot.parse(prefs.getString(snapshotKey(projectId), null))
+        // Nothing stored yet (just placed, or the app was never opened since): ask the app's
+        // Dart side to write the snapshot from the on-device data, without opening the UI.
+        if (snapshot == null) requestSnapshot(context, prefs)
         provideContent {
             WidgetContent(snapshot, projectId, appWidgetId)
         }
@@ -129,7 +144,10 @@ internal class Snapshot(
                 val project = root.optJSONObject("project")
                 val name = (project?.optString("name") ?: root.optString("name"))
                 val rows = parseRows(root)
-                if (name.isBlank() && rows.isEmpty()) return null
+                // An empty list is a valid snapshot ("Nothing coming up"), not a missing one. Only
+                // JSON that carries no row list at all is treated as not written yet.
+                val hasRows = SNAPSHOT_ROW_KEYS.any { root.has(it) }
+                if (name.isBlank() && rows.isEmpty() && !hasRows) return null
                 Snapshot(
                     name = name,
                     glyph = glyphFor(project, root, name),
@@ -455,7 +473,8 @@ private fun TapTarget(icon: Int, description: String, action: () -> Action) {
 private fun oneLine(value: String, limit: Int = 40): String =
     if (value.length <= limit) value else value.take(limit - 1).trimEnd() + "…"
 
-private fun appIntent(context: Context): Intent = Intent(context, MainActivity::class.java)
+// A real otda:// link, so MainActivity hands it to Dart (which also refreshes the widget on start).
+private fun appIntent(context: Context): Intent = deepLink(context, Uri.parse("otda://upcoming"))
 
 private fun configIntent(context: Context, appWidgetId: Int): Intent =
     Intent(context, TasksWidgetConfigActivity::class.java)
