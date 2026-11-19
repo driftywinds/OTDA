@@ -41,10 +41,62 @@ void main() {
     expect(upcomingDay(t, today), '2026-11-20');
   });
 
-  test('a completed recurrent task is not upcoming', () {
+  test('a completed one-off is not upcoming', () {
+    final t = task({
+      'due': {'date': '2026-11-25'},
+      'completed_at': 1795000000000,
+    });
+    expect(upcomingDay(t, today), isNull);
+  });
+
+  test('a recurring task ticked off today stays upcoming, on its next day', () {
+    final t = task({
+      'due': {'date': today},
+      'recurrence': 'every day',
+      'completed_at': 1795000000000,
+    });
+    expect(upcomingDay(t, today), '2026-11-19');
+  });
+
+  test('a completed daily task with an old due still shows tomorrow', () {
     final t = task({
       'due': {'date': '2026-11-10'},
       'recurrence': 'every day',
+      'completed_at': 1795000000000,
+    });
+    expect(upcomingDay(t, today), '2026-11-19');
+  });
+
+  test('a monthly task done today comes back next month, not never', () {
+    final t = task({
+      'due': {'date': today},
+      'recurrence': 'every month',
+      'completed_at': 1795000000000,
+    });
+    expect(upcomingDay(t, today), '2026-12-18');
+  });
+
+  test('ticked off ahead of time: the next one is after the stored due', () {
+    final t = task({
+      'due': {'date': '2026-11-20'},
+      'recurrence': 'every day',
+      'completed_at': 1795000000000,
+    });
+    expect(upcomingDay(t, today), '2026-11-21');
+  });
+
+  test('an open daily task due yesterday still shows tomorrow', () {
+    final t = task({
+      'due': {'date': '2026-11-17'},
+      'recurrence': 'every day',
+    });
+    expect(upcomingDay(t, today), '2026-11-19');
+  });
+
+  test('a completed series that has ended is not upcoming', () {
+    final t = task({
+      'due': {'date': '2026-11-01'},
+      'recurrence': 'every day until 2026-11-05',
       'completed_at': 1795000000000,
     });
     expect(upcomingDay(t, today), isNull);

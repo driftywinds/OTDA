@@ -74,6 +74,9 @@ String _shift(String day, int days) {
 
 String _addDays(String day, int days) => _shift(day, days);
 
+/// `day` moved by [days] calendar days (negative goes back).
+String shiftDay(String day, int days) => _shift(day, days);
+
 String _nextDay(String day) => _shift(day, 1);
 
 /// The day before [day], in the calendar (no time zones involved).

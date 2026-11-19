@@ -194,6 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
   static double _position(Task task) => (task.raw['position'] as num?)?.toDouble() ?? 0;
 
   Future<void> _toggle(Task task) async {
+    // In Upcoming a done repeating task is listed on its next occurrence, which
+    // is open and not due yet. Ticking it must not reopen the one done today.
+    if (_view == TaskView.upcoming && task.isCompleted && isRecurring(task)) {
+      final day = _upcomingDays[task.id];
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(day == null ? 'Already done for now.' : 'Done for now — it comes round again on ${friendlyDate(day, _today)}.'),
+        ));
+      return;
+    }
     await widget.state.repo?.setCompleted(task, !task.isCompleted);
     await _load();
   }
@@ -507,6 +518,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         TaskView.calendar => _calendarDay,
                         _ => null,
                       },
+                      // Upcoming lists a repeating task on its next occurrence, which
+                      // is not done even though today's was.
+                      showDone: !(_view == TaskView.upcoming && isRecurring(task)),
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                     );
@@ -665,6 +679,7 @@ class _TaskRow extends StatelessWidget {
     this.projectName,
     this.projectColor,
     this.dueOverride,
+    this.showDone = true,
   });
 
   final Task task;
@@ -672,6 +687,10 @@ class _TaskRow extends StatelessWidget {
 
   /// The day to show instead of `due` (Upcoming projects a repeating task).
   final String? dueOverride;
+
+  /// Draw the task as finished when it is. False for a future occurrence of a
+  /// repeating task, which is open even when the one before it was done.
+  final bool showDone;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final String? projectName;
@@ -721,7 +740,7 @@ class _TaskRow extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  TaskCheck(done: task.isCompleted, priority: task.priority, onChanged: onToggle),
+                  TaskCheck(done: task.isCompleted && showDone, priority: task.priority, onChanged: onToggle),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -734,9 +753,9 @@ class _TaskRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyLarge?.copyWith(
                               fontWeight: FontWeight.w600,
-                              decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                              decoration: task.isCompleted && showDone ? TextDecoration.lineThrough : null,
                               decorationColor: scheme.onSurfaceVariant,
-                              color: task.isCompleted ? scheme.onSurfaceVariant : scheme.onSurface,
+                              color: task.isCompleted && showDone ? scheme.onSurfaceVariant : scheme.onSurface,
                             ),
                           ),
                           if (meta.isNotEmpty) ...[
