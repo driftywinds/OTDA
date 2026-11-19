@@ -601,7 +601,11 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
   try {
     final active = await HomeWidget.getWidgetData<String>('active_projects') ?? '';
     final ids = active.split(',').where((id) => id.trim().isNotEmpty).toSet();
-    for (final id in {...ids, 'all'}) {
+    // A widget bound to a project whose binding the native side has not listed
+    // would read a snapshot nobody wrote, so every project gets one. There are a
+    // handful, and each is capped at a few rows.
+    final every = {for (final project in projects) project.id};
+    for (final id in {...ids, ...every, 'all'}) {
       final snapshot = buildWidgetSnapshot(
         tasks,
         projects,

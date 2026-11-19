@@ -35,7 +35,7 @@ void main() {
     expect(row['day'], '2026-11-18');
   });
 
-  test('a repeating task done today appears on its next day', () {
+  test('a repeating task due today is listed today, not projected away', () {
     final series = task('s', {
       'title': 'Post e paper',
       'due': {'date': today},
@@ -43,9 +43,47 @@ void main() {
     });
     final snapshot = buildWidgetSnapshot([series], const [], today: today);
     final rows = (snapshot['rows'] as List).cast<Map>();
+    final section = rows.firstWhere((r) => r['t'] == 'section');
+    final row = rows.firstWhere((r) => r['t'] == 'task');
+    expect(section['label'], 'Today');
+    expect(row['day'], today);
+    expect(row['title'], 'Post e paper');
+  });
+
+  test('a repeating task finished today shows its next occurrence', () {
+    // Completed without a record (an older client): the rule still projects ahead.
+    final series = task('s2', {
+      'title': 'Post e paper',
+      'due': {'date': today},
+      'recurrence': 'every day',
+      'completed_at': 1,
+    });
+    final snapshot = buildWidgetSnapshot([series], const [], today: today);
+    final rows = (snapshot['rows'] as List).cast<Map>();
     final row = rows.firstWhere((r) => r['t'] == 'task');
     expect(row['day'], '2026-11-20');
-    expect(row['title'], 'Post e paper');
+  });
+
+  test('an overdue repeating task stays overdue rather than jumping ahead', () {
+    final series = task('s3', {
+      'title': 'Post e paper',
+      'due': {'date': '2026-11-18'},
+      'recurrence': 'every day',
+    });
+    final snapshot = buildWidgetSnapshot([series], const [], today: today);
+    final rows = (snapshot['rows'] as List).cast<Map>();
+    final section = rows.firstWhere((r) => r['t'] == 'section');
+    final row = rows.firstWhere((r) => r['t'] == 'task');
+    expect(section['label'], 'Overdue');
+    expect(row['overdue'], isTrue);
+  });
+
+  test('a plain task due today lands in Today', () {
+    final snapshot = buildWidgetSnapshot([
+      task('p', {'title': 'File receipts', 'due': {'date': today}}),
+    ], const [], today: today);
+    final rows = (snapshot['rows'] as List).cast<Map>();
+    expect(rows.firstWhere((r) => r['t'] == 'section')['label'], 'Today');
   });
 
   test('the list is capped and the remainder is counted', () {

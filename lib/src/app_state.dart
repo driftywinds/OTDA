@@ -294,13 +294,29 @@ class AppState extends ChangeNotifier {
     _syncError = _failures.add(e);
   }
 
-  Timer? _changeDebounce;
+  bool _changeRunning = false;
+  bool _changeAgain = false;
 
+  /// Called after every field write. A task is several writes, so this coalesces
+  /// them, but it does not wait for a timer: a push is already running or it starts
+  /// now. Nothing about the widget depends on a sync.
   void _scheduleAfterChange() {
-    _changeDebounce?.cancel();
-    _changeDebounce = Timer(const Duration(milliseconds: 600), () {
-      unawaited(afterDataChanged());
-    });
+    _changeAgain = true;
+    if (!_changeRunning) unawaited(_drainChanges());
+  }
+
+  Future<void> _drainChanges() async {
+    _changeRunning = true;
+    try {
+      while (_changeAgain) {
+        _changeAgain = false;
+        // Let the write that triggered this finish before reading it back.
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        await afterDataChanged();
+      }
+    } finally {
+      _changeRunning = false;
+    }
   }
 
   /// The one trigger the blueprint allows: every finished sync and every local
@@ -382,7 +398,6 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _changeDebounce?.cancel();
     _timer?.cancel();
     _engine?.stopLive();
     _db?.close();

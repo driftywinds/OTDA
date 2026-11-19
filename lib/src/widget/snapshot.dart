@@ -18,10 +18,14 @@ Map<String, Object?> buildWidgetSnapshot(
   for (final task in tasks) {
     if (task.isDeleted || task.raw['series_id'] != null) continue;
     if (projectId != null && projectId != 'all' && task.projectId != projectId) continue;
-    // Upcoming only offers what is ahead; a widget that hid today and yesterday
-    // would be useless at a glance, so an open one-off falls back to its due day.
-    final day = upcomingDay(task, tasks, today) ??
-        (task.isCompleted || isRecurring(task) ? null : task.dueDate);
+    // Upcoming offers what is *ahead*, so a repeating task due today is projected to
+    // tomorrow. A glance surface needs the occurrence in front of you, so the widget
+    // takes the current occurrence when it is due today or already overdue and only
+    // projects when the series has moved past it.
+    final due = task.dueDate;
+    final current = isRecurring(task) && !task.isCompleted && due != null && due.compareTo(today) <= 0;
+    final day = current ? due : upcomingDay(task, tasks, today) ??
+        (task.isCompleted || isRecurring(task) ? null : due);
     if (day == null) {
       // A task added from the widget's own "+" often has no date yet; hiding it
       // would make the widget look like the add did nothing.
