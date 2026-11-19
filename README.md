@@ -27,6 +27,7 @@ Offline-first, with the same data model as the server so every device converges.
 9. [Test it](#test-it)
 10. [Releasing](#releasing)
 11. [Regenerate the API spec](#regenerate-the-api-spec)
+12. [Privacy](#privacy)
 
 ## What is here
 
@@ -557,6 +558,12 @@ Without `ANDROID_KEYSTORE_BASE64` the release job still runs and warns: the
 artifacts are then signed with the debug key, which is fine for testing and
 unusable for distribution. `key.properties` and `*.keystore` are gitignored, so
 the keystore only ever exists on the runner.
+
+## Privacy
+
+The app collects nothing: no analytics, no ads, no crash reporting, and no server
+of ours. Your tasks are stored on your device and sent only to the OpenTodo server
+you sign in to. The full policy is [PRIVACY.md](PRIVACY.md).
 
 ## Regenerate the API spec
 
