@@ -2,7 +2,7 @@
   <img src="assets/app-icon.png" alt="OTDA" width="120">
 </p>
 
-# OTDA
+# OTDA - **O**pen**T**o**D**o for **A**ndroid
 
 A Flutter client for [OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers —
 offline-first, with the same data model as the server so every device converges.
