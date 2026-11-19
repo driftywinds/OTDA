@@ -12,6 +12,7 @@ import 'auth/auth_service.dart';
 import 'auth/session_store.dart';
 import 'data/clock.dart';
 import 'data/db.dart';
+import 'data/failure_meter.dart';
 import 'data/repo.dart';
 import 'data/sync_engine.dart';
 
@@ -35,10 +36,8 @@ class AppState extends ChangeNotifier {
   bool _restoring = true;
   String? _syncError;
 
-  /// Consecutive exchanges that failed to reach the server. A phone that just
-  /// came out of sleep resolves nothing for a moment; one such attempt is not
-  /// something to show.
-  int _unreachable = 0;
+  /// Decides when a failure is worth showing; see [FailureMeter].
+  final _failures = FailureMeter();
 
   /// The font is a device choice, not an account one: it lives in
   /// shared_preferences so it applies before anyone signs in.
@@ -198,13 +197,32 @@ class AppState extends ChangeNotifier {
     _repo = Repo(db: db, clock: clock, engine: engine);
     engine.changes.listen((_) {
       _lastSync = engine.lastSync;
-      _syncError = engine.error;
+      // The background sync goes through here, not through syncNow, so it has to
+      // follow the same wording rule or the raw socket text leaks through.
+      final failure = engine.failure;
+      if (failure == null) {
+        _syncError = null;
+        _failures.reset();
+      } else if (!failure.isUnauthenticated) {
+        _recordFailure(failure);
+      }
       notifyListeners();
     });
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
     await _syncQuietly();
     await engine.startLive();
+  }
+
+  /// What a failed exchange is worth saying.
+  ///
+  /// "failed host lookup" is a developer's sentence, and a phone that has just
+  /// woken up resolves nothing for a moment, so an unreachable server is only
+  /// reported after it happens twice in a row and then in plain words. A server
+  /// that answered and said no is reported at once, in its own words, because
+  /// that one needs action.
+  void _recordFailure(ApiException e) {
+    _syncError = _failures.add(e);
   }
 
   /// Runs an exchange and folds the outcome into the UI state.
@@ -216,24 +234,14 @@ class AppState extends ChangeNotifier {
       final result = await engine.exchange();
       _lastSync = DateTime.now();
       _syncError = null;
-      _unreachable = 0;
+      _failures.reset();
       return result;
     } on ApiException catch (e) {
       if (e.isUnauthenticated) {
         await signOut();
         return null;
       }
-      final unreachable = e.code == 'network' || e.code == 'timeout';
-      _unreachable++;
-      if (!unreachable) {
-        // The server answered and said no: that is worth showing at once and in
-        // its own words.
-        _syncError = e.message;
-      } else if (_unreachable >= 2) {
-        // Still unreachable after a retry: say so plainly. The raw socket text
-        // ("failed host lookup") is a developer's sentence, not a person's.
-        _syncError = 'Offline — your changes are saved on this phone';
-      }
+      _recordFailure(e);
       return null;
     } finally {
       notifyListeners();

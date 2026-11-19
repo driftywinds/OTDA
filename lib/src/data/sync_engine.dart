@@ -42,14 +42,18 @@ class SyncEngine {
   int _backfillSeq = 0;
   bool _running = false;
   DateTime? _lastSync;
-  String? _error;
+  ApiException? _failure;
   int _pending = 0;
 
   final _status = StreamController<void>.broadcast();
 
   Stream<void> get changes => _status.stream;
   DateTime? get lastSync => _lastSync;
-  String? get error => _error;
+  /// The last exchange failure, so the caller can decide how to word it: the raw
+  /// socket text is not what a person should read.
+  ApiException? get failure => _failure;
+
+  String? get error => _failure?.message;
   bool get isRunning => _running;
   int get pending => _pending;
 
@@ -86,7 +90,7 @@ class SyncEngine {
     }
     if (_running) return const SyncResult(applied: 0, pulled: 0, rejected: 0, pending: 0, pages: 0);
     _running = true;
-    _error = null;
+    _failure = null;
     _status.add(null);
 
     var applied = 0;
@@ -191,7 +195,7 @@ class SyncEngine {
       _lastSync = DateTime.now();
       return SyncResult(applied: applied, pulled: pulled, rejected: rejected, pending: _pending, pages: pages);
     } on ApiException catch (e) {
-      _error = e.isUnauthenticated ? 'signed out' : e.message;
+      _failure = e;
       rethrow;
     } finally {
       _running = false;
