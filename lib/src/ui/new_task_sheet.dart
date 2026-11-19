@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
@@ -43,10 +44,29 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   final _priorityKey = GlobalKey();
   final _projectKey = GlobalKey();
 
+  /// Held so the popup can focus the line and raise the keyboard itself: in the
+  /// widget's translucent window the autofocus request can land before the window
+  /// has input focus, and Android then drops it.
+  final _titleFocus = FocusNode();
+
   @override
   void initState() {
     super.initState();
     _input.addListener(_onChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _titleFocus.requestFocus();
+      // Wait for the sheet's entrance to finish rather than for a timer, then ask
+      // for the keyboard: in the widget's translucent window the first request can
+      // be dropped before the window holds focus.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      try {
+        await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      } on Object {
+        // no text input connection (or none on this platform): nothing to raise
+      }
+    });
   }
 
   @override
@@ -54,6 +74,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     _debounce?.cancel();
     _input.removeListener(_onChanged);
     _input.dispose();
+    _titleFocus.dispose();
     super.dispose();
   }
 
@@ -251,6 +272,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                   Expanded(
                     child: TextField(
                       controller: _input,
+                      focusNode: _titleFocus,
                       autofocus: true,
                       textInputAction: TextInputAction.done,
                       textCapitalization: TextCapitalization.sentences,

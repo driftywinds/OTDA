@@ -1,5 +1,6 @@
 package com.dw.otda
 
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,6 +17,17 @@ class QuickAddActivity : FlutterActivity() {
 
     override fun getBackgroundMode(): FlutterActivityLaunchConfigs.BackgroundMode =
         FlutterActivityLaunchConfigs.BackgroundMode.transparent
+
+    override fun onPostResume() {
+        super.onPostResume()
+        // A translucent window does not always keep the IME request the Flutter view
+        // makes while it is being attached; asking again once the activity is
+        // resumed is what raises the keyboard with the popup.
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE,
+        )
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
