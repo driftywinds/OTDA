@@ -525,3 +525,14 @@ String nextOccurrence(String rule, String? due, String today) {
     if (c > item) return _formatDate(c);
   }
 }
+
+/// The next occurrence of a completion-relative interval rule, counted from the
+/// day it was finished (the web app's `nextAfterCompletion`).
+String nextAfterCompletion(String rule, String completedOn) {
+  final parsed = parseRule(rule);
+  final z = _dayNumberIso(completedOn);
+  if (!parsed.ok || z == null) return completedOn;
+  final r = parsed.rule!;
+  if (r.kind != 'interval') return nextOccurrence(rule, completedOn, completedOn);
+  return _formatDate(_step(r, z, 1));
+}

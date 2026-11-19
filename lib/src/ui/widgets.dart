@@ -294,7 +294,7 @@ class BrandMark extends StatelessWidget {
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
         semanticLabel: 'OTDA logo',
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
       ),
     );
   }

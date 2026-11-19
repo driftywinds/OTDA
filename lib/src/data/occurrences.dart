@@ -34,9 +34,16 @@ List<(String, Task)> occurrencesBetween(
       day = rules.nextOccurrence(rule, due, _previousDay(from));
     }
 
-    for (var guard = 0; day.compareTo(to) <= 0 && guard < maxPerTask; guard++) {
+    // `maxPerTask` counts occurrences added, not dates stepped over: asking for
+    // one occurrence from a window that opens after an older due date must still
+    // return it. The step guard only stops a rule that cannot advance.
+    var added = 0;
+    for (var guard = 0; day.compareTo(to) <= 0 && added < maxPerTask && guard < maxPerTask * 4 + 400; guard++) {
       if (until != null && day.compareTo(until) > 0) break;
-      if (day.compareTo(from) >= 0) out.add((day, task));
+      if (day.compareTo(from) >= 0) {
+        out.add((day, task));
+        added++;
+      }
       final next = _advance(rule, due, day);
       if (next.isEmpty || next.compareTo(day) <= 0) break; // never spin
       day = next;

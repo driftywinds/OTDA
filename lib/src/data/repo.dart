@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import 'clock.dart';
 import 'db.dart';
 import 'models.dart';
+import '../quickadd/rule.dart' as rules;
+import 'series.dart';
 import 'sync_engine.dart';
 
 /// Reads the replica and writes through it: every change is a field write plus
@@ -115,10 +117,85 @@ class Repo {
     await db.putField(entity, entityId, field, value, ts, engine.device);
   }
 
+  /// Marks one occurrence done.
+  ///
+  /// A plain task gets `completed_at` and is finished. A repeating one is a
+  /// series: the occurrence in front of you becomes its own record (what the web
+  /// client writes) and the series moves to its next date, so a daily task comes
+  /// back tomorrow instead of disappearing. Only when the series has run out does
+  /// the series itself complete, which is what the web does too.
   Future<void> setCompleted(Task task, bool completed) async {
+    final raw = task.raw['recurrence']?.toString() ?? '';
+    final recurring = raw.isNotEmpty && rules.parseRule(raw).ok;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (!recurring) {
+      final ts = await clock.next();
+      await db.putField('task', task.id, 'completed_at', completed ? now : null, ts, engine.device);
+      return;
+    }
+
+    final today = _todayString();
+    final date = occurrenceDateOf(task, today);
+
+    if (!completed) {
+      // Undoing the last tick: the series has already moved on, so the occurrence
+      // to go back to is the one its newest live record stands for.
+      final rows = await db.entities('task');
+      Map<String, Object?>? record;
+      for (final row in rows) {
+        if (row['series_id']?.toString() == task.id &&
+            row['deleted_at'] == null &&
+            row['completed_at'] != null &&
+            (record == null ||
+                (row['occurrence_date']?.toString() ?? '').compareTo(
+                      record['occurrence_date']?.toString() ?? '',
+                    ) >
+                    0)) {
+          record = row;
+        }
+      }
+      final back = record?['occurrence_date']?.toString() ?? date;
+      final ts = await clock.next();
+      if (record != null) {
+        await db.putField('task', record['id'] as String, 'deleted_at', now, ts, engine.device);
+      }
+      await db.putField('task', task.id, 'completed_at', null, ts, engine.device);
+      await db.putField('task', task.id, 'due', movedDue(task, back), ts, engine.device);
+      return;
+    }
+
+    final finished = await _occurrenceCount(task.id);
+    final next = nextOccurrenceAfterCompletion(task, finished, today);
+    if (next == null) {
+      // The end condition is reached: the series completes like a plain task.
+      final ts = await clock.next();
+      await db.putField('task', task.id, 'completed_at', now, ts, engine.device);
+      return;
+    }
+
     final ts = await clock.next();
-    await db.putField('task', task.id, 'completed_at',
-        completed ? DateTime.now().millisecondsSinceEpoch : null, ts, engine.device);
+    final recordId = occurrenceIdOf(task.id, date);
+    for (final entry in occurrenceFields(task, date, now, today).entries) {
+      await db.putField('task', recordId, entry.key, entry.value, ts, engine.device);
+    }
+    for (final entry in movedDates(task, next, today).entries) {
+      await db.putField('task', task.id, entry.key, entry.value, ts, engine.device);
+    }
+  }
+
+  /// How many occurrences of this series are already finished, for a `for N times`
+  /// rule.
+  Future<int> _occurrenceCount(String seriesId) async {
+    final rows = await db.entities('task');
+    return rows.where((row) => row['series_id']?.toString() == seriesId && row['deleted_at'] == null).length;
+  }
+
+  String _todayString() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> trash(Task task) async {

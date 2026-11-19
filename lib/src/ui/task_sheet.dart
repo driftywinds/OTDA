@@ -203,6 +203,18 @@ class _TaskSheetState extends State<TaskSheet> {
                     done: _completed,
                     priority: _priority,
                     onChanged: () async {
+                      // Ticking a repeating task finishes one occurrence: the
+                      // series stays open and comes round again, so the tick must
+                      // not stick here.
+                      if (_recurrence.isNotEmpty) {
+                        if (_completed) return;
+                        final messenger = ScaffoldMessenger.of(context);
+                        await widget.repo.setCompleted(widget.task, true);
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Done for now — it comes round again')),
+                        );
+                        return;
+                      }
                       setState(() => _completed = !_completed);
                       await widget.repo.setCompleted(widget.task, _completed);
                     },
