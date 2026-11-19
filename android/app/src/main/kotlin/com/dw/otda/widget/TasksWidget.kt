@@ -1,5 +1,7 @@
 package com.dw.otda.widget
 
+import com.dw.otda.CompleteActivity
+
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -464,7 +466,7 @@ private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
     ) {
         Box(
             modifier = GlanceModifier.size(style.grow(40))
-                .clickable(actionRunCallback<CompleteAction>(completeParameters(task))),
+                .clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task)))),
             contentAlignment = Alignment.Center,
         ) {
             if (task.done) {

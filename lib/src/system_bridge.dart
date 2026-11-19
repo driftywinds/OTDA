@@ -11,6 +11,7 @@ class SystemBridge {
   SystemBridge._();
 
   static const _channel = MethodChannel('com.dw.otda/system');
+  static const _complete = MethodChannel('com.dw.otda/complete');
   static void Function(Uri uri)? _onLink;
 
   /// Delivers the link that launched the app (if any) and every later one.
@@ -78,6 +79,24 @@ class SystemBridge {
       await _quick.invokeMethod<bool>('close');
     } on Object {
       // not running inside the popup
+    }
+  }
+
+  /// The `otda://` action the CompleteActivity was started with.
+  static Future<String?> completeUri() async {
+    try {
+      return await _complete.invokeMethod<String>('uri');
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Asks CompleteActivity to finish and stay out of the recents list.
+  static Future<void> closeComplete() async {
+    try {
+      await _complete.invokeMethod<bool>('close');
+    } on Object {
+      // already gone
     }
   }
 }

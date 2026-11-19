@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'src/app_state.dart';
+import 'src/headless_action_app.dart';
 import 'src/quick_add_app.dart';
 import 'src/reminders/service.dart';
 import 'src/system_bridge.dart';
@@ -13,6 +14,13 @@ import 'src/ui/theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const OtdaApp());
+}
+
+/// Entry point of CompleteActivity: the widget's check mark, run invisibly.
+@pragma('vm:entry-point')
+void completeMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const HeadlessActionApp());
 }
 
 /// Entry point of QuickAddActivity, the widget's "+" popup. It must live in this

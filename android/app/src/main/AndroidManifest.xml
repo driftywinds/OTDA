@@ -50,6 +50,20 @@
             </intent-filter>
         </activity>
         <!-- The widget's "+" popup. Not in Recents, and not part of the app's task. -->
+        <!-- Runs one widget action and disappears: a system-started activity is
+             what the launcher is allowed to start, unlike a background callback. -->
+        <activity
+            android:name=".CompleteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleTop"
+            android:theme="@style/QuickAddTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".QuickAddActivity"
             android:exported="false"
