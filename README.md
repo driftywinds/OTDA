@@ -5,8 +5,9 @@
 # OTDA
 
 **O**pen**T**o**D**o for **A**ndroid — a Flutter client for
-[OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers — offline-first, with
-the same data model as the server so every device converges.
+[OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers. 
+
+Offline-first, with the same data model as the server so every device converges.
 
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
