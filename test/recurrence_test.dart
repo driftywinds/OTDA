@@ -10,11 +10,11 @@ void main() {
   const today = '2026-11-18';
 
   test('a plain task ahead uses its due date', () {
-    expect(upcomingDay(task({'due': {'date': '2026-11-21'}}), today), '2026-11-21');
+    expect(upcomingDay(task({'due': {'date': '2026-11-21'}}), [task({'due': {'date': '2026-11-21'}})], today), '2026-11-21');
   });
 
   test('a plain task in the past is not upcoming', () {
-    expect(upcomingDay(task({'due': {'date': '2026-11-10'}}), today), isNull);
+    expect(upcomingDay(task({'due': {'date': '2026-11-10'}}), [task({'due': {'date': '2026-11-10'}})], today), isNull);
   });
 
   test('a monthly task whose due has passed shows its next occurrence', () {
@@ -22,7 +22,7 @@ void main() {
       'due': {'date': '2026-10-01'},
       'recurrence': 'every month',
     });
-    expect(upcomingDay(t, today), '2026-12-01');
+    expect(upcomingDay(t, [t], today), '2026-12-01');
   });
 
   test('a daily task whose due has passed shows tomorrow', () {
@@ -30,7 +30,7 @@ void main() {
       'due': {'date': '2026-11-10'},
       'recurrence': 'every day',
     });
-    expect(upcomingDay(t, today), '2026-11-19');
+    expect(upcomingDay(t, [t], today), '2026-11-19');
   });
 
   test('a weekly task lands on the next weekday', () {
@@ -38,7 +38,7 @@ void main() {
       'due': {'date': '2026-11-13'}, // a Friday
       'recurrence': 'every friday',
     });
-    expect(upcomingDay(t, today), '2026-11-20');
+    expect(upcomingDay(t, [t], today), '2026-11-20');
   });
 
   test('a completed one-off is not upcoming', () {
@@ -46,7 +46,7 @@ void main() {
       'due': {'date': '2026-11-25'},
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), isNull);
+    expect(upcomingDay(t, [t], today), isNull);
   });
 
   test('a recurring task ticked off today stays upcoming, on its next day', () {
@@ -55,7 +55,7 @@ void main() {
       'recurrence': 'every day',
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), '2026-11-19');
+    expect(upcomingDay(t, [t], today), '2026-11-19');
   });
 
   test('a completed daily task with an old due still shows tomorrow', () {
@@ -64,7 +64,7 @@ void main() {
       'recurrence': 'every day',
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), '2026-11-19');
+    expect(upcomingDay(t, [t], today), '2026-11-19');
   });
 
   test('a monthly task done today comes back next month, not never', () {
@@ -73,7 +73,7 @@ void main() {
       'recurrence': 'every month',
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), '2026-12-18');
+    expect(upcomingDay(t, [t], today), '2026-12-18');
   });
 
   test('ticked off ahead of time: the next one is after the stored due', () {
@@ -82,7 +82,7 @@ void main() {
       'recurrence': 'every day',
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), '2026-11-21');
+    expect(upcomingDay(t, [t], today), '2026-11-21');
   });
 
   test('an open daily task due yesterday still shows tomorrow', () {
@@ -90,7 +90,7 @@ void main() {
       'due': {'date': '2026-11-17'},
       'recurrence': 'every day',
     });
-    expect(upcomingDay(t, today), '2026-11-19');
+    expect(upcomingDay(t, [t], today), '2026-11-19');
   });
 
   test('a completed series that has ended is not upcoming', () {
@@ -99,7 +99,7 @@ void main() {
       'recurrence': 'every day until 2026-11-05',
       'completed_at': 1795000000000,
     });
-    expect(upcomingDay(t, today), isNull);
+    expect(upcomingDay(t, [t], today), isNull);
   });
 
   test('a series that ended before today is not upcoming', () {
@@ -107,13 +107,13 @@ void main() {
       'due': {'date': '2026-11-01'},
       'recurrence': 'every month until 2026-11-05',
     });
-    expect(upcomingDay(t, today), isNull);
+    expect(upcomingDay(t, [t], today), isNull);
   });
 
   test('an undated task only appears when it repeats', () {
-    expect(upcomingDay(task({'due': null}), today), isNull);
+    expect(upcomingDay(task({'due': null}), [task({'due': null})], today), isNull);
     final recurring = task({'due': null, 'recurrence': 'every month'});
-    expect(upcomingDay(recurring, today), isNotNull);
+    expect(upcomingDay(recurring, [recurring], today), isNotNull);
   });
 
   test('the rule label is canonical where it parses', () {

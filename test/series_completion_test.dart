@@ -10,7 +10,9 @@ import 'package:otda/src/api/cookie_jar.dart';
 import 'package:otda/src/data/clock.dart';
 import 'package:otda/src/data/db.dart';
 import 'package:otda/src/data/models.dart';
+import 'package:otda/src/data/recurrence.dart';
 import 'package:otda/src/data/repo.dart';
+import 'package:otda/src/data/series.dart';
 import 'package:otda/src/data/sync_engine.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -191,5 +193,24 @@ void main() {
     final rows = await db.entities('task', includeDeleted: true);
     expect(rows.firstWhere((row) => row['id'] == id)['deleted_at'], isNotNull);
     expect(rows.where((row) => row['series_id'] == id && row['deleted_at'] == null), isEmpty);
+  });
+
+  test('a skipped date is stepped over by the projection', () async {
+    final (repo, db, clock) = await buildRepo();
+    final id = await addTask(db, clock, 'skip-1', {
+      'title': 'Post e paper',
+      'due': {'date': today},
+      'recurrence': 'every day',
+    });
+
+    // Today done, tomorrow skipped by another device (or this one).
+    await repo.setCompleted(await taskById(repo, id), true);
+    await repo.deleteSeries(await taskById(repo, id), SeriesScope.occurrence);
+
+    final series = await taskById(repo, id);
+    final all = await repo.tasks();
+    expect(upcomingDay(series, all, today), shift(today, 2),
+        reason: 'the skipped day is not offered again');
+    expect(recordsOf(id, all).map((r) => r.date), containsAll([today, tomorrow]));
   });
 }

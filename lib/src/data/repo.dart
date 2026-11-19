@@ -136,7 +136,9 @@ class Repo {
     }
 
     final today = _todayString();
-    final date = occurrenceDateOf(task, today);
+    final all = await db.entities('task');
+    final tasks = [for (final row in all) Task(row['id'] as String, row)];
+    final date = currentOccurrence(task, tasks, today) ?? occurrenceDateOf(task, today);
 
     if (!completed) {
       // Undoing the last tick: the series has already moved on, so the occurrence
@@ -165,8 +167,15 @@ class Repo {
       return;
     }
 
-    final finished = await _occurrenceCount(task.id);
-    final next = nextOccurrenceAfterCompletion(task, finished, today);
+    final budget = seriesBudget(task, tasks, exceptDate: date);
+    final next = nextFree(
+      raw,
+      task.dueDate,
+      today,
+      today,
+      budget.taken,
+      budget.except,
+    );
     if (next == null) {
       // The end condition is reached: the series completes like a plain task.
       final ts = await clock.next();
@@ -199,7 +208,10 @@ class Repo {
         await setCompleted(task, true, skipped: true);
       case SeriesScope.future:
         final ts = await clock.next();
-        final date = occurrenceDateOf(task, _todayString());
+        final today = _todayString();
+        final all = await db.entities('task');
+        final tasks = [for (final row in all) Task(row['id'] as String, row)];
+        final date = currentOccurrence(task, tasks, today) ?? occurrenceDateOf(task, today);
         final raw = task.raw['recurrence']?.toString() ?? '';
         await db.putField('task', task.id, 'recurrence', rules.ruleWithUntil(raw, addDays(date, -1)), ts,
             engine.device);
@@ -217,13 +229,6 @@ class Repo {
           }
         }
     }
-  }
-
-  /// How many occurrences of this series are already finished, for a `for N times`
-  /// rule.
-  Future<int> _occurrenceCount(String seriesId) async {
-    final rows = await db.entities('task');
-    return rows.where((row) => row['series_id']?.toString() == seriesId && row['deleted_at'] == null).length;
   }
 
   String _todayString() {

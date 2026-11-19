@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 
 import '../app_state.dart';
 import '../data/models.dart';
@@ -18,7 +19,7 @@ import 'workspace_icon.dart';
 
 /// Where the shell is showing. The first four are the bottom bar; the rest come
 /// from the sidebar, and none of them highlights a tab.
-enum TaskView { inbox, today, upcoming, search, calendar, anytime, someday, project }
+enum TaskView { inbox, today, upcoming, search, calendar, anytime, someday, history, project }
 
 /// The task list over the local replica: readable and editable with no network.
 class HomeScreen extends StatefulWidget {
@@ -146,11 +147,21 @@ class _HomeScreenState extends State<HomeScreen> {
         // a monthly or daily task does not sit in the past and vanish from here.
         final dated = <(String, Task)>[
           for (final t in _tasks)
-            if (upcomingDay(t, today) case final day?) (day, t),
+            if (upcomingDay(t, _tasks, today) case final day?) (day, t),
         ]..sort((a, b) => '${a.$1}${a.$2.dueTime ?? '99:99'}'
             .compareTo('${b.$1}${b.$2.dueTime ?? '99:99'}'));
         _upcomingDays = {for (final e in dated) e.$2.id: e.$1};
         return [for (final e in dated) e.$2];
+      case TaskView.history:
+        // The occurrence records: what was actually done or skipped, and when.
+        final records = [
+          for (final task in _tasks)
+            if (task.raw['series_id'] != null &&
+                (task.raw['occurrence_date']?.toString().isNotEmpty ?? false))
+              task,
+        ]..sort((a, b) => (b.raw['occurrence_date']?.toString() ?? '')
+            .compareTo(a.raw['occurrence_date']?.toString() ?? ''));
+        return records;
       case TaskView.search:
         final needle = _query.trim().toLowerCase();
         if (needle.isEmpty) return const [];
@@ -341,6 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
     TaskView.calendar: 'Calendar',
     TaskView.anytime: 'Anytime',
     TaskView.someday: 'Someday',
+    TaskView.history: 'History',
   };
 
   String get _title =>
@@ -385,7 +397,24 @@ class _HomeScreenState extends State<HomeScreen> {
     final tasks = _visible;
     final entries = _entries(tasks);
 
-    return Scaffold(
+    return PopScope(
+      // Back goes to Today from anywhere and only leaves the app from Today; a
+      // drawer that is open eats the gesture first.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final scaffold = _scaffoldKey.currentState;
+        if (scaffold?.isDrawerOpen ?? false) {
+          scaffold!.closeDrawer();
+          return;
+        }
+        if (_view == TaskView.today) {
+          SystemNavigator.pop();
+          return;
+        }
+        _go(TaskView.today);
+      },
+      child: Scaffold(
       key: _scaffoldKey,
       drawer: _AppDrawer(
         state: widget.state,
@@ -545,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add_rounded, size: 28),
       ),
       bottomNavigationBar: _BottomBar(view: _view, onSelect: _go),
-    );
+    ));
   }
 }
 
@@ -641,6 +670,11 @@ class _EmptyState extends StatelessWidget {
       TaskView.project => (Icons.folder_open_outlined, 'Nothing open here', 'This project has no open tasks.'),
       TaskView.anytime => (Icons.layers_outlined, 'Nothing waiting', 'Tasks with no date show up here.'),
       TaskView.someday => (Icons.bedtime_outlined, 'Nothing in Someday', 'Park ideas here for later.'),
+    TaskView.history => (
+        Icons.history_rounded,
+        'Nothing done yet',
+        'Occurrences you finish or skip show up here.',
+      ),
     };
     return Padding(
       padding: const EdgeInsets.only(bottom: 80),
@@ -926,6 +960,7 @@ class _AppDrawer extends StatelessWidget {
                   ),
                   destination(TaskView.anytime, Icons.layers_outlined, 'Anytime'),
                   destination(TaskView.someday, Icons.bedtime_outlined, 'Someday'),
+                  destination(TaskView.history, Icons.history_rounded, 'History'),
                 ],
               ),
             ),
