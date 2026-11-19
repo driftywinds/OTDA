@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show SystemNavigator;
 import '../app_state.dart';
 import '../data/models.dart';
 import '../data/views.dart';
+import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'settings_screen.dart';
 import 'task_sheet.dart';
@@ -68,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     WidgetsBinding.instance.addObserver(this);
+    widget.state.e2eeLocked.addListener(_askForPassphrase);
     ReminderService.instance.pendingTask.addListener(_openPendingFromWidget);
     ReminderService.instance.pendingNewTask.addListener(_openPendingNewTask);
     super.initState();
@@ -112,12 +114,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.state.e2eeLocked.removeListener(_askForPassphrase);
     ReminderService.instance.pendingTask.removeListener(_openPendingFromWidget);
     ReminderService.instance.pendingNewTask.removeListener(_openPendingNewTask);
     WidgetsBinding.instance.removeObserver(this);
     _syncTimer?.cancel();
     _searchField.dispose();
     super.dispose();
+  }
+
+  bool _askingForPassphrase = false;
+
+  /// An encrypted account with no key here: ask once, then sync. Accounts without a
+  /// key record never reach this, so a normal account behaves exactly as before.
+  Future<void> _askForPassphrase() async {
+    if (!mounted || _askingForPassphrase) return;
+    if (!widget.state.e2eeLocked.value) return;
+    _askingForPassphrase = true;
+    try {
+      final unlocked = await showE2eeUnlockSheet(context);
+      if (unlocked) {
+        await widget.state.afterUnlock();
+      }
+    } finally {
+      _askingForPassphrase = false;
+    }
   }
 
   Future<void> _load() async {

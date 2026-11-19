@@ -16,6 +16,7 @@ import 'data/db.dart';
 import 'data/failure_meter.dart';
 import 'data/server_history.dart';
 import 'data/repo.dart';
+import 'e2ee/session.dart';
 import 'reminders/service.dart';
 import 'data/sync_engine.dart';
 
@@ -67,6 +68,32 @@ class AppState extends ChangeNotifier {
   DateTime? _lastSync;
 
   ApiClient? get client => _client;
+
+  /// True when the server's account has a key record this device cannot open: the
+  /// app asks for the passphrase and syncs nothing meanwhile.
+  final e2eeLocked = ValueNotifier<bool>(false);
+
+  /// Reads the wrapped key record and keeps what this device already knows. Accounts
+  /// without one are untouched: `enabled` stays false and nothing prompts.
+  Future<void> loadEncryption() async {
+    await E2eeSession.instance.restore();
+    final client = _client;
+    if (client == null) return;
+    try {
+      await E2eeSession.instance.fetchRecord(client);
+    } on Object {
+      // offline or the route is missing: the cached copy decides
+    }
+    e2eeLocked.value = E2eeSession.instance.enabled && !E2eeSession.instance.unlocked;
+  }
+
+  /// Called after a successful unlock: the key is in the keystore, so the next
+  /// exchange decrypts and the UI can load everything the pull brings.
+  Future<void> afterUnlock() async {
+    e2eeLocked.value = false;
+    notifyListeners();
+    await syncNow();
+  }
   StoredAccount? get account => _account;
   ServerInfo? get server => _server;
   Repo? get repo => _repo;
@@ -191,7 +218,8 @@ class AppState extends ChangeNotifier {
       }
       _client = client;
       await _openReplica();
-      unawaited(afterDataChanged());
+      unawaited(loadEncryption());
+    unawaited(afterDataChanged());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
       unawaited(_loadAvatar());
@@ -345,6 +373,10 @@ class AppState extends ChangeNotifier {
   Future<SyncResult?> syncNow() async {
     final engine = _engine;
     if (engine == null) return null;
+    if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
+      e2eeLocked.value = true;
+      return null;
+    }
     notifyListeners();
     try {
       final result = await engine.exchange();
@@ -353,6 +385,9 @@ class AppState extends ChangeNotifier {
       _failures.reset();
       unawaited(afterDataChanged());
       return result;
+    } on E2eeLockedException {
+      e2eeLocked.value = true;
+      return null;
     } on ApiException catch (e) {
       if (e.isUnauthenticated) {
         await signOut();

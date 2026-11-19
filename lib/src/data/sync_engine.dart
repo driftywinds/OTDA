@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../e2ee/session.dart';
 import 'clock.dart';
 import 'db.dart';
 
@@ -89,6 +90,11 @@ class SyncEngine {
       _deviceId = await _loadDeviceId();
     }
     if (_running) return const SyncResult(applied: 0, pulled: 0, rejected: 0, pending: 0, pages: 0);
+    // An encrypted account with no key here must not pull: the batch would land as
+    // ciphertext in the replica. The app asks for the passphrase instead.
+    if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
+      throw const E2eeLockedException();
+    }
     _running = true;
     _failure = null;
     _status.add(null);
@@ -113,7 +119,12 @@ class SyncEngine {
             'entity': row['entity'],
             'entityId': row['entity_id'],
             'field': row['field'],
-            'value': jsonDecode(row['value'] as String),
+            'value': E2eeSession.instance.seal(
+              row['entity'] as String,
+              row['entity_id'] as String,
+              row['field'] as String,
+              jsonDecode(row['value'] as String),
+            ),
             'ts': row['ts'],
             'device': row['device'],
           });
@@ -153,7 +164,12 @@ class SyncEngine {
           for (final raw in incoming)
             if (raw is Map) raw.cast<String, dynamic>(),
         ];
-        await db.applyOps(page);
+        await db.applyOps([
+          if (E2eeSession.instance.enabled)
+            for (final op in page) E2eeSession.instance.openOp(op)
+          else
+            ...page,
+        ]);
         for (final op in page) {
           clock.observe(((op['ts'] as num?) ?? 0).toInt());
         }

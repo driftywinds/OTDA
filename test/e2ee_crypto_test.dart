@@ -1,6 +1,5 @@
 // The shared known-answer vectors from internal/e2ee and web/src/lib/crypto: if any
 // of these drift, this client would write values no other client can read.
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
