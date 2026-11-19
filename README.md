@@ -2,10 +2,11 @@
   <img src="assets/app-icon.png" alt="OTDA" width="120">
 </p>
 
-# OTDA - **O**pen**T**o**D**o for **A**ndroid
+# OTDA
 
-A Flutter client for [OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers —
-offline-first, with the same data model as the server so every device converges.
+**O**pen**T**o**D**o for **A**ndroid — a Flutter client for
+[OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers — offline-first, with
+the same data model as the server so every device converges.
 
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
