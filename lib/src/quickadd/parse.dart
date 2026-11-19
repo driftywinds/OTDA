@@ -16,9 +16,14 @@ import 'vocab/index.dart';
 typedef AttributeKind = String;
 
 class Chip {
-  const Chip({required this.kind, required this.key, required this.spans, required this.value});
+  const Chip({required this.kind, required this.key, required this.spans, required this.value, this.spanKinds});
 
   final AttributeKind kind;
+
+  /// What each span is, when the chip mixes things: a `due` chip reads `date` for
+  /// the day phrase and `time` for the clock phrase, so a highlighter can colour
+  /// them apart. Null means every span is just [kind].
+  final List<AttributeKind>? spanKinds;
 
   /// Stable within one parse: kind plus the first span start.
   final String key;
@@ -431,15 +436,20 @@ ParseResult parse(String line, ParseContext ctx) {
   }
 
   final chips = <Chip>[];
-  void chip(AttributeKind kind, List<Span> spans, Object? value) =>
-      chips.add(Chip(kind: kind, key: '$kind:${spans[0].start}', spans: spans, value: value));
+  void chip(AttributeKind kind, List<Span> spans, Object? value, [List<AttributeKind>? spanKinds]) =>
+      chips.add(Chip(kind: kind, key: '$kind:${spans[0].start}', spans: spans, value: value, spanKinds: spanKinds));
 
-  final dueSpans = <Span>[];
-  for (final s in [if (date != null) date.span, if (time != null) time.span]) {
-    if (!dueSpans.any((x) => identical(x, s))) dueSpans.add(s);
+  final dueParts = <({Span span, AttributeKind kind})>[];
+  for (final part in [
+    if (date != null) (span: date.span, kind: 'date'),
+    if (time != null) (span: time.span, kind: 'time'),
+  ]) {
+    if (!dueParts.any((x) => identical(x.span, part.span))) dueParts.add(part);
   }
-  dueSpans.sort((a, b) => a.start - b.start);
-  if (due != null && dueSpans.isNotEmpty) chip('due', dueSpans, due);
+  dueParts.sort((a, b) => a.span.start - b.span.start);
+  if (due != null && dueParts.isNotEmpty) {
+    chip('due', [for (final x in dueParts) x.span], due, [for (final x in dueParts) x.kind]);
+  }
   if (recurrence != null) chip('recurrence', [recurrence.span], recurrence.value);
   for (final r in reminders) {
     chip('reminder', [r.span], r.value);

@@ -7,6 +7,23 @@ import 'data/models.dart';
 import 'quickadd/attributes.dart';
 import 'quickadd/quickadd.dart';
 
+/// One understood stretch of the typed line, for colouring it while it is typed.
+class ParseHighlight {
+  const ParseHighlight(this.start, this.end, this.kind, this.text);
+
+  /// Offsets into the line exactly as typed (leading space included).
+  final int start;
+  final int end;
+
+  /// `date`, `time`, `recurrence`, `reminder`, `deadline`, `project`, `label`,
+  /// `priority`, `estimate`, `spent`, `energy`, `evening`, `daypart`, `someday`, `sector`.
+  final String kind;
+
+  /// The text at [start, end) when it was parsed, so a stale highlight can be told
+  /// from a current one after more typing.
+  final String text;
+}
+
 /// What the composer shows under the input.
 class ParsedLine {
   const ParsedLine({
@@ -14,7 +31,11 @@ class ParsedLine {
     this.fields = const {},
     this.chips = const [],
     this.unmatched = const [],
+    this.highlights = const [],
   });
+
+  /// The understood stretches of the line, one per phrase, for the typing highlight.
+  final List<ParseHighlight> highlights;
 
   /// The title with the recognised tokens cut out.
   final String title;
@@ -54,6 +75,8 @@ ParsedLine parseLine(
 }) {
   final text = line.trim();
   if (text.isEmpty) return const ParsedLine(title: '');
+  // The parser sees the trimmed line; highlights are placed on the line as typed.
+  final shift = line.length - line.trimLeft().length;
   final refs = projectRefs(projects);
   final result = parseQuickAdd(
     text,
@@ -67,6 +90,16 @@ ParsedLine parseLine(
     fields: result.fields,
     chips: [for (final chip in result.chips) chipLabel(chip, projects: refs)],
     unmatched: [for (final miss in result.unmatched) miss.span.text],
+    highlights: [
+      for (final chip in result.chips)
+        for (var k = 0; k < chip.spans.length; k++)
+          ParseHighlight(
+            chip.spans[k].start + shift,
+            chip.spans[k].end + shift,
+            chip.spanKinds != null ? chip.spanKinds![k] : chip.kind,
+            chip.spans[k].text,
+          ),
+    ],
   );
 }
 

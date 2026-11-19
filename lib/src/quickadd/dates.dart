@@ -264,11 +264,54 @@ int _yearAt(Token? token) {
 }
 
 ({int n, String unit})? _unitAt(List<Token> tokens, int i, Vocabulary v) {
-  for (final unit in ['hour', 'day', 'week', 'month']) {
+  for (final unit in ['minute', 'hour', 'day', 'week', 'month', 'year']) {
     final n = phraseAt(tokens, i, v.units[unit], '${v.code}:unit:$unit');
     if (n != 0) return (n: n, unit: unit);
   }
   return null;
+}
+
+/// The compact unit suffix of "in 4m", "in 2h", "in 3d", "in 2w", "in 3mt", "in 1y".
+/// A bare `m` is minutes; months are `mt`, `mth` or `mo`. Language independent, like
+/// the `+30m` duration tokens.
+final RegExp _compactRe = RegExp(r'^(\d{1,3})(mins?|m|hrs?|h|d|wks?|w|mths?|mt|mos?|yrs?|y)$');
+
+const Map<String, String> _compactUnits = {
+  'm': 'minute',
+  'min': 'minute',
+  'mins': 'minute',
+  'h': 'hour',
+  'hr': 'hour',
+  'hrs': 'hour',
+  'd': 'day',
+  'w': 'week',
+  'wk': 'week',
+  'wks': 'week',
+  'mt': 'month',
+  'mth': 'month',
+  'mths': 'month',
+  'mo': 'month',
+  'mos': 'month',
+  'y': 'year',
+  'yr': 'year',
+  'yrs': 'year',
+};
+
+/// "in N <unit>" at token i: the spoken form ("in 4 minutes", "in a week") or the
+/// compact one ("in 4m", "in 3d"). `n` counts the tokens, the "in" word included.
+({int n, int count, String unit})? _relativeAt(List<Token> tokens, int i, Vocabulary v) {
+  final inN = phraseAt(tokens, i, v.inWords, '${v.code}:in');
+  if (inN == 0) return null;
+  final t = _tok(tokens, i + inN);
+  if (t != null && !t.quoted) {
+    final m = _compactRe.firstMatch(t.norm);
+    if (m != null) return (n: inN + 1, count: int.parse(m[1]!), unit: _compactUnits[m[2]!]!);
+  }
+  final count = countAt(tokens, i + inN, v);
+  if (count == null) return null;
+  final unit = _unitAt(tokens, i + inN + count.n, v);
+  if (unit == null) return null;
+  return (n: inN + count.n + unit.n, count: count.count, unit: unit.unit);
 }
 
 // ---------- dates ----------
@@ -535,21 +578,19 @@ int ofMonthAt(List<Token> tokens, int k, DateContext ctx) {
 }
 
 ({String date, int n})? _inPeriodAt(List<Token> tokens, int j, Vocabulary v, DateContext ctx) {
-  final inN = phraseAt(tokens, j, v.inWords, '${v.code}:in');
-  if (inN == 0) return null;
-  final count = countAt(tokens, j + inN, v);
-  if (count == null) return null;
-  final unit = _unitAt(tokens, j + inN + count.n, v);
-  if (unit == null || unit.unit == 'hour') return null;
-  final n = inN + count.n + unit.n;
-  switch (unit.unit) {
+  final rel = _relativeAt(tokens, j, v);
+  if (rel == null) return null;
+  switch (rel.unit) {
     case 'day':
-      return (date: addDays(ctx.today, count.count), n: n);
+      return (date: addDays(ctx.today, rel.count), n: rel.n);
     case 'week':
-      return (date: addDays(ctx.today, 7 * count.count), n: n);
+      return (date: addDays(ctx.today, 7 * rel.count), n: rel.n);
     case 'month':
-      return (date: addMonths(ctx.today, count.count), n: n);
+      return (date: addMonths(ctx.today, rel.count), n: rel.n);
+    case 'year':
+      return (date: addMonths(ctx.today, 12 * rel.count), n: rel.n);
   }
+  // Minutes and hours are a time, read by matchTimeAt.
   return null;
 }
 
@@ -661,21 +702,20 @@ TimeMatch? matchTimeAt(List<Token> tokens, int i, DateContext ctx) {
   return best;
 }
 
+/// "in 4 minutes", "in 4m", "in 3 hours", "in 2h": the wall clock now plus the
+/// amount, on the day it lands on.
 TimeMatch? _inHoursAt(List<Token> tokens, int i, Vocabulary v, DateContext ctx) {
   if (ctx.now == null) return null;
-  final inN = phraseAt(tokens, i, v.inWords, '${v.code}:in');
-  if (inN == 0) return null;
-  final count = countAt(tokens, i + inN, v);
-  if (count == null) return null;
-  final unit = _unitAt(tokens, i + inN + count.n, v);
-  if (unit == null || unit.unit != 'hour') return null;
+  final rel = _relativeAt(tokens, i, v);
+  if (rel == null || (rel.unit != 'hour' && rel.unit != 'minute')) return null;
   final hm = ctx.now!.split(':').map(int.parse).toList();
-  final total = hm[0] + count.count;
+  final total = hm[0] * 60 + hm[1] + rel.count * (rel.unit == 'hour' ? 60 : 1);
+  final within = total % 1440;
   return TimeMatch(
-    time: clock(total % 24, hm[1]),
-    date: addDays(ctx.today, total ~/ 24),
+    time: clock(within ~/ 60, within % 60),
+    date: addDays(ctx.today, total ~/ 1440),
     from: i,
-    to: i + inN + count.n + unit.n,
+    to: i + rel.n,
   );
 }
 

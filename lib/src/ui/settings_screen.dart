@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../reminders/debug_log.dart';
 import '../reminders/service.dart';
 import '../system_bridge.dart';
+import '../widget/widget_settings.dart';
 
 import '../app_state.dart';
 import '../data/repo.dart';
@@ -188,6 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 _Section(title: 'Notifications', children: [_NotificationsCard(state: widget.state)]),
+                const _Section(title: 'Home screen widget', children: [_WidgetCard()]),
                 _Section(
                   title: 'Appearance',
                   children: [
@@ -635,6 +637,182 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
             await widget.state.afterDataChanged();
             await _refresh();
           }),
+      ],
+    );
+  }
+}
+
+
+/// The home-screen widget's look: text size, spacing, theme, background and what it
+/// lists. Kept on this device (the widget is per device), applied to the widget as
+/// soon as a value changes.
+class _WidgetCard extends StatefulWidget {
+  const _WidgetCard();
+
+  @override
+  State<_WidgetCard> createState() => _WidgetCardState();
+}
+
+class _WidgetCardState extends State<_WidgetCard> {
+  WidgetSettings _settings = const WidgetSettings();
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetSettings.load().then((value) {
+      if (mounted) {
+        setState(() {
+          _settings = value;
+          _loaded = true;
+        });
+      }
+    });
+  }
+
+  /// Shows the change now; writes it (and redraws the widget) when [save] is set,
+  /// which a slider does only when the finger lifts.
+  void _change(WidgetSettings next, {bool save = true}) {
+    setState(() => _settings = next);
+    if (save) next.save();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+    final s = _settings;
+    const divider = Divider(height: 1, indent: 16, endIndent: 16);
+
+    Widget slider({
+      required String label,
+      required String value,
+      required double current,
+      required double min,
+      required double max,
+      required int divisions,
+      required void Function(double, {bool save}) onChange,
+    }) =>
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text(label, style: style)),
+                  Text(value,
+                      style: style?.copyWith(color: scheme.primary, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              Slider(
+                value: current.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: _loaded ? (v) => onChange(v, save: false) : null,
+                onChangeEnd: _loaded ? (v) => onChange(v, save: true) : null,
+              ),
+            ],
+          ),
+        );
+
+    Widget toggle(String label, String subtitle, bool value, WidgetSettings Function(bool) apply) =>
+        SwitchListTile(
+          dense: true,
+          value: value,
+          title: Text(label, style: style),
+          subtitle: Text(subtitle),
+          onChanged: _loaded ? (v) => _change(apply(v)) : null,
+        );
+
+    return Column(
+      children: [
+        // What the text size will look like, at the size chosen.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.radio_button_unchecked, size: 22 * (s.textScalePct / 100).clamp(0.9, 1.3).toDouble(), color: scheme.onSurfaceVariant),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Call Sam',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16 * s.textScalePct / 100, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                if (s.showDue)
+                  Text('15:00',
+                      style: TextStyle(fontSize: 14 * s.textScalePct / 100, color: scheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ),
+        slider(
+          label: 'Text size',
+          value: '${s.textScalePct}%',
+          current: s.textScalePct.toDouble(),
+          min: WidgetSettings.minTextScale.toDouble(),
+          max: WidgetSettings.maxTextScale.toDouble(),
+          divisions: (WidgetSettings.maxTextScale - WidgetSettings.minTextScale) ~/ 5,
+          onChange: (v, {bool save = true}) => _change(s.copyWith(textScalePct: v.round()), save: save),
+        ),
+        divider,
+        SettingsChoiceRow(
+          label: 'Row spacing',
+          value: s.density,
+          options: const {'compact': 'Compact', 'standard': 'Standard', 'roomy': 'Roomy'},
+          onChanged: (v) => _change(s.copyWith(density: v)),
+        ),
+        divider,
+        SettingsChoiceRow(
+          label: 'Widget theme',
+          value: s.theme,
+          options: const {'system': 'Follow the phone', 'light': 'Light', 'dark': 'Dark'},
+          onChanged: (v) => _change(s.copyWith(theme: v)),
+        ),
+        divider,
+        slider(
+          label: 'Background opacity',
+          value: '${s.backgroundPct}%',
+          current: s.backgroundPct.toDouble(),
+          min: WidgetSettings.minBackground.toDouble(),
+          max: WidgetSettings.maxBackground.toDouble(),
+          divisions: (WidgetSettings.maxBackground - WidgetSettings.minBackground) ~/ 5,
+          onChange: (v, {bool save = true}) => _change(s.copyWith(backgroundPct: v.round()), save: save),
+        ),
+        divider,
+        toggle('Section headings', 'Overdue, Today, Tomorrow…', s.showSections,
+            (v) => s.copyWith(showSections: v)),
+        divider,
+        toggle('Due time and date', 'At the right of each task', s.showDue, (v) => s.copyWith(showDue: v)),
+        divider,
+        toggle('Completed tasks', 'Keep ticked-off tasks in the list', s.showCompleted,
+            (v) => s.copyWith(showCompleted: v)),
+        divider,
+        ListTile(
+          dense: true,
+          leading: Icon(Icons.restart_alt, size: 18, color: scheme.primary),
+          title: Text('Reset widget look', style: style),
+          onTap: _loaded ? () => _change(const WidgetSettings()) : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Text(
+            'Applies to every OTDA widget on this phone. Changes show on the home screen right away.',
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
       ],
     );
   }

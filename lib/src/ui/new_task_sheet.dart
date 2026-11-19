@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../data/repo.dart';
 import '../quickadd_bridge.dart';
 import 'composer_state.dart';
+import 'highlight_controller.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -28,12 +29,13 @@ class NewTaskSheet extends StatefulWidget {
 }
 
 class _NewTaskSheetState extends State<NewTaskSheet> {
-  final _input = TextEditingController();
+  final _input = HighlightingController();
   Timer? _debounce;
 
   late final ComposerState _values = ComposerState(projectId: widget.initialProjectId);
   ParsedLine _parsed = const ParsedLine(title: '');
   bool _saving = false;
+  String? _lastParsedText;
 
   // `showMenu` opens against a position, so each menu chip needs its own anchor.
   final _durationKey = GlobalKey();
@@ -58,14 +60,19 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   /// Parses after a pause, the way the web app does, so the preview follows the
   /// typing without a request per keystroke.
   void _onChanged() {
+    // Setting the highlights notifies this listener too, and so do caret moves;
+    // only a change of the text itself needs a new parse.
+    if (_input.text == _lastParsedText) return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 180), () {
       final line = _input.text;
+      _lastParsedText = line;
       final parsed = parseLine(line,
           today: todayString(), now: nowString(), projects: widget.projects);
       if (!mounted) return;
       setState(() {
         _parsed = parsed;
+        _input.highlights = parsed.highlights;
         _values.applyParsed(parsed);
       });
     });

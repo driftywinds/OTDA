@@ -118,8 +118,9 @@ class TasksWidget : GlanceAppWidget() {
         // Nothing stored yet (just placed, or the app was never opened since): ask the app's
         // Dart side to write the snapshot from the on-device data, without opening the UI.
         if (snapshot == null) requestSnapshot(context, prefs)
+        val style = WidgetStyle.read(prefs)
         provideContent {
-            WidgetContent(snapshot, projectId, appWidgetId)
+            WidgetContent(snapshot, projectId, appWidgetId, style)
         }
     }
 }
@@ -227,30 +228,105 @@ internal sealed interface WidgetRow {
 }
 
 private val BrandNavy = Color(0xFF0F172A)
-private val Surface: ColorProvider = dayNightColor(Color(0xFFFFFFFF), Color(0xFF242424))
-private val OnSurface: ColorProvider = dayNightColor(BrandNavy, Color(0xFFE8ECF2))
-private val SecondaryText: ColorProvider = dayNightColor(Color(0xFF64748B), Color(0xFF94A3B8))
+private val LightSurface = Color(0xFFFFFFFF)
+private val DarkSurface = Color(0xFF242424)
+private val LightOnSurface = BrandNavy
+private val DarkOnSurface = Color(0xFFE8ECF2)
+private val LightSecondary = Color(0xFF64748B)
+private val DarkSecondary = Color(0xFF94A3B8)
 private val Accent = ColorProvider(Color(0xFF34D399))
 private val ErrorRed = ColorProvider(Color(0xFFE5484D))
 
+
+private fun readInt(prefs: SharedPreferences, key: String, fallback: Int): Int =
+    when (val v = prefs.all[key]) {
+        is Number -> v.toInt()
+        is String -> v.toIntOrNull() ?: fallback
+        else -> fallback
+    }
+
+private fun readBool(prefs: SharedPreferences, key: String, fallback: Boolean): Boolean =
+    (prefs.all[key] as? Boolean) ?: fallback
+
+private fun readChoice(prefs: SharedPreferences, key: String, allowed: Set<String>, fallback: String): String =
+    (prefs.all[key] as? String)?.takeIf { it in allowed } ?: fallback
+
+/**
+ * How the widget looks, from the Settings screen's "Home screen widget" section. The keys and
+ * defaults mirror `lib/src/widget/widget_settings.dart`; a missing or odd value is the default.
+ */
+internal class WidgetStyle(
+    val scale: Float,
+    val density: Float,
+    val theme: String,
+    val backgroundAlpha: Float,
+    val showSections: Boolean,
+    val showDue: Boolean,
+    val showCompleted: Boolean,
+) {
+    val surface: ColorProvider = when (theme) {
+        "light" -> ColorProvider(LightSurface.copy(alpha = backgroundAlpha))
+        "dark" -> ColorProvider(DarkSurface.copy(alpha = backgroundAlpha))
+        else -> dayNightColor(LightSurface.copy(alpha = backgroundAlpha), DarkSurface.copy(alpha = backgroundAlpha))
+    }
+    val onSurface: ColorProvider = when (theme) {
+        "light" -> ColorProvider(LightOnSurface)
+        "dark" -> ColorProvider(DarkOnSurface)
+        else -> dayNightColor(LightOnSurface, DarkOnSurface)
+    }
+    val secondary: ColorProvider = when (theme) {
+        "light" -> ColorProvider(LightSecondary)
+        "dark" -> ColorProvider(DarkSecondary)
+        else -> dayNightColor(LightSecondary, DarkSecondary)
+    }
+
+    /** A font size at the chosen text size. */
+    fun sp(base: Int) = (base * scale).sp
+
+    /** A length that grows with the text but never shrinks below its base (touch targets). */
+    fun grow(base: Int) = (base * maxOf(1f, scale)).dp
+
+    /** The height of a task row: text size and the spacing choice together. */
+    val rowHeight get() = (40 * density * maxOf(1f, scale)).dp
+
+    /** Titles are cut by characters (Glance has no ellipsis), so a bigger font keeps fewer. */
+    fun limit(base: Int) = maxOf(8, (base / scale).toInt())
+
+    companion object {
+        fun read(prefs: SharedPreferences): WidgetStyle = WidgetStyle(
+            scale = readInt(prefs, "widget_text_scale", 100).coerceIn(70, 160) / 100f,
+            density = when (readChoice(prefs, "widget_density", setOf("compact", "standard", "roomy"), "standard")) {
+                "compact" -> 0.85f
+                "roomy" -> 1.2f
+                else -> 1f
+            },
+            theme = readChoice(prefs, "widget_theme", setOf("system", "light", "dark"), "system"),
+            backgroundAlpha = readInt(prefs, "widget_background", 100).coerceIn(20, 100) / 100f,
+            showSections = readBool(prefs, "widget_show_sections", true),
+            showDue = readBool(prefs, "widget_show_due", true),
+            showCompleted = readBool(prefs, "widget_show_completed", true),
+        )
+    }
+}
+
 @Composable
-private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: Int) {
+private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
     Box(
         modifier = GlanceModifier.fillMaxSize()
             .appWidgetBackground()
-            .background(Surface)
+            .background(style.surface)
             .cornerRadius(28.dp),
     ) {
         if (snapshot == null) {
-            SetupCard()
+            SetupCard(style)
         } else {
-            Card(snapshot, projectId, appWidgetId)
+            Card(snapshot, projectId, appWidgetId, style)
         }
     }
 }
 
 @Composable
-private fun SetupCard() {
+private fun SetupCard(style: WidgetStyle) {
     val context = LocalContext.current
     Column(
         modifier = GlanceModifier.fillMaxSize()
@@ -261,35 +337,36 @@ private fun SetupCard() {
     ) {
         Text(
             text = "OTDA",
-            style = TextStyle(color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(color = style.onSurface, fontSize = style.sp(20), fontWeight = FontWeight.Bold),
             maxLines = 1,
         )
         Spacer(GlanceModifier.height(4.dp))
         Text(
             text = "Open OTDA to set up",
-            style = TextStyle(color = SecondaryText, fontSize = 14.sp),
+            style = TextStyle(color = style.secondary, fontSize = style.sp(14)),
             maxLines = 2,
         )
     }
 }
 
 @Composable
-private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
+private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
     val compact = LocalSize.current.width < 250.dp
+    val rows = visibleRows(snapshot.rows, style, showSections = style.showSections && !compact)
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(top = 6.dp, bottom = 8.dp),
     ) {
-        Header(snapshot, projectId, appWidgetId)
-        if (snapshot.rows.isEmpty()) {
-            EmptyState()
+        Header(snapshot, projectId, appWidgetId, style)
+        if (rows.isEmpty()) {
+            EmptyState(style)
             return@Column
         }
         LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = 16.dp)) {
-            snapshot.rows.forEach { row ->
+            rows.forEach { row ->
                 item {
                     when (row) {
-                        is WidgetRow.Section -> if (!compact) SectionLabel(row.label)
-                        is WidgetRow.Task -> TaskRow(row)
+                        is WidgetRow.Section -> SectionLabel(row.label, style)
+                        is WidgetRow.Task -> TaskRow(row, style)
                     }
                 }
             }
@@ -298,18 +375,35 @@ private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
             Text(
                 text = "+${snapshot.more} more",
                 modifier = GlanceModifier.padding(start = 16.dp, top = 4.dp),
-                style = TextStyle(color = SecondaryText, fontSize = 13.sp),
+                style = TextStyle(color = style.secondary, fontSize = style.sp(13)),
                 maxLines = 1,
             )
         }
     }
 }
 
+/**
+ * The rows the settings leave in: completed tasks only when asked for, headings only when
+ * shown, and never a heading with nothing under it.
+ */
+private fun visibleRows(rows: List<WidgetRow>, style: WidgetStyle, showSections: Boolean): List<WidgetRow> {
+    val kept = rows.filter { it !is WidgetRow.Task || style.showCompleted || !it.done }
+    val out = ArrayList<WidgetRow>(kept.size)
+    for ((index, row) in kept.withIndex()) {
+        if (row is WidgetRow.Section) {
+            val next = kept.getOrNull(index + 1)
+            if (!showSections || next == null || next is WidgetRow.Section) continue
+        }
+        out.add(row)
+    }
+    return out
+}
+
 @Composable
-private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
+private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
     val context = LocalContext.current
     Row(
-        modifier = GlanceModifier.fillMaxWidth().height(36.dp).padding(start = 16.dp, end = 4.dp),
+        modifier = GlanceModifier.fillMaxWidth().height(style.grow(36)).padding(start = 16.dp, end = 4.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Row(
@@ -318,11 +412,11 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
             verticalAlignment = Alignment.Vertical.CenterVertically,
         ) {
             Text(
-                text = oneLine(snapshot.name.ifBlank { "OTDA" }),
+                text = oneLine(snapshot.name.ifBlank { "OTDA" }, style.limit(40)),
                 modifier = GlanceModifier.defaultWeight(),
                 style = TextStyle(
-                    color = OnSurface,
-                    fontSize = 20.sp,
+                    color = style.onSurface,
+                    fontSize = style.sp(20),
                     fontWeight = FontWeight.Bold,
                 ),
                 maxLines = 1,
@@ -330,52 +424,52 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int) {
             Image(
                 provider = ImageProvider(R.drawable.ic_widget_chevron),
                 contentDescription = "Choose project",
-                modifier = GlanceModifier.size(16.dp),
-                colorFilter = ColorFilter.tint(SecondaryText),
+                modifier = GlanceModifier.size(style.grow(16)),
+                colorFilter = ColorFilter.tint(style.secondary),
             )
         }
-        TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20) {
+        TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20, style = style) {
             actionStartActivity(quickAddIntent(context, projectId))
         }
-        TapTarget(R.drawable.ic_widget_open, "Open OTDA", target = 32, icon = 18) {
+        TapTarget(R.drawable.ic_widget_open, "Open OTDA", target = 32, icon = 18, style = style) {
             actionStartActivity(appIntent(context))
         }
     }
 }
 
 @Composable
-private fun SectionLabel(label: String) {
+private fun SectionLabel(label: String, style: WidgetStyle) {
     Text(
-        text = oneLine(label, 32),
+        text = oneLine(label, style.limit(32)),
         modifier = GlanceModifier.fillMaxWidth().padding(top = 6.dp, bottom = 0.dp),
-        style = TextStyle(color = SecondaryText, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+        style = TextStyle(color = style.secondary, fontSize = style.sp(12), fontWeight = FontWeight.Medium),
         maxLines = 1,
     )
 }
 
 @Composable
-private fun TaskRow(task: WidgetRow.Task) {
+private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
     val context = LocalContext.current
     val titleStyle = TextStyle(
-        color = if (task.done) SecondaryText else OnSurface,
-        fontSize = 16.sp,
+        color = if (task.done) style.secondary else style.onSurface,
+        fontSize = style.sp(16),
         fontWeight = FontWeight.Medium,
         textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
     )
     Row(
         modifier = GlanceModifier.fillMaxWidth()
-            .height(40.dp)
+            .height(style.rowHeight)
             .clickable(actionStartActivity(deepLink(context, taskUri(task)))),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Box(
-            modifier = GlanceModifier.size(40.dp)
+            modifier = GlanceModifier.size(style.grow(40))
                 .clickable(actionRunCallback<CompleteAction>(completeParameters(task))),
             contentAlignment = Alignment.Center,
         ) {
             if (task.done) {
                 Box(
-                    modifier = GlanceModifier.size(24.dp).cornerRadius(12.dp).background(Accent),
+                    modifier = GlanceModifier.size(style.grow(24)).cornerRadius(12.dp * maxOf(1f, style.scale)).background(Accent),
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
@@ -389,24 +483,24 @@ private fun TaskRow(task: WidgetRow.Task) {
                 Image(
                     provider = ImageProvider(R.drawable.ic_widget_circle),
                     contentDescription = "Complete ${task.title}",
-                    modifier = GlanceModifier.size(24.dp),
-                    colorFilter = ColorFilter.tint(SecondaryText),
+                    modifier = GlanceModifier.size(style.grow(24)),
+                    colorFilter = ColorFilter.tint(style.secondary),
                 )
             }
         }
         Text(
-            text = oneLine(task.title),
+            text = oneLine(task.title, style.limit(if (style.showDue) 40 else 52)),
             modifier = GlanceModifier.defaultWeight(),
             style = titleStyle,
             maxLines = 1,
         )
-        if (task.right != null) {
+        if (style.showDue && task.right != null) {
             Spacer(GlanceModifier.width(8.dp))
             Text(
-                text = oneLine(task.right, 18),
+                text = oneLine(task.right, style.limit(18)),
                 style = TextStyle(
-                    color = if (task.overdue) ErrorRed else SecondaryText,
-                    fontSize = 14.sp,
+                    color = if (task.overdue) ErrorRed else style.secondary,
+                    fontSize = style.sp(14),
                 ),
                 maxLines = 1,
             )
@@ -415,7 +509,7 @@ private fun TaskRow(task: WidgetRow.Task) {
 }
 
 @Composable
-private fun EmptyState() {
+private fun EmptyState(style: WidgetStyle) {
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(vertical = 16.dp),
         verticalAlignment = Alignment.Vertical.CenterVertically,
@@ -430,23 +524,23 @@ private fun EmptyState() {
         Spacer(GlanceModifier.height(8.dp))
         Text(
             text = "Nothing coming up",
-            style = TextStyle(color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium),
+            style = TextStyle(color = style.onSurface, fontSize = style.sp(16), fontWeight = FontWeight.Medium),
             maxLines = 1,
         )
     }
 }
 
 @Composable
-private fun TapTarget(res: Int, description: String, target: Int, icon: Int, action: () -> Action) {
+private fun TapTarget(res: Int, description: String, target: Int, icon: Int, style: WidgetStyle, action: () -> Action) {
     Box(
-        modifier = GlanceModifier.size(target.dp).clickable(action()),
+        modifier = GlanceModifier.size(style.grow(target)).clickable(action()),
         contentAlignment = Alignment.Center,
     ) {
         Image(
             provider = ImageProvider(res),
             contentDescription = description,
-            modifier = GlanceModifier.size(icon.dp),
-            colorFilter = ColorFilter.tint(OnSurface),
+            modifier = GlanceModifier.size(style.grow(icon)),
+            colorFilter = ColorFilter.tint(style.onSurface),
         )
     }
 }
