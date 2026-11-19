@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show DartPluginRegistrant;
@@ -22,6 +23,7 @@ import '../data/models.dart';
 import '../data/repo.dart';
 import '../data/sync_engine.dart';
 import '../widget/snapshot.dart';
+import 'debug_log.dart';
 import 'planner.dart';
 
 /// A request, from a widget or a link, to open the new-task sheet.
@@ -52,6 +54,7 @@ class ReminderService {
   static const _enabledPref = 'notif.enabled';
   static const _timePref = 'notif.default_time';
   static const _askedPref = 'notif.asked.v2';
+  static const _alarmClockPref = 'notif.alarm_clock';
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
@@ -72,28 +75,44 @@ class ReminderService {
   Future<void> init() => _initFuture ??= _init().catchError((Object e) {
         lastError = 'init: $e';
         _initFuture = null;
+        return DebugLog.add('init FAILED: $e', source: _source);
       });
 
+  /// Which isolate is logging: the app, or a notification/widget background callback.
+  static String _source = 'app';
+  static void markBackground() => _source = 'bg';
+
   Future<void> _init() async {
+    await DebugLog.add('init: start', source: _source);
     tzdata.initializeTimeZones();
     await _setLocalZone();
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_stat_otda'),
-        iOS: DarwinInitializationSettings(
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
-        ),
-      ),
-      onDidReceiveNotificationResponse: _onTap,
-      onDidReceiveBackgroundNotificationResponse: onReminderAction,
-    );
+    Future<void> initWith(String icon) => _plugin.initialize(
+          settings: InitializationSettings(
+            android: AndroidInitializationSettings(icon),
+            iOS: const DarwinInitializationSettings(
+              requestAlertPermission: false,
+              requestBadgePermission: false,
+              requestSoundPermission: false,
+            ),
+          ),
+          onDidReceiveNotificationResponse: _onTap,
+          onDidReceiveBackgroundNotificationResponse: onReminderAction,
+        );
+    try {
+      await initWith('ic_stat_otda');
+    } on PlatformException catch (e) {
+      // The status-bar icon was stripped from the build. Fall back to the launcher icon so
+      // reminders still work (Android draws it as a plain square) instead of failing outright.
+      await DebugLog.add('init: icon ic_stat_otda rejected: ${e.code}; using launcher icon', source: _source);
+      await initWith('@mipmap/ic_launcher');
+    }
     await _createChannels();
     _ready = true;
+    await DebugLog.add('init: ok, zone=${tz.local.name}', source: _source);
     // The app was started by tapping a reminder: open that task once the UI is up.
     final launch = await _plugin.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp == true) {
+      await DebugLog.add('launched by notification ${launch?.notificationResponse?.payload}', source: _source);
       _openPayload(launch?.notificationResponse?.payload);
     }
   }
@@ -160,6 +179,21 @@ class ReminderService {
   Future<void> setReminderTime(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_timePref, value);
+  }
+
+  /// Alarm-clock mode: Android treats the reminder like a real alarm, so phone makers'
+  /// battery managers (Xiaomi, Oppo, ...) do not defer it. The cost is a small alarm icon in
+  /// the status bar while a reminder is pending. On by default until the phone proves it is
+  /// not needed.
+  Future<bool> alarmClockMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs.getBool(_alarmClockPref) ?? true;
+  }
+
+  Future<void> setAlarmClockMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_alarmClockPref, value);
   }
 
   // ---- permissions -----------------------------------------------------
@@ -229,9 +263,15 @@ class ReminderService {
   ) async {
     try {
       await init();
-      if (!_ready) return;
+      if (!_ready) {
+        await DebugLog.add('rearm: skipped, notifications not initialised ($lastError)', source: _source);
+        return;
+      }
       final enabled = await remindersEnabled();
       final pending = await _plugin.pendingNotificationRequests();
+      await DebugLog.add(
+          'rearm: ${tasks.length} tasks, ${snoozes.length} snoozes, enabled=$enabled, ${pending.length} pending before',
+          source: _source);
       if (!enabled) {
         for (final request in pending) {
           if (request.id != _testNowId && request.id != _testLaterId) await _plugin.cancel(id: request.id);
@@ -257,16 +297,27 @@ class ReminderService {
         if (!wanted.contains(request.id)) await _plugin.cancel(id: request.id);
       }
       final exact = await exactAlarmsAllowed();
+      await DebugLog.add('rearm: plan has ${plan.length} reminder(s), exact=$exact', source: _source);
+      String? firstFailure;
       for (final reminder in plan) {
-        await _schedule(reminder.id, reminder.title, reminder.body, reminder.at, reminder.payload, exact);
+        try {
+          await _schedule(reminder.id, reminder.title, reminder.body, reminder.at, reminder.payload, exact);
+          await DebugLog.add('armed #${reminder.id} "${reminder.title}" at ${reminder.at}', source: _source);
+        } on Object catch (e) {
+          firstFailure ??= '$e';
+          await DebugLog.add('arm FAILED #${reminder.id} "${reminder.title}": $e', source: _source);
+        }
       }
       lastPlan = plan;
       lastRearmAt = DateTime.now();
-      lastError = null;
+      lastError = firstFailure;
+      final after = await _plugin.pendingNotificationRequests();
+      await DebugLog.add('rearm: done, ${after.length} pending in the OS', source: _source);
     } on Object catch (e) {
       // A missing permission or a plugin gap must not take the app down, but it must
       // be visible: the Notifications card shows this line.
       lastError = '$e';
+      await DebugLog.add('rearm FAILED: $e', source: _source);
     }
   }
 
@@ -280,12 +331,21 @@ class ReminderService {
           androidScheduleMode: mode,
           payload: payload,
         );
-    if (!exact) return go(AndroidScheduleMode.inexactAllowWhileIdle);
-    try {
-      await go(AndroidScheduleMode.exactAllowWhileIdle);
-    } on PlatformException {
-      // The exact-alarm grant was revoked between the check and the call.
-      await go(AndroidScheduleMode.inexactAllowWhileIdle);
+    final modes = <AndroidScheduleMode>[
+      if (await alarmClockMode()) AndroidScheduleMode.alarmClock,
+      if (exact) AndroidScheduleMode.exactAllowWhileIdle,
+      AndroidScheduleMode.inexactAllowWhileIdle,
+    ];
+    for (var i = 0; i < modes.length; i++) {
+      try {
+        await go(modes[i]);
+        if (i > 0) await DebugLog.add('schedule #$id: fell back to ${modes[i].name}', source: _source);
+        return;
+      } on PlatformException catch (e) {
+        // A grant was revoked between the check and the call: try the next weaker mode.
+        await DebugLog.add('schedule #$id: ${modes[i].name} refused: ${e.code}', source: _source);
+        if (i == modes.length - 1) rethrow;
+      }
     }
   }
 
@@ -318,7 +378,9 @@ class ReminderService {
   /// Posts a notification right now. Proves the permission and the channel.
   Future<String> sendTestNow() async {
     await init();
+    if (!_ready) return 'Notification setup failed: $lastError';
     if (!await notificationsEnabled()) return _blocked;
+    await DebugLog.add('test: show now', source: _source);
     await _plugin.show(
       id: _testNowId,
       title: 'Reminder test',
@@ -333,12 +395,23 @@ class ReminderService {
   /// reminder. Lock the phone, close the app and wait: this is the realistic check.
   Future<String> scheduleTest(Duration after) async {
     await init();
+    if (!_ready) return 'Notification setup failed: $lastError';
     if (!await notificationsEnabled()) return _blocked;
     final at = tz.TZDateTime.now(tz.local).add(after);
     final exact = await exactAlarmsAllowed();
-    await _schedule(_testLaterId, 'Scheduled reminder test',
-        'This one came from the alarm clock, not from the open app.', at, 'test', exact);
+    await DebugLog.add('test: schedule for $at exact=$exact', source: _source);
+    try {
+      await _schedule(_testLaterId, 'Scheduled reminder test',
+          'This one came from the alarm clock, not from the open app.', at, 'test', exact);
+    } on Object catch (e) {
+      await DebugLog.add('test: schedule FAILED: $e', source: _source);
+      return 'Scheduling failed: $e';
+    }
+    final pendingNow = await _plugin.pendingNotificationRequests();
+    await DebugLog.add(
+        'test: scheduled, pending ids=${pendingNow.map((r) => r.id).toList()}', source: _source);
     final clock = _clock(at);
+    if (await alarmClockMode()) return 'Scheduled for $clock in alarm-clock mode. Lock the phone and swipe the app away.';
     return exact
         ? 'Scheduled for $clock. Lock the phone, swipe the app away and wait.'
         : 'Scheduled for about $clock, but exact alarms are off so Android may deliver it late.';
@@ -354,6 +427,7 @@ class ReminderService {
     await repo.createTask('Test reminder (safe to delete)', extra: {
       'due': {'date': date, 'time': '${_two(due.hour)}:${_two(due.minute)}'},
     });
+    await DebugLog.add('test: real task created for $date ${_two(due.hour)}:${_two(due.minute)}', source: _source);
     await rearmFrom(repo);
     if (lastError != null) return 'Task created, but arming failed: $lastError';
     return 'Task created for ${_two(due.hour)}:${_two(due.minute)}. Lock the phone and wait, '
@@ -374,9 +448,60 @@ class ReminderService {
   static String describe(PlannedReminder reminder) =>
       '${reminder.day} ${_clock(reminder.at)}  ${reminder.title}';
 
+  // ---- debug report ----------------------------------------------------
+
+  /// Everything needed to see why a reminder or the widget misbehaves, as plain text.
+  Future<String> debugReport() async {
+    final out = StringBuffer('OTDA reminders debug report\n');
+    Future<void> line(String label, Future<Object?> Function() value) async {
+      try {
+        out.writeln('$label: ${await value()}');
+      } on Object catch (e) {
+        out.writeln('$label: ERROR $e');
+      }
+    }
+
+    out.writeln('now: ${DateTime.now()}  zone: ${tz.local.name}');
+    await init();
+    out.writeln('initialised: $_ready  lastError: $lastError');
+    out.writeln('lastRearmAt: $lastRearmAt');
+    await line('reminders enabled', remindersEnabled);
+    await line('default time', reminderTime);
+    await line('notifications allowed', notificationsEnabled);
+    await line('exact alarms allowed', exactAlarmsAllowed);
+    await line('alarm-clock mode', alarmClockMode);
+    await line('widget active_projects', () => HomeWidget.getWidgetData<String>('active_projects'));
+    await line('widget snapshot_all length',
+        () async => (await HomeWidget.getWidgetData<String>('snapshot_all'))?.length);
+    await line('widget projects_index length',
+        () async => (await HomeWidget.getWidgetData<String>('projects_index'))?.length);
+    out.writeln('lastWidgetError: $lastWidgetError');
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      out.writeln('pending in the OS: ${pending.length}');
+      for (final request in pending) {
+        out.writeln('  #${request.id} "${request.title}" ${request.body} payload=${request.payload}');
+      }
+    } on Object catch (e) {
+      out.writeln('pending in the OS: ERROR $e');
+    }
+    out.writeln('last plan (${lastPlan.length}):');
+    for (final reminder in lastPlan) {
+      out.writeln('  #${reminder.id} ${reminder.at} "${reminder.title}"');
+    }
+    out.writeln('--- log (oldest first) ---');
+    for (final entry in await DebugLog.read()) {
+      out.writeln(entry);
+    }
+    return out.toString();
+  }
+
   // ---- taps ------------------------------------------------------------
 
-  void _onTap(NotificationResponse response) => _openPayload(response.payload);
+  void _onTap(NotificationResponse response) {
+    unawaited(DebugLog.add('tap payload=${response.payload} action=${response.actionId}', source: _source));
+    _openPayload(response.payload);
+  }
 
   /// A payload is `taskId|day`; a test notification carries none and opens nothing.
   void _openPayload(String? payload) {
@@ -390,15 +515,26 @@ class ReminderService {
 Future<void> onReminderAction(NotificationResponse response) async {
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
+  ReminderService.markBackground();
   final payload = response.payload;
+  await DebugLog.add('action ${response.actionId} payload=$payload', source: 'bg');
   if (payload == null || !payload.contains('|')) return;
   final parts = payload.split('|');
   final taskId = parts[0];
   final day = parts[1];
 
-  final repo = await openHeadlessRepo();
+  final Repo repo;
+  try {
+    repo = await openHeadlessRepo();
+  } on Object catch (e) {
+    await DebugLog.add('action: could not open the database: $e', source: 'bg');
+    return;
+  }
   final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
-  if (task == null) return;
+  if (task == null) {
+    await DebugLog.add('action: task $taskId not found', source: 'bg');
+    return;
+  }
 
   switch (response.actionId) {
     case 'complete':
@@ -419,6 +555,7 @@ Future<void> onReminderAction(NotificationResponse response) async {
     default:
       return;
   }
+  await DebugLog.add('action ${response.actionId}: done, re-arming', source: 'bg');
   await ReminderService.instance.rearmFrom(repo);
   await pushWidgetsFromRepo(repo);
 }
@@ -480,9 +617,12 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
       qualifiedAndroidName: 'com.dw.otda.widget.TasksWidgetReceiver',
     );
     lastWidgetError = null;
+    await DebugLog.add('widget: pushed ${ids.length} project snapshot(s) + all, ${tasks.length} tasks',
+        source: ReminderService._source);
   } on Object catch (e) {
     // No widget placed, or no launcher support: nothing to do.
     lastWidgetError = '$e';
+    await DebugLog.add('widget: push FAILED: $e', source: ReminderService._source);
   }
 }
 
@@ -490,6 +630,7 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
 /// link at start-up and with every later tap while the app is running.
 Future<void> handleWidgetUri(Uri? uri) async {
   if (uri == null) return;
+  await DebugLog.add('link: $uri', source: ReminderService._source);
   switch (uri.host) {
     case 'task':
       if (uri.pathSegments.isNotEmpty) ReminderService.instance.pendingTask.value = uri.pathSegments.first;
@@ -511,7 +652,15 @@ Future<void> onWidgetAction(Uri? uri) async {
   if (uri == null) return;
   WidgetsFlutterBinding.ensureInitialized();
   DartPluginRegistrant.ensureInitialized();
-  final repo = await openHeadlessRepo();
+  ReminderService.markBackground();
+  await DebugLog.add('widget action: $uri', source: 'bg');
+  final Repo repo;
+  try {
+    repo = await openHeadlessRepo();
+  } on Object catch (e) {
+    await DebugLog.add('widget action: could not open the database: $e', source: 'bg');
+    return;
+  }
   if (uri.host == 'complete') {
     final taskId = uri.queryParameters['id'];
     if (taskId == null) return;

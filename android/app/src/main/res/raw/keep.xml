@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notification icon is looked up by name at runtime (getIdentifier), so the release
+     build's resource shrinker sees no reference and strips it. That made notification setup
+     fail with "invalid_icon", and every scheduled reminder with it. -->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_otda,@mipmap/ic_launcher,@mipmap/ic_launcher_round" />

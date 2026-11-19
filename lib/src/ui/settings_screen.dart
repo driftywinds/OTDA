@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+
+import '../reminders/debug_log.dart';
 import '../reminders/service.dart';
 import '../system_bridge.dart';
 
@@ -402,6 +405,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
   bool? _exact;
   bool? _battery;
   bool _enabled = true;
+  bool _alarmClock = true;
   String _time = '09:00';
   String _maker = '';
   int _armed = 0;
@@ -433,6 +437,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
     final armed = await service.armedCount();
     final battery = await SystemBridge.ignoringBatteryOptimizations();
     final enabled = await service.remindersEnabled();
+    final alarmClock = await service.alarmClockMode();
     final time = await service.reminderTime();
     final maker = await SystemBridge.manufacturer();
     if (!mounted) return;
@@ -441,6 +446,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
       _exact = exact;
       _battery = battery;
       _enabled = enabled;
+      _alarmClock = alarmClock;
       _time = time;
       _maker = maker;
       _armed = armed;
@@ -547,6 +553,19 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
           },
         ),
         divider,
+        SwitchListTile(
+          dense: true,
+          value: _alarmClock,
+          title: Text('Extra reliable (alarm-clock mode)', style: style),
+          subtitle: const Text('Fires on time even when the phone is strict about battery. Shows a small alarm icon'),
+          onChanged: (value) async {
+            setState(() => _alarmClock = value);
+            await service.setAlarmClockMode(value);
+            await widget.state.afterDataChanged();
+            await _refresh();
+          },
+        ),
+        divider,
         status('Time for tasks without one', _time, onTap: _pickTime),
         divider,
         status(
@@ -598,6 +617,16 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
             'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
           _say(await service.scheduleTest(const Duration(minutes: 1)));
           await _refresh();
+        }),
+        action(Icons.copy_all_outlined, 'Copy debug log',
+            'Permissions, what is armed, and recent events. Paste it to share', () async {
+          final report = await service.debugReport();
+          await Clipboard.setData(ClipboardData(text: report));
+          _say('Copied ${report.split('\n').length} lines to the clipboard.');
+        }),
+        action(Icons.delete_sweep_outlined, 'Clear debug log', 'Start fresh before a test', () async {
+          await DebugLog.clear();
+          _say('Log cleared.');
         }),
         if (repo != null)
           action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
