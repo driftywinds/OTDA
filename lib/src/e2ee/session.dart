@@ -113,6 +113,9 @@ class E2eeSession {
     await _storage.write(key: _recordSlot, value: jsonEncode(fromServer.toJson()));
   }
 
+  /// Test seam: adopt a key without the keystore, for the replica tests.
+  void adoptKeyForTest(Uint8List key) => _accountKey = key;
+
   /// Forgets the key but keeps the record, so the next unlock works offline.
   Future<void> lock() async {
     _accountKey = null;

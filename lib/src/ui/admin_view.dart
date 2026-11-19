@@ -4,6 +4,7 @@ import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../auth/auth_service.dart';
 import '../data/admin_api.dart';
+import '../util/numbers.dart';
 import 'theme.dart';
 
 /// The Server tab: everyone on this instance, invitations, the audit log and
@@ -270,7 +271,7 @@ class _AdminViewState extends State<AdminView> {
   }
 
   Widget _invitationRow(Map<String, Object?> invitation) {
-    final expires = (invitation['expiresAt'] as num?)?.toInt();
+    final expires = numOrNull(invitation['expiresAt'])?.toInt();
     final status = invitation['status']?.toString() ?? '';
     return ListTile(
       leading: Icon(
@@ -344,7 +345,7 @@ class _AdminViewState extends State<AdminView> {
   }
 
   static String _bytes(Object? value) {
-    final bytes = (value as num?)?.toDouble();
+    final bytes = numOrNull(value)?.toDouble();
     if (bytes == null) return '—';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
@@ -356,7 +357,7 @@ class _AdminViewState extends State<AdminView> {
   }
 
   static String _ago(Object? value) {
-    final millis = (value as num?)?.toInt();
+    final millis = numOrNull(value)?.toInt();
     if (millis == null) return 'never';
     final when = DateTime.fromMillisecondsSinceEpoch(millis);
     final d = DateTime.now().difference(when);

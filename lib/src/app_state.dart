@@ -69,6 +69,8 @@ class AppState extends ChangeNotifier {
 
   ApiClient? get client => _client;
 
+  bool _encryptionChecked = false;
+
   /// True when the server's account has a key record this device cannot open: the
   /// app asks for the passphrase and syncs nothing meanwhile.
   final e2eeLocked = ValueNotifier<bool>(false);
@@ -224,7 +226,10 @@ class AppState extends ChangeNotifier {
       }
       _client = client;
       await _openReplica();
-      unawaited(loadEncryption());
+      // Before anything syncs: a pull that runs while this device still thinks the
+    // account is unencrypted stores ciphertext in the replica.
+    await loadEncryption();
+    _encryptionChecked = true;
     unawaited(afterDataChanged());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
@@ -377,6 +382,10 @@ class AppState extends ChangeNotifier {
 
   /// Runs an exchange and folds the outcome into the UI state.
   Future<SyncResult?> syncNow() async {
+    if (!_encryptionChecked) {
+      await loadEncryption();
+      _encryptionChecked = true;
+    }
     final engine = _engine;
     if (engine == null) return null;
     if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
