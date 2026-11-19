@@ -243,6 +243,29 @@ class Repo {
     await db.putField('task', task.id, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
   }
 
+  /// Snoozes one occurrence on this device. Never synced: a snooze is a local
+  /// decision, and the plan reads it back through [snoozes].
+  Future<void> setSnooze(String taskId, String day, DateTime? until) async {
+    await db.setMeta('snooze:$taskId|$day', until == null ? '' : '${until.millisecondsSinceEpoch}');
+  }
+
+  /// The snoozes still in the future, keyed `taskId|day`.
+  Future<Map<String, DateTime>> snoozes() async {
+    final out = <String, DateTime>{};
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final row in await db.entities('task')) {
+      final id = row['id'] as String;
+      // The plan only needs snoozes for tasks that exist; the keys are per task and
+      // day, and reading them one by one keeps the schema untouched.
+      for (final day in (row['snooze_days'] as List?) ?? const []) {
+        final value = await db.meta('snooze:$id|$day');
+        final at = int.tryParse(value ?? '');
+        if (at != null && at > now) out['$id|$day'] = DateTime.fromMillisecondsSinceEpoch(at);
+      }
+    }
+    return out;
+  }
+
   /// Renames a project or changes its colour or icon, one field at a time.
   Future<void> updateProject(String projectId, Map<String, Object?> fields) async {
     final ts = await clock.next();

@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'package:home_widget/home_widget.dart';
+
 import 'src/app_state.dart';
+import 'src/reminders/service.dart';
 import 'src/ui/connect_screen.dart';
 import 'src/ui/home_screen.dart';
 import 'src/ui/theme.dart';
@@ -25,6 +28,8 @@ class _OtdaAppState extends State<OtdaApp> {
     super.initState();
     _state.loadLocalPreferences();
     _state.restore();
+    ReminderService.instance.init();
+    HomeWidget.registerInteractivityCallback(onWidgetAction);
   }
 
   @override

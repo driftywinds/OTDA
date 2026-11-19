@@ -16,6 +16,7 @@ import 'data/db.dart';
 import 'data/failure_meter.dart';
 import 'data/server_history.dart';
 import 'data/repo.dart';
+import 'reminders/service.dart';
 import 'data/sync_engine.dart';
 
 /// The app's session: who is signed in, to which server, with which credential,
@@ -286,6 +287,26 @@ class AppState extends ChangeNotifier {
     _syncError = _failures.add(e);
   }
 
+  /// The one trigger the blueprint allows: every finished sync and every local
+  /// change lands here, which re-arms reminders and refreshes the widget.
+  Future<void> afterDataChanged() async {
+    final repo = _repo;
+    if (repo == null) return;
+    final tasks = await repo.tasks();
+    final projects = await repo.projects();
+    final names = {for (final project in projects) project.id: project.name};
+    await ReminderService.instance.init();
+    await ReminderService.instance.rearm(tasks, projectNames: names);
+    await pushWidgets(tasks, projects, today: _todayString());
+  }
+
+  String _todayString() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+  }
+
   /// Runs an exchange and folds the outcome into the UI state.
   Future<SyncResult?> syncNow() async {
     final engine = _engine;
@@ -296,6 +317,7 @@ class AppState extends ChangeNotifier {
       _lastSync = DateTime.now();
       _syncError = null;
       _failures.reset();
+      unawaited(afterDataChanged());
       return result;
     } on ApiException catch (e) {
       if (e.isUnauthenticated) {

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/app-icon.png" alt="OTDA" width="120">
+</p>
+
 # OTDA
 
 A Flutter client for [OpenTodo](https://github.com/OpenTodoApp/OpenTodo) servers —
