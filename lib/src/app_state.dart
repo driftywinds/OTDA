@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:material_ui/material_ui.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -13,6 +14,7 @@ import 'auth/session_store.dart';
 import 'data/clock.dart';
 import 'data/db.dart';
 import 'data/failure_meter.dart';
+import 'data/server_history.dart';
 import 'data/repo.dart';
 import 'data/sync_engine.dart';
 
@@ -43,6 +45,22 @@ class AppState extends ChangeNotifier {
   /// shared_preferences so it applies before anyone signs in.
   static const _fontPref = 'ui.font';
   static const _serversPref = 'servers.recent';
+  static const _themePref = 'ui.theme';
+
+  /// system, light, dark or amoled.
+  String _themeChoice = 'system';
+  String get themeChoice => _themeChoice;
+  ThemeMode get themeMode => switch (_themeChoice) {
+        'light' => ThemeMode.light,
+        'dark' || 'amoled' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+  bool get amoled => _themeChoice == 'amoled';
+
+  /// The signed-in account's picture, downloaded once per version. Zero versions
+  /// mean the account has none, and the avatar falls back to initials.
+  Uint8List? _avatarBytes;
+  Uint8List? get avatarBytes => _avatarBytes;
   bool _useAllo = false;
   bool get useAllo => _useAllo;
   DateTime? _lastSync;
@@ -73,8 +91,8 @@ class AppState extends ChangeNotifier {
   Future<void> _rememberServer(String url) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final list = [...?prefs.getStringList(_serversPref)]..remove(url);
-      await prefs.setStringList(_serversPref, [url, ...list].take(5).toList());
+      final list = rememberServer(prefs.getStringList(_serversPref) ?? const [], url);
+      await prefs.setStringList(_serversPref, list);
     } on Object {
       // remembering is a convenience, never a failure
     }
@@ -85,10 +103,43 @@ class AppState extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _useAllo = prefs.getString(_fontPref) == 'allo';
+      _themeChoice = prefs.getString(_themePref) ?? 'system';
     } on Object {
       _useAllo = false; // a missing store is the default look, not an error
     }
     notifyListeners();
+  }
+
+  /// Reads the profile's picture version and, when there is one, its bytes.
+  /// A picture is decoration: failing to get it must never break signing in.
+  Future<void> _loadAvatar() async {
+    final client = _client;
+    final account = _account;
+    if (client == null || account == null) return;
+    try {
+      final profile = await AuthService().me(client);
+      final raw = profile['avatarVersion'];
+      final version = raw is num ? raw.toInt() : 0;
+      Uint8List? bytes;
+      if (version > 0) {
+        bytes = await client.getBytes('/api/v1/users/${Uri.encodeComponent(account.userId)}/avatar?v=$version');
+      }
+      _avatarBytes = bytes;
+    } on Object {
+      _avatarBytes = null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> setThemeChoice(String choice) async {
+    _themeChoice = choice;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themePref, choice);
+    } on Object {
+      // the choice stays in memory for this run
+    }
   }
 
   Future<void> setUseAllo(bool value) async {
@@ -133,6 +184,9 @@ class AppState extends ChangeNotifier {
       }
       _client = client;
       await _openReplica();
+      // The picture is not needed to be online, but fetching it here means a
+      // restart shows the account's face instead of initials.
+      unawaited(_loadAvatar());
     } finally {
       _restoring = false;
       notifyListeners();
@@ -174,6 +228,7 @@ class AppState extends ChangeNotifier {
     );
     await _store.write(account);
     await _rememberServer(account.serverUrl);
+    unawaited(_loadAvatar());
     _client = client;
     _account = account;
     _server = await _auth.health(client);
@@ -257,6 +312,10 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // Remember the address before the session that holds it goes away: losing it
+    // here is what left the sign-in screen with nothing to offer.
+    final server = _account?.serverUrl;
+    if (server != null) await _rememberServer(server);
     _timer?.cancel();
     _timer = null;
     _engine?.stopLive();

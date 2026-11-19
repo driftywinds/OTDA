@@ -126,6 +126,14 @@ class Repo {
     await db.putField('task', task.id, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
   }
 
+  /// Renames a project or changes its colour or icon, one field at a time.
+  Future<void> updateProject(String projectId, Map<String, Object?> fields) async {
+    final ts = await clock.next();
+    for (final entry in fields.entries) {
+      await db.putField('project', projectId, entry.key, entry.value, ts, engine.device);
+    }
+  }
+
   /// A project delete is a tombstone, like a task's: the row stays so every
   /// other device learns it is gone.
   Future<void> trashProject(String projectId) async {
@@ -134,7 +142,7 @@ class Repo {
         'project', projectId, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
   }
 
-  Future<Project> createProject(String name) async {
+  Future<Project> createProject(String name, {String? color, String? icon}) async {
     final id = newId();
     final ts = await clock.next();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -142,6 +150,8 @@ class Repo {
       'name': name.trim(),
       'created_at': now,
       'position': now.toDouble(),
+      if (color != null && color.isNotEmpty) 'color': color,
+      if (icon != null && icon.isNotEmpty) 'icon': icon,
     };
     for (final entry in fields.entries) {
       await db.putField('project', id, entry.key, entry.value, ts, engine.device);

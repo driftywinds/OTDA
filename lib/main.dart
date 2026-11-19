@@ -40,8 +40,13 @@ class _OtdaAppState extends State<OtdaApp> {
       builder: (context, _) => MaterialApp(
         title: 'OTDA',
         debugShowCheckedModeBanner: false,
+        themeMode: _state.themeMode,
         theme: buildTheme(Brightness.light, fontFamily: _state.useAllo ? alloFont : null),
-        darkTheme: buildTheme(Brightness.dark, fontFamily: _state.useAllo ? alloFont : null),
+        darkTheme: buildTheme(
+          Brightness.dark,
+          fontFamily: _state.useAllo ? alloFont : null,
+          amoled: _state.amoled,
+        ),
         home: _state.isRestoring
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : _state.isSignedIn

@@ -50,6 +50,7 @@ class Project {
 
   String get name => raw['name']?.toString() ?? '';
   String? get color => raw['color']?.toString();
+  String get icon => raw['icon']?.toString() ?? '';
   String? get parentId => raw['parent_id']?.toString();
   bool get isArchived => raw['archived'] == true;
   bool get isDeleted => raw['deleted_at'] != null;

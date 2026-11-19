@@ -71,4 +71,12 @@ void main() {
     // Without a family the platform face is used.
     expect(buildTheme(Brightness.light).textTheme.bodyMedium?.fontFamily, isNot(alloFont));
   });
+
+  test('AMOLED paints the page black and the cards nearly so', () {
+    final amoled = buildTheme(Brightness.dark, amoled: true);
+    expect(amoled.colorScheme.page, const Color(0xFF000000));
+    expect(amoled.scaffoldBackgroundColor, const Color(0xFF000000));
+    // The ordinary dark theme keeps its own page colour.
+    expect(buildTheme(Brightness.dark).colorScheme.page, isNot(const Color(0xFF000000)));
+  });
 }

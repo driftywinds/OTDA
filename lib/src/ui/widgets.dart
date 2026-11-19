@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../app_state.dart';
 import 'theme.dart';
 
 /// `#RRGGBB` (or `RRGGBB`) to a colour; null for anything else, so a project
@@ -212,6 +213,54 @@ class SectionLabel extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The signed-in account's picture, or its initials in the brand gradient when it
+/// has none. A picture is fetched once per version by [AppState]; this widget only
+/// draws what is there.
+class AccountAvatar extends StatelessWidget {
+  const AccountAvatar({super.key, required this.state, this.size = 30});
+
+  final AppState state;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bytes = state.avatarBytes;
+    if (bytes != null && bytes.isNotEmpty) {
+      return ClipOval(
+        child: Image.memory(
+          bytes,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          // A corrupt picture must not take the screen down with it.
+          errorBuilder: (context, _, _) => _initials(context, scheme),
+        ),
+      );
+    }
+    return _initials(context, scheme);
+  }
+
+  Widget _initials(BuildContext context, ColorScheme scheme) {
+    final name = state.account?.displayName ?? '';
+    final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(gradient: scheme.brandGradient, shape: BoxShape.circle),
+      child: Text(
+        initial,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.onPrimary,
+              fontSize: size * 0.42,
+            ),
       ),
     );
   }

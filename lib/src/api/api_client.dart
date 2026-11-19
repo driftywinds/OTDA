@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -113,6 +114,28 @@ class ApiClient {
       throw ApiException(response.statusCode, 'not_json',
           'the server answered with something that is not JSON');
     }
+  }
+
+  /// A response body that is not JSON, such as a profile picture.
+  Future<Uint8List> getBytes(String path) async {
+    final request = http.Request('GET', _uri(path))
+      ..headers.addAll(_headers(json: false))
+      ..followRedirects = false;
+
+    final http.StreamedResponse streamed;
+    try {
+      streamed = await _http.send(request).timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException(0, 'timeout', 'the server did not answer in time');
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'network', e.message);
+    }
+    final response = await http.Response.fromStream(streamed);
+    jar.absorb(response.headers['set-cookie']);
+    if (response.statusCode >= 400) {
+      throw ApiException.fromBody(response.statusCode, response.body);
+    }
+    return response.bodyBytes;
   }
 
   /// Opens a server-sent event stream (the sync wake-up channel).

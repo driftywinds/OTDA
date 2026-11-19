@@ -34,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Task> _tasks = const [];
   Map<String, String> _projectNames = const {};
   Map<String, Color> _projectColors = const {};
+  Map<String, String> _projectIcons = const {};
   TaskView _view = TaskView.today;
   bool _loading = true;
 
@@ -105,6 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _projectColors = {
         for (final p in projects)
           if (!p.isDeleted && here(p) && parseHexColor(p.color) != null) p.id: parseHexColor(p.color)!,
+      };
+      _projectIcons = {
+        for (final p in projects)
+          if (!p.isDeleted && here(p) && p.icon.isNotEmpty) p.id: p.icon,
       };
       final from = firstOfMonth(today, -3);
       final to = lastOfMonth(today, 9);
@@ -233,13 +238,24 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _createProject(String name) async {
+  Future<void> _createProject(Map<String, Object?> fields) async {
     final repo = widget.state.repo;
     if (repo == null) return;
-    final created = await repo.createProject(name);
+    final created = await repo.createProject(
+      fields['name'] as String? ?? '',
+      color: fields['color'] as String?,
+      icon: fields['icon'] as String?,
+    );
     await _load();
     if (!mounted) return;
     _go(TaskView.project, projectId: created.id);
+  }
+
+  Future<void> _updateProject(String id, Map<String, Object?> fields) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    await repo.updateProject(id, fields);
+    await _load();
   }
 
   /// Projects are tombstoned one by one; the tasks keep their project id, which is
@@ -362,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
         workspaceId: _workspaceId,
         projects: _projectNames,
         projectColors: _projectColors,
+        projectIcons: _projectIcons,
         projectCounts: {
           for (final project in _projectNames.keys)
             project: _tasks.where((t) => !t.isCompleted && !t.isDeleted && t.projectId == project).length,
@@ -370,6 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onOpen: _go,
         onProject: (id) => _go(TaskView.project, projectId: id),
         onCreateProject: _createProject,
+        onUpdateProject: _updateProject,
         onDeleteProjects: _deleteProjects,
         onWorkspace: _chooseWorkspace,
       ),
@@ -749,11 +767,13 @@ class _AppDrawer extends StatelessWidget {
     required this.workspaceId,
     required this.projects,
     required this.projectColors,
+    required this.projectIcons,
     required this.projectCounts,
     required this.projectId,
     required this.onOpen,
     required this.onProject,
     required this.onCreateProject,
+    required this.onUpdateProject,
     required this.onDeleteProjects,
     required this.onWorkspace,
   });
@@ -764,13 +784,15 @@ class _AppDrawer extends StatelessWidget {
   final String? workspaceId;
   final Map<String, String> projects;
   final Map<String, Color> projectColors;
+  final Map<String, String> projectIcons;
   final Map<String, int> projectCounts;
 
   /// The project currently open, so its row is the selected one.
   final String? projectId;
   final void Function(TaskView) onOpen;
   final void Function(String projectId) onProject;
-  final void Function(String name) onCreateProject;
+  final void Function(Map<String, Object?> fields) onCreateProject;
+  final void Function(String projectId, Map<String, Object?> fields) onUpdateProject;
   final void Function(List<String> projectIds) onDeleteProjects;
   final VoidCallback onWorkspace;
 
@@ -864,10 +886,12 @@ class _AppDrawer extends StatelessWidget {
                   _ProjectSection(
                     projects: projects,
                     colors: projectColors,
+                    icons: projectIcons,
                     counts: projectCounts,
                     currentId: view == TaskView.project ? projectId : null,
                     onOpen: onProject,
                     onCreate: onCreateProject,
+                    onUpdate: onUpdateProject,
                     onDelete: onDeleteProjects,
                     inset: inset,
                   ),
@@ -879,20 +903,7 @@ class _AppDrawer extends StatelessWidget {
             rule,
             ListTile(
               dense: true,
-              leading: Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(gradient: scheme.brandGradient, shape: BoxShape.circle),
-                child: Text(
-                  (state.account?.displayName.isNotEmpty == true
-                          ? state.account!.displayName
-                          : '?')
-                      .substring(0, 1)
-                      .toUpperCase(),
-                  style: theme.textTheme.labelMedium?.copyWith(color: scheme.onPrimary),
-                ),
-              ),
+              leading: AccountAvatar(state: state, size: 30),
               title: Text(
                 state.account?.displayName ?? 'Signed in',
                 style: const TextStyle(fontWeight: FontWeight.w600),
@@ -906,10 +917,6 @@ class _AppDrawer extends StatelessWidget {
                   await state.signOut();
                 },
               ),
-              onTap: () async {
-                Navigator.of(context).pop();
-                await state.signOut();
-              },
             ),
           ],
         ),
@@ -997,26 +1004,31 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-/// The project list in the sidebar: open one, add one, or select several and
-/// delete them together (with a confirmation, because a tombstone is a delete).
+/// The project list in the sidebar: open one, add one, edit one by holding it,
+/// or select several and delete them together (with a confirmation, because a
+/// tombstone is a delete).
 class _ProjectSection extends StatefulWidget {
   const _ProjectSection({
     required this.projects,
     required this.colors,
+    required this.icons,
     required this.counts,
     required this.currentId,
     required this.onOpen,
     required this.onCreate,
+    required this.onUpdate,
     required this.onDelete,
     required this.inset,
   });
 
   final Map<String, String> projects;
   final Map<String, Color> colors;
+  final Map<String, String> icons;
   final Map<String, int> counts;
   final String? currentId;
   final void Function(String projectId) onOpen;
-  final void Function(String name) onCreate;
+  final void Function(Map<String, Object?> fields) onCreate;
+  final void Function(String projectId, Map<String, Object?> fields) onUpdate;
   final void Function(List<String> projectIds) onDelete;
   final Widget Function(Widget child) inset;
 
@@ -1028,35 +1040,86 @@ class _ProjectSectionState extends State<_ProjectSection> {
   bool _selecting = false;
   final Set<String> _selected = {};
 
-  Future<void> _create() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+  /// A palette rather than a colour wheel: enough to tell projects apart, and the
+  /// same names the web app uses.
+  static const _palette = [
+    '#64748b', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899',
+    '#ef4444', '#f59e0b', '#10b981', '#14b8a6', '#0ea5e9',
+  ];
+
+  Future<void> _edit({String? id}) async {
+    final hue = id == null ? _palette[1] : _hexOf(widget.colors[id]) ?? _palette[1];
+    final result = await showModalBottomSheet<Map<String, Object?>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New project'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(labelText: 'Name'),
-          onSubmitted: (text) => Navigator.of(context).pop(text),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Create')),
-        ],
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _ProjectEditor(
+        name: id == null ? '' : (widget.projects[id] ?? ''),
+        color: hue,
+        icon: id == null ? '' : (widget.icons[id] ?? ''),
+        palette: _palette,
+        editing: id != null,
       ),
     );
-    controller.dispose();
-    final trimmed = name?.trim() ?? '';
-    if (trimmed.isEmpty) return;
-    setState(() => _selecting = false);
-    widget.onCreate(trimmed);
+    if (result == null) return;
+    if (id == null) {
+      widget.onCreate(result);
+    } else {
+      widget.onUpdate(id, result);
+    }
   }
 
-  Future<void> _confirmDelete() async {
+  static String? _hexOf(Color? color) {
+    if (color == null) return null;
+    final value = color.toARGB32() & 0xFFFFFF;
+    return '#${value.toRadixString(16).padLeft(6, '0')}';
+  }
+
+  /// Holding a project offers what you would want to do with it.
+  Future<void> _menu(String id) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                widget.projects[id] ?? 'Project',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text('Hold to edit or delete'),
+              dense: true,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit project'),
+              onTap: () => Navigator.of(context).pop('edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: const Text('Delete project'),
+              onTap: () => Navigator.of(context).pop('delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'edit') {
+      await _edit(id: id);
+    } else {
+      await _confirmDelete([id]);
+    }
+  }
+
+  Future<void> _confirmDelete([List<String>? only]) async {
+    final ids = only ?? _selected.toList();
     final names = [
-      for (final id in _selected)
+      for (final id in ids)
         if (widget.projects[id] != null) widget.projects[id]!,
     ];
     if (names.isEmpty) return;
@@ -1066,10 +1129,7 @@ class _ProjectSectionState extends State<_ProjectSection> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(names.length == 1 ? 'Delete this project?' : 'Delete ${names.length} projects?'),
-        content: Text(
-          '$shown$more',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        content: Text('$shown$more', style: Theme.of(context).textTheme.bodyMedium),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep')),
           FilledButton(
@@ -1081,7 +1141,6 @@ class _ProjectSectionState extends State<_ProjectSection> {
       ),
     );
     if (confirmed != true) return;
-    final ids = _selected.toList();
     setState(() {
       _selecting = false;
       _selected.clear();
@@ -1130,7 +1189,7 @@ class _ProjectSectionState extends State<_ProjectSection> {
               IconButton(
                 tooltip: 'New project',
                 visualDensity: VisualDensity.compact,
-                onPressed: _create,
+                onPressed: () => _edit(),
                 icon: const Icon(Icons.add_rounded, size: 18),
               ),
             ],
@@ -1160,19 +1219,9 @@ class _ProjectSectionState extends State<_ProjectSection> {
                     onChanged: (_) => _toggle(entry.key),
                     visualDensity: VisualDensity.compact,
                   )
-                : Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: widget.colors[entry.key] ?? scheme.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (widget.colors[entry.key] ?? scheme.primary).withValues(alpha: 0.4),
-                          blurRadius: 5,
-                        ),
-                      ],
-                    ),
+                : _ProjectMark(
+                    color: widget.colors[entry.key] ?? scheme.primary,
+                    icon: widget.icons[entry.key] ?? '',
                   ),
             title: Text(
               entry.value,
@@ -1188,8 +1237,204 @@ class _ProjectSectionState extends State<_ProjectSection> {
                     style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
                   ),
             onTap: () => _selecting ? _toggle(entry.key) : widget.onOpen(entry.key),
+            onLongPress: () => _menu(entry.key),
           )),
       ],
+    );
+  }
+}
+
+/// A project's mark: its chosen icon, or the colour dot it falls back to.
+class _ProjectMark extends StatelessWidget {
+  const _ProjectMark({required this.color, required this.icon});
+
+  final Color color;
+  final String icon;
+
+  @override
+  Widget build(BuildContext context) {
+    if (icon.isEmpty) {
+      return Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 5)],
+        ),
+      );
+    }
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Center(child: Icon(workspaceIcon(icon), size: 17, color: color)),
+    );
+  }
+}
+
+/// Creates or edits a project: name, colour and icon, the three fields the server
+/// lets a project carry.
+class _ProjectEditor extends StatefulWidget {
+  const _ProjectEditor({
+    required this.name,
+    required this.color,
+    required this.icon,
+    required this.palette,
+    required this.editing,
+  });
+
+  final String name;
+  final String color;
+  final String icon;
+  final List<String> palette;
+  final bool editing;
+
+  @override
+  State<_ProjectEditor> createState() => _ProjectEditorState();
+}
+
+class _ProjectEditorState extends State<_ProjectEditor> {
+  late final TextEditingController _name = TextEditingController(text: widget.name);
+  late String _color = widget.color;
+  late String _icon = widget.icon;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    Navigator.of(context).pop(<String, Object?>{
+      'name': name,
+      'color': _color,
+      'icon': _icon.isEmpty ? null : _icon,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final icons = workspaceIconNames;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.editing ? 'Edit project' : 'New project',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _name,
+              autofocus: !widget.editing,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Name'),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 16),
+            Text('Colour', style: theme.textTheme.labelMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final hex in widget.palette)
+                  InkWell(
+                    onTap: () => setState(() => _color = hex),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: parseHexColor(hex) ?? scheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _color == hex
+                          ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('Icon', style: theme.textTheme.labelMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _icon = ''),
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _icon.isEmpty ? scheme.primary : scheme.cardBorder,
+                        width: _icon.isEmpty ? 2 : 1,
+                      ),
+                    ),
+                    child: Icon(Icons.circle, size: 10, color: parseHexColor(_color) ?? scheme.primary),
+                  ),
+                ),
+                for (final name in icons)
+                  InkWell(
+                    onTap: () => setState(() => _icon = name),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _icon == name ? scheme.primary : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        workspaceIcon(name),
+                        size: 18,
+                        color: _icon == name ? scheme.primary : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _save,
+                    child: Text(widget.editing ? 'Save' : 'Create'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

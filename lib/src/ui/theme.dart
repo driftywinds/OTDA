@@ -15,10 +15,14 @@ extension OtdaColors on ColorScheme {
   bool get _isDark => brightness == Brightness.dark;
 
   /// The page behind everything.
-  Color get page => _isDark ? _darkPage : _lightPage;
+  /// AMOLED is signalled by a pure-black surface, so the palette can follow
+  /// without every call site carrying a flag.
+  bool get _amoled => _isDark && surface == const Color(0xFF000000);
+
+  Color get page => _isDark ? (_amoled ? Colors.black : _darkPage) : _lightPage;
 
   /// A row or panel sitting on the page.
-  Color get card => _isDark ? _darkCard : _lightCard;
+  Color get card => _isDark ? (_amoled ? const Color(0xFF0A0A0A) : _darkCard) : _lightCard;
 
   /// A hairline between things on a card.
   Color get hairline => outlineVariant.withValues(alpha: _isDark ? 0.5 : 0.7);
@@ -27,7 +31,9 @@ extension OtdaColors on ColorScheme {
   Color get field => _isDark ? const Color(0xFF25252D) : const Color(0xFFEDEDF3);
 
   /// The outline that separates a card from the page.
-  Color get cardBorder => _isDark ? const Color(0xFF2A2A33) : const Color(0xFFE7E7EE);
+  Color get cardBorder => _isDark
+      ? (_amoled ? const Color(0xFF232329) : const Color(0xFF2A2A33))
+      : const Color(0xFFE7E7EE);
 
   /// A soft lift for cards; dark surfaces separate by outline alone.
   List<BoxShadow> get softShadow => _isDark
@@ -58,9 +64,20 @@ Color priorityColor(int priority, ColorScheme scheme) => switch (priority) {
 /// platform's own font.
 const alloFont = 'Allo';
 
-ThemeData buildTheme(Brightness brightness, {String? fontFamily}) {
+ThemeData buildTheme(Brightness brightness, {String? fontFamily, bool amoled = false}) {
   final base = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
-  final scheme = base.copyWith(surface: brightness == Brightness.dark ? _darkPage : _lightPage);
+  final dark = brightness == Brightness.dark;
+  final surface = !dark ? _lightPage : (amoled ? const Color(0xFF000000) : _darkPage);
+  final scheme = base.copyWith(
+    surface: surface,
+    // Keep the containers black too: the bottom bar and sheets would otherwise
+    // stay grey against an otherwise black page.
+    surfaceContainerLowest: surface,
+    surfaceContainerLow: dark && amoled ? const Color(0xFF070707) : null,
+    surfaceContainer: dark && amoled ? const Color(0xFF0A0A0A) : null,
+    surfaceContainerHigh: dark && amoled ? const Color(0xFF101014) : null,
+    surfaceContainerHighest: dark && amoled ? const Color(0xFF16161B) : null,
+  );
   final radius = BorderRadius.circular(14);
   final cardShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(18),

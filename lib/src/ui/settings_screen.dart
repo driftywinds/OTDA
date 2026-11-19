@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 /// The account's settings: the synced preferences that follow the person to every
 /// device, plus who they are signed in as and how.
@@ -64,7 +65,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       length: isAdmin ? 2 : 1,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Settings'),
+          // Bigger than the tab labels below it, which it read as smaller than.
+          title: Text(
+            'Settings',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
           bottom: isAdmin
               ? const TabBar(tabs: [Tab(text: 'You'), Tab(text: 'Server')])
               : null,
@@ -79,7 +84,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(
                   title: 'Account',
                   children: [
-                    _Row(label: 'Name', value: account?.displayName ?? ''),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: Row(
+                        children: [
+                          AccountAvatar(state: widget.state, size: 44),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(account?.displayName ?? '', style: theme.textTheme.titleMedium),
+                                Text(
+                                  account?.userEmail ?? '',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     _Row(label: 'Email', value: account?.userEmail ?? ''),
                     _Row(label: 'Role', value: account?.userRole ?? ''),
                     _Row(
@@ -148,6 +176,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _Row(
                       label: 'Waiting to send',
                       value: widget.state.pending == 0 ? 'Nothing' : '${widget.state.pending} change(s)',
+                    ),
+                  ],
+                ),
+                _Section(
+                  title: 'Appearance',
+                  children: [
+                    _ChoiceRow(
+                      label: 'Theme',
+                      value: widget.state.themeChoice,
+                      options: const {
+                        'system': 'System',
+                        'light': 'Light',
+                        'dark': 'Dark',
+                        'amoled': 'AMOLED black',
+                      },
+                      onChanged: (value) => widget.state.setThemeChoice(value),
                     ),
                     _ChoiceRow(
                       label: 'Font',
@@ -251,6 +295,7 @@ class _Row extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+          const SizedBox(width: 12),
           Flexible(
             child: Text(
               value,
@@ -259,6 +304,9 @@ class _Row extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // The choice rows end their value before an 18px chevron and a 6px gap;
+          // a plain row reserves the same space so every value lines up.
+          const SizedBox(width: 24),
         ],
       ),
     );

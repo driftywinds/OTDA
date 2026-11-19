@@ -7,6 +7,9 @@ import 'package:material_ui/material_ui.dart';
 /// to show, whatever its owner chose.
 IconData workspaceIcon(String name) => _icons[name] ?? Icons.workspaces_outlined;
 
+/// The names [workspaceIcon] knows, for an icon picker.
+List<String> get workspaceIconNames => _icons.keys.toList();
+
 const _icons = <String, IconData>{
   'briefcase': Icons.work_outline_rounded,
   'briefcase-business': Icons.business_center_outlined,
