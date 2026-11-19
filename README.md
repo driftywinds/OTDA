@@ -143,7 +143,7 @@ Write report tomorrow #work @call p2 +45m
 ```
 
 It is a port of the web app's `web/src/lib/nlp` (OpenTodo v1.5.0), kept
-behaviour-identical and checked against the **same 588 shared test vectors** the
+behaviour-identical and checked against the **same 306 shared test vectors** the
 web and Go implementations run (`test/quickadd/quickadd.vectors.json`). It runs
 entirely on the device, so the preview works offline and updates as you type.
 
@@ -183,11 +183,12 @@ flowchart LR
 | `tokenize.dart` | Splits on whitespace into `Token`s (`text`, folded `norm`, `start`, `end`, `quoted`) and reports the quote characters of balanced pairs. `stripSpans` builds the title by turning every recognised span into a word break, so `milk tomorrow p2` never glues words. |
 | `vocab/` | One `Vocabulary` per language (`en`, `de`, `fr`, `it`, `es`, `pt`, `nl`): day words, weekdays, months, "in/at/on/by", units, am/pm, ordinals, recurrence words. `normalize()` folds case, diacritics and `ß`, so vocabularies are written in natural spelling. English is always active; extra languages are *added*, not swapped. |
 | `attributes.dart` | The language-independent single tokens: `#project` (exact folded name, then unique prefix, `#Parent/Child` paths), `@label`, `p1`–`p4`, `~deep`/`~medium`/`~low`, durations (`+45m`, `+1h30`) and spent/estimate (`30m/2h`). |
-| `dates.dart` | The date and time grammar and resolver: day words, weekdays, `next …`, ordinal weekdays, `in N <unit>`, `D month [year]`, numeric dates (order from the date-format preference), clock times (`3pm`, `15:30`, `15h`, `noon`, Dutch `half 4`). |
+| `dates.dart` | The date and time grammar and resolver: day words, weekdays, `next …`, ordinal weekdays, `in N <unit>`, `D month [year]`, numeric dates (order from the date-format preference), clock times (`3pm`, `15:30`, `noon`, Dutch `half 4`; a bare `15h` is a time only in a language that writes times that way — in English it is a 15-hour estimate). |
 | `recurrence.dart` + `rule.dart` | Recurrence phrases → canonical rule (`every monday`, `every 2 weeks on saturday`, `every 3 days after completion`, `until`, `for N times`, "every other"), `parseRule`, `firstOccurrence`, and `compatibleRule` (written in the form a 1.0 client reads). |
 | `reminders.dart` | `remind me 30 min before` (offset) or `remind me tomorrow at 9` (moment), and how a reminder resolves against the final due date. |
 | `sectors.dart` | Time sectors (`this week`, `next quarter`) → the stored ISO week / month / quarter. |
 | `parse.dart` | The loop that ties it all together, plus the `Chip`/`ParseResult` types and dismissal bookkeeping. |
+| `types.dart` | The floating `Due` value the whole grammar returns (`date`, optional `time`); there is no time zone or instant anywhere in it. |
 | `quickadd.dart` | The public entry point `parseQuickAdd`, `toTaskInput` (label and project resolution into the REST body), chip labels, Backspace/dismissal helpers. |
 | `settings.dart` | Language resolution and numeric date order from the user's preferences. |
 | `../quickadd_bridge.dart` | The app-side wrapper `parseLine`: supplies today/now, project refs, and converts chips to preview labels and highlights. |
@@ -198,7 +199,8 @@ flowchart LR
 in this order:
 
 1. **Single-token attributes** (`#`, `@`, `~`, `p1`, durations). The first
-   `#project` and first priority win; every `@label` and `~energy` accumulates.
+   `#project` and the first priority win; every `@label` accumulates, and every
+   `~energy` token is collected with the **last** one setting the value.
 2. **Deadline words** — `deadline friday`, `by friday` (a `by` date followed by
    a time stays a due date instead).
 3. **Evening / part words** — `tonight`, `this evening`; `this morning` /
