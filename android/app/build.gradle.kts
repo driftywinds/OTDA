@@ -3,6 +3,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -17,10 +18,11 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.dw.otda"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -57,6 +59,18 @@ android {
             }
         }
     }
+
+    // The home-screen widget (android/app/src/main/kotlin/com/dw/otda/widget) is Glance, which is
+    // Compose code.
+    buildFeatures {
+        compose = true
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+    implementation("androidx.glance:glance-material3:1.2.0")
 }
 
 kotlin {

@@ -29,7 +29,35 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Deep links the home-screen widget opens: task detail, new task,
+                 upcoming and complete. All are handled by the Flutter app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="otda" android:host="task"/>
+                <data android:scheme="otda" android:host="new"/>
+                <data android:scheme="otda" android:host="upcoming"/>
+                <data android:scheme="otda" android:host="complete"/>
+            </intent-filter>
         </activity>
+        <!-- Home-screen widget. Glance renders it; the receiver only binds it. -->
+        <receiver
+            android:name=".widget.TasksWidgetReceiver"
+            android:exported="false"
+            android:label="OTDA">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tasks_widget_info"/>
+        </receiver>
+        <!-- Project picker for the widget. Plain Views, so it works with the app process dead. -->
+        <activity
+            android:name=".widget.TasksWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

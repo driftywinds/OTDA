@@ -58,3 +58,7 @@ android/key.properties
 android/app/*.keystore
 android/app/*.jks
 *.keystore
+
+# Kotlin/Gradle build caches
+.kotlin/
+

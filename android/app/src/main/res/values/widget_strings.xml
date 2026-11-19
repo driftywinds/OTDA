@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget card preview and picker copy. -->
+    <string name="widget_label">OTDA</string>
+    <string name="widget_preview_title">Today</string>
+    <string name="widget_preview_task_one">Send the launch note</string>
+    <string name="widget_preview_task_two">Review pull requests</string>
+    <string name="widget_preview_initial">T</string>
+</resources>
