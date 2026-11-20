@@ -291,8 +291,10 @@ class AppState extends ChangeNotifier {
     await _store.write(account);
     await _rememberServer(account.serverUrl);
     _client = client;
-    unawaited(_loadAvatar());
     _account = account;
+    // After the account is set: _loadAvatar reads it for the user id, and firing it
+    // one line early made it return on every launch, so no picture ever loaded.
+    unawaited(_loadAvatar());
     otdaLog('auth: account stored, reading the server');
     _server = await _auth.health(client);
     otdaLog('auth: server ${_server?.version}, reading the key record');

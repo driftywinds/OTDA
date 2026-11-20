@@ -137,7 +137,12 @@ class Repo {
     if (seriesId != null && seriesId.isNotEmpty) {
       final ts = await clock.next();
       if (completed) {
+        // A re-tick after an undo must clear the tombstone: the record id is
+        // derived from series and date, so the row is the same one that was undone,
+        // and leaving deleted_at set made the task invisible for ever while the
+        // series rolled on without it.
         await db.putField('task', task.id, 'completed_at', now, ts, engine.device);
+        await db.putField('task', task.id, 'deleted_at', null, ts, engine.device);
         await db.putField('task', task.id, 'skipped', false, ts, engine.device);
         return;
       }
@@ -191,6 +196,27 @@ class Repo {
       return;
     }
 
+    // A row that the series has already moved past: the list still held it when the
+    // tap happened (a second tap, a widget tap racing the refresh). Completing it
+    // would write the *next* occurrence and skip a day, which is exactly how a daily
+    // task lost today and tomorrow.
+    final tapped = task.dueDate;
+    if (tapped != null && tapped != date) {
+      otdaLog('complete: ${task.id} row=$tapped but the series is on $date, ignoring the stale tap');
+      return;
+    }
+
+    // Already done for this occurrence: nothing to roll.
+    final existing = tasks.where(
+      (t) => t.raw['series_id']?.toString() == task.id && t.raw['occurrence_date']?.toString() == date,
+    );
+    for (final record in existing) {
+      if (!record.isDeleted && record.isCompleted) {
+        otdaLog('complete: ${task.id} $date already done, not rolling again');
+        return;
+      }
+    }
+
     final budget = seriesBudget(task, tasks, exceptDate: date);
     final next = nextFree(
       raw,
@@ -216,6 +242,9 @@ class Repo {
     for (final entry in fields.entries) {
       await db.putField('task', recordId, entry.key, entry.value, ts, engine.device);
     }
+    // The record id is derived from series and date, so an earlier undo left this
+    // same row tombstoned; ticking again must clear that, not write around it.
+    await db.putField('task', recordId, 'deleted_at', null, ts, engine.device);
     for (final entry in movedDates(task, next, today).entries) {
       await db.putField('task', task.id, entry.key, entry.value, ts, engine.device);
     }
