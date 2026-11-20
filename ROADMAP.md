@@ -54,15 +54,49 @@ fields the same way it carries the current ones.
 but nothing can create a subtask, reorder one, or promote it.
 
 **Scope**
-- Create a subtask from a task, and from the list (indented row).
-- Show children under their parent, with progress (done / total).
-- Move a subtask to another parent, promote it to top level, delete it.
-- Completing a parent does not complete children silently; the parent's completion
-  should ask or leave them open (decide once, document in code).
-- Recurrence: a subtask of a recurring task is copied with the record, as today.
+- Create a subtask from a task, from the list, and from the row menu. A new subtask
+  inherits the parent's project, priority 4, no due date, and appears beneath its
+  parent immediately, offline.
+- Show children indented under their parent, ordered by `position`, with progress
+  "completed/total" over **direct** children in the row and in the detail sheet.
+- Move a subtask to another parent, promote it to top level, delete it. Moving a
+  parent's project moves every descendant (one op per task).
+- Collapse/expand per device, remembered locally, not synced.
+
+**Behaviour, taken from the web client's code** (`web/src/lib/ops.ts`,
+`web/src/lib/recurring.ts`, `openspec/specs/subtasks`). These are decided; implement
+them, do not re-decide them.
+
+1. **Completing a plain task completes its open descendants.**
+   `planCompletePlain` (`ops.ts:1221`) writes `completed_at` on the task and on every
+   live descendant that is not already completed — **one completion op per task**, so
+   the result converges on every device. Our `setCompleted` currently touches only the
+   tapped task; this is the change to make.
+2. **Completing a recurring series completes no children.**
+   `completeTask` for a series only writes the occurrence record and rolls the series
+   (`planCompletion`); descendants are not part of the plan.
+3. **Reopening a parent reopens only the parent.** Never reopen descendants.
+4. **The last open subtask does not complete the parent.** Offer a one-key action
+   ("Complete the parent") instead of doing it silently.
+5. **A child whose parent is deleted, completed or not yet received still shows**, at
+   the top level of its project, with no write. Today and Upcoming list such a child
+   as a normal row.
+6. **Progress is derived, never stored.** Direct children only: a grandchild counts
+   toward its own parent, not toward the grandparent. A deleted child counts nowhere.
+   A completed parent keeps showing its children's progress.
+7. **Subtasks of a repeating task carry over to the next occurrence, keeping their
+   state.** The record gets `parent_id` equal to the *series'* own parent
+   (`recurring.ts:202`); children are neither copied into the record nor reparented,
+   so they stay attached to the series as it rolls. A child checked off today is still
+   checked on tomorrow's occurrence, and the record itself has no children (its
+   progress reads 0/0). This is deliberate in the web client — do not "fix" it by
+   resetting children on roll, and do not copy them into the record.
 
 **Notes** ordering already exists (`position`) and the server has `manual-ordering`;
-reuse it rather than inventing a second order.
+reuse it rather than inventing a second order. The subtask tree is read one level at
+a time through the `parent_id` index (`liveSubtree`, `ops.ts`), never by scanning every
+task; our `db.entities('task')` returns all rows today, so a per-parent query or an
+index is needed before this ships on a large account.
 
 ---
 
