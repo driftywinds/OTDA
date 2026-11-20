@@ -16,6 +16,7 @@ import '../data/occurrences.dart';
 import '../reminders/service.dart';
 import '../data/recurrence.dart';
 import 'format.dart';
+import '../util/log.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'workspace_icon.dart';
@@ -203,6 +204,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final defaultWorkspace = workspaces.where((w) => w.isDefault).map((w) => w.id).firstOrNull ??
         workspaces.map((w) => w.id).firstOrNull;
+    final todayNow = _today;
+    otdaLog('list: ${tasks.length} task(s), '
+        'finishedToday=${tasks.where((t) => _finishedToday(t, todayNow)).length}, '
+        'records=${tasks.where((t) => t.raw['series_id'] != null).length}');
+    for (final t in tasks.where((t) => t.raw['series_id'] != null)) {
+      otdaLog('list: record ${t.id} series=${t.raw['series_id']} '
+          'occ=${t.raw['occurrence_date']} due=${t.dueDate} done=${t.isCompleted} del=${t.isDeleted}');
+    }
     setState(() {
       _tasks = tasks;
       _workspaces = workspaces;

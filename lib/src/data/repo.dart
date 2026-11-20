@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
 import 'clock.dart';
+import '../util/log.dart';
 import 'db.dart';
 import 'models.dart';
 import '../quickadd/rule.dart' as rules;
@@ -209,6 +210,8 @@ class Repo {
     final ts = await clock.next();
     final recordId = occurrenceIdOf(task.id, date);
     final fields = occurrenceFields(task, date, now, today);
+    otdaLog('complete: series ${task.id} date=$date record=$recordId next=$next '
+        'due=${fields['due']} completed_at=${fields['completed_at']}');
     if (skipped) fields['skipped'] = true;
     for (final entry in fields.entries) {
       await db.putField('task', recordId, entry.key, entry.value, ts, engine.device);
