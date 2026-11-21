@@ -38,6 +38,8 @@ a project removes every task that references it, and the app mirrors that locall
 
 ### 1.2 Task metadata in the editor
 
+**Status: done.**
+
 **Why** `deadline`, `start`, `estimate_minutes`, `energy`, `section_id` and labels are
 already in the model and used by the views, but `lib/src/ui/task_sheet.dart` can only
 set title, description, due, recurrence, priority and project.

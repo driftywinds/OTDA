@@ -28,10 +28,58 @@ class _TaskSheetState extends State<TaskSheet> {
   late int _priority = widget.task.priority;
   late String? _projectId = widget.task.projectId;
   late Map<String, Object?>? _due = widget.task.due;
+  late String? _deadline = widget.task.deadline;
+
+  /// Null, `someday` or `YYYY-MM-DD`.
+  late String? _start = switch (widget.task.raw['start']?.toString()) {
+    null || '' => null,
+    final value => value,
+  };
+  late int? _estimate = widget.task.estimateMinutes;
+
+  /// `""`, `deep`, `medium` or `low`.
+  late String _energy = widget.task.raw['energy']?.toString() ?? '';
+  late List<String> _labels = [...widget.task.labels];
+  late String? _sectionId = widget.task.sectionId;
+  List<Label> _allLabels = const [];
+  List<Section> _sections = const [];
 
   /// The repeat rule as stored (`every month`, `every 3 days after completion`),
   /// empty for a one-off task.
   late String _recurrence = widget.task.raw['recurrence']?.toString() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLabels();
+    _loadSections();
+  }
+
+  Future<void> _loadLabels() async {
+    final labels = await widget.repo.labels();
+    if (!mounted) return;
+    setState(() {
+      _allLabels = labels;
+      _labels = [
+        for (final id in _labels)
+          if (labels.any((label) => label.id == id)) id,
+      ];
+    });
+  }
+
+  Future<void> _loadSections() async {
+    final projectId = _projectId;
+    if (projectId == null) {
+      if (mounted) setState(() => _sections = const []);
+      return;
+    }
+    final sections = await widget.repo.sections(projectId);
+    if (!mounted) return;
+    setState(() {
+      _sections = sections;
+      if (_sectionId != null && !sections.any((s) => s.id == _sectionId)) _sectionId = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -171,6 +219,268 @@ class _TaskSheetState extends State<TaskSheet> {
     setState(() => _due = null);
   }
 
+  /// The same day picker the due date uses, returning `YYYY-MM-DD` or null.
+  Future<String?> _pickDay(String? current) async {
+    final now = DateTime.now();
+    final initial = current != null ? DateTime.tryParse(current) ?? now : now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (picked == null) return null;
+    return '${picked.year.toString().padLeft(4, '0')}-'
+        '${picked.month.toString().padLeft(2, '0')}-'
+        '${picked.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickDeadline() async {
+    final date = await _pickDay(_deadline);
+    if (date == null) return;
+    await widget.repo.setField('task', widget.task.id, 'deadline', date);
+    if (mounted) setState(() => _deadline = date);
+  }
+
+  Future<void> _clearDeadline() async {
+    await widget.repo.setField('task', widget.task.id, 'deadline', null);
+    if (mounted) setState(() => _deadline = null);
+  }
+
+  Future<void> _pickStart() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('No start date'),
+              trailing: _start == null ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.of(context).pop('__none'),
+            ),
+            ListTile(
+              title: const Text('Someday'),
+              subtitle: const Text('Parked until you move it'),
+              trailing: _start == 'someday' ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.of(context).pop('someday'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_available_outlined),
+              title: Text(_start != null && _start != 'someday' ? 'Change date' : 'Pick a date…'),
+              onTap: () => Navigator.of(context).pop('__date'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    String? value;
+    if (choice == '__date') {
+      value = await _pickDay(_start != 'someday' ? _start : null);
+      if (value == null) return;
+    } else {
+      value = choice == '__none' ? null : choice;
+    }
+    await widget.repo.setField('task', widget.task.id, 'start', value);
+    if (mounted) setState(() => _start = value);
+  }
+
+  Future<void> _pickEstimate() async {
+    const presets = [15, 30, 45, 60, 90, 120, 240];
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('No estimate'),
+                trailing: _estimate == null ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.of(context).pop('__none'),
+              ),
+              for (final minutes in presets)
+                ListTile(
+                  title: Text(durationLabel(minutes)),
+                  trailing: _estimate == minutes ? const Icon(Icons.check_rounded) : null,
+                  onTap: () => Navigator.of(context).pop('$minutes'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Custom minutes…'),
+                onTap: () => Navigator.of(context).pop('__custom'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    int? minutes;
+    if (choice == '__custom') {
+      final controller = TextEditingController(text: _estimate?.toString() ?? '');
+      final typed = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Estimate'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Minutes', suffixText: 'min'),
+            onSubmitted: (text) => Navigator.of(context).pop(text),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Set')),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (typed == null) return;
+      minutes = int.tryParse(typed.trim());
+      if (minutes == null || minutes < 1 || minutes > 10080) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Use a whole number of minutes, up to one week.')),
+          );
+        }
+        return;
+      }
+    } else if (choice != '__none') {
+      minutes = int.tryParse(choice);
+    }
+    await widget.repo.setField('task', widget.task.id, 'estimate_minutes', minutes);
+    if (mounted) setState(() => _estimate = minutes);
+  }
+
+  Future<void> _setEnergy(String energy) async {
+    final value = energy.isEmpty ? null : energy;
+    await widget.repo.setField('task', widget.task.id, 'energy', value ?? '');
+    if (mounted) setState(() => _energy = value ?? '');
+  }
+
+  String _labelNames(List<String> ids) {
+    final names = [
+      for (final id in ids)
+        if (_allLabels.where((label) => label.id == id).firstOrNull != null)
+          _allLabels.where((label) => label.id == id).first.name,
+    ];
+    if (names.isEmpty) return 'Labels';
+    return names.length <= 2 ? names.join(', ') : '${names.take(2).join(', ')} +${names.length - 2}';
+  }
+
+  Future<void> _setLabels(List<String> ids) async {
+    await widget.repo.setField('task', widget.task.id, 'labels', ids);
+    if (mounted) setState(() => _labels = [...ids]);
+  }
+
+  Future<void> _editLabels() async {
+    final selected = {..._labels};
+    final added = TextEditingController();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: added,
+                          decoration: const InputDecoration(
+                            hintText: 'New label by name',
+                            prefixIcon: Icon(Icons.new_label_outlined),
+                          ),
+                          onSubmitted: (text) async {
+                            final name = text.trim();
+                            if (name.isEmpty) return;
+                            final id = await widget.repo.ensureLabel(name);
+                            if (!context.mounted) return;
+                            selected.add(id);
+                            added.clear();
+                            await _setLabels(selected.toList());
+                            await _loadLabels();
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Create label',
+                        icon: const Icon(Icons.add_rounded),
+                        onPressed: () async {
+                          final name = added.text.trim();
+                          if (name.isEmpty) return;
+                          final id = await widget.repo.ensureLabel(name);
+                          if (!context.mounted) return;
+                          selected.add(id);
+                          added.clear();
+                          await _setLabels(selected.toList());
+                          await _loadLabels();
+                          setSheetState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                if (_allLabels.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No labels yet. Type a name above to make one.'),
+                  )
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final label in _allLabels)
+                          CheckboxListTile(
+                            value: selected.contains(label.id),
+                            title: Text(label.name),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            onChanged: (on) async {
+                              setSheetState(() {
+                                if (on == true) {
+                                  selected.add(label.id);
+                                } else {
+                                  selected.remove(label.id);
+                                }
+                              });
+                              await _setLabels(selected.toList());
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    added.dispose();
+  }
+
+  Future<void> _setSection(String? id) async {
+    await widget.repo.setField('task', widget.task.id, 'section_id', id);
+    if (mounted) setState(() => _sectionId = id);
+  }
+
   String get _projectName {
     if (_projectId == null) return 'Inbox';
     for (final project in widget.projects) {
@@ -187,6 +497,7 @@ class _TaskSheetState extends State<TaskSheet> {
     final today = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final date = _due?['date']?.toString();
     final time = _due?['time']?.toString();
+    final sectionName = _sections.where((s) => s.id == _sectionId).firstOrNull?.name;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -262,6 +573,62 @@ class _TaskSheetState extends State<TaskSheet> {
                       onTap: _pickTime,
                     ),
                     PropChip(
+                      icon: Icons.outlined_flag_rounded,
+                      label: _deadline == null ? 'Deadline' : 'Due by ${friendlyDate(_deadline!, today)}',
+                      active: _deadline != null,
+                      onTap: _pickDeadline,
+                      onClear: _deadline == null ? null : _clearDeadline,
+                    ),
+                    PropChip(
+                      icon: Icons.play_circle_outline,
+                      label: _start == null
+                          ? 'Start'
+                          : _start == 'someday'
+                              ? 'Someday'
+                              : 'From ${friendlyDate(_start!, today)}',
+                      active: _start != null,
+                      onTap: _pickStart,
+                      onClear: _start == null
+                          ? null
+                          : () async {
+                              await widget.repo.setField('task', widget.task.id, 'start', null);
+                              if (mounted) setState(() => _start = null);
+                            },
+                    ),
+                    PropChip(
+                      icon: Icons.timelapse_rounded,
+                      label: _estimate == null ? 'Estimate' : durationLabel(_estimate!),
+                      active: _estimate != null,
+                      onTap: _pickEstimate,
+                      onClear: _estimate == null
+                          ? null
+                          : () async {
+                              await widget.repo.setField('task', widget.task.id, 'estimate_minutes', null);
+                              if (mounted) setState(() => _estimate = null);
+                            },
+                    ),
+                    PopupMenuButton<String>(
+                      initialValue: _energy,
+                      tooltip: 'Energy',
+                      onSelected: _setEnergy,
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: '', child: Text('No energy')),
+                        PopupMenuItem(value: 'deep', child: Text('Deep work')),
+                        PopupMenuItem(value: 'medium', child: Text('Medium')),
+                        PopupMenuItem(value: 'low', child: Text('Low')),
+                      ],
+                      child: PropChip(
+                        icon: Icons.bolt_rounded,
+                        label: switch (_energy) {
+                          'deep' => 'Deep',
+                          'medium' => 'Medium',
+                          'low' => 'Low',
+                          _ => 'Energy',
+                        },
+                        active: _energy.isNotEmpty,
+                      ),
+                    ),
+                    PropChip(
                       icon: Icons.repeat_rounded,
                       label: _recurrence.isEmpty ? 'Repeat' : _recurrenceLabel(_recurrence),
                       active: _recurrence.isNotEmpty,
@@ -292,8 +659,15 @@ class _TaskSheetState extends State<TaskSheet> {
                       initialValue: _projectId,
                       tooltip: 'Project',
                       onSelected: (value) async {
+                        if (value == _projectId) return;
                         setState(() => _projectId = value);
                         await widget.repo.setField('task', widget.task.id, 'project_id', value);
+                        if (_sectionId != null) {
+                          // A section belongs to one project; the task leaves it.
+                          await widget.repo.setField('task', widget.task.id, 'section_id', null);
+                          if (mounted) setState(() => _sectionId = null);
+                        }
+                        await _loadSections();
                       },
                       itemBuilder: (_) => [
                         const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
@@ -306,6 +680,29 @@ class _TaskSheetState extends State<TaskSheet> {
                         label: _projectName,
                         active: _projectId != null,
                       ),
+                    ),
+                    if (_projectId != null)
+                      PopupMenuButton<String?>(
+                        initialValue: _sectionId,
+                        tooltip: 'Section',
+                        onSelected: _setSection,
+                        itemBuilder: (_) => [
+                          const PopupMenuItem<String?>(value: null, child: Text('No section')),
+                          for (final section in _sections)
+                            PopupMenuItem<String?>(value: section.id, child: Text(section.name)),
+                        ],
+                        child: PropChip(
+                          icon: Icons.view_stream_outlined,
+                          label: sectionName ?? 'Section',
+                          active: _sectionId != null,
+                        ),
+                      ),
+                    PropChip(
+                      icon: Icons.label_outline_rounded,
+                      label: _labelNames(_labels),
+                      active: _labels.isNotEmpty,
+                      onTap: _editLabels,
+                      onClear: _labels.isEmpty ? null : () => _setLabels(const []),
                     ),
                   ],
                 ),

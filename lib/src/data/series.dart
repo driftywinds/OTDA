@@ -92,9 +92,12 @@ Map<String, Object?> occurrenceFields(Task series, String date, int now, String 
     'position',
     'estimate_minutes',
     'section_id',
+    'energy',
   ]) {
     if (raw[key] != null) fields[key] = raw[key];
   }
+  // A someday start is a value, not a date to move.
+  if (raw['start'] == 'someday') fields['start'] = 'someday';
   fields['created_at'] = now;
   fields['recurrence'] = null; // a record is one occurrence, not a series
   fields['series_id'] = series.id;

@@ -75,6 +75,19 @@ class Label {
   double get position => (raw['position'] as num?)?.toDouble() ?? 0;
 }
 
+/// A list of tasks inside one project (OpenTodo's `section` entity).
+class Section {
+  Section(this.id, this.raw);
+
+  final String id;
+  final Map<String, Object?> raw;
+
+  String get name => raw['name']?.toString() ?? '';
+  String? get projectId => raw['project_id']?.toString();
+  bool get isDeleted => raw['deleted_at'] != null;
+  double get position => (raw['position'] as num?)?.toDouble() ?? 0;
+}
+
 /// A directory entry from the sync exchange: projects, labels and views live in
 /// one, and a person can be in several.
 class Workspace {

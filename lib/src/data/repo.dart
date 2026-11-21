@@ -73,6 +73,15 @@ class Repo {
   Future<List<Label>> labels() async =>
       (await db.entities('label')).map((e) => Label(e['id'] as String, e)).toList();
 
+  /// The live sections of a project, in board order.
+  Future<List<Section>> sections(String projectId) async {
+    final rows = await db.entities('section');
+    return [
+      for (final row in rows)
+        if (row['project_id']?.toString() == projectId) Section(row['id'] as String, row),
+    ]..sort((a, b) => a.position.compareTo(b.position));
+  }
+
   /// The workspaces the sync exchange last reported, in the server's order.
   Future<List<Workspace>> workspaces() async {
     final raw = await db.meta('sync.workspaces');
