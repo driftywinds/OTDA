@@ -12,8 +12,8 @@ Status values: **todo** · **doing** · **done**.
 **Current state:** Milestone 1 (Trash, task metadata, subtasks), Milestone 2
 (workspaces, project sharing, invitations, public links) and Milestone 4 (export,
 statistics, activity, theming) are done, except that note pages await the notes
-feature. Milestone 3 is in progress: enable/disable and the resumable rewrite are
-done; file encryption and biometric unlock remain.
+feature. Milestone 3 is mostly done: enable/disable, the resumable rewrite and
+biometric unlock work; encrypted file bytes remain.
 
 ---
 
@@ -299,6 +299,8 @@ minimum is an in-app viewer for images and PDFs plus a share sheet for the rest.
 
 ### 3.4 Biometric unlock
 
+**Status: done.**
+
 **Why** the passphrase is the only way in, and 600,000 PBKDF2 rounds is a slow way.
 
 **Scope**
@@ -309,6 +311,16 @@ minimum is an in-app viewer for images and PDFs plus a share sheet for the rest.
 - Delete the wrapped copy on sign-out, passphrase change or reset, encryption
   disable, and when the account key changes (the platform invalidates it when
   biometrics change).
+
+**Notes** `flutter_secure_storage` 11 already supports this: Android uses
+`AndroidOptions.biometric(enforceBiometrics: true)` (Keystore AES key, API 28+) and
+iOS uses `IOSOptions(accessControlFlags: [userPresence])`. The copy is stored under
+the account key record's `createdAt`, which survives a passphrase re-wrap and changes
+when a new key record is created; a mismatch or a keystore error deletes the copy and
+falls back to the passphrase. The unlock sheet shows the biometric button only when a
+copy exists, and the offer appears after a passphrase unlock. Sign-out now calls
+`E2eeSession.forget`, which deletes the copy; disabling encryption does the same.
+Platform failure is caught and the passphrase remains the fallback.
 
 ---
 

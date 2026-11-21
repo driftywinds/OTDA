@@ -3,10 +3,12 @@ import 'package:material_ui/material_ui.dart';
 
 import '../api/api_exception.dart';
 import '../app_state.dart';
+import '../e2ee/biometric.dart';
 import '../e2ee/crypto.dart';
 import '../e2ee/keys.dart';
 import '../e2ee/lifecycle.dart';
 import '../e2ee/session.dart';
+import 'biometric_offer.dart';
 import 'reauth.dart';
 
 /// The account's encryption: turn it on (with the one-time recovery key), finish
@@ -25,6 +27,7 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
   E2eeMigrationProgress? _progress;
   String? _error;
   E2eeMigrationMode? _pending;
+  bool _biometric = false;
 
   E2eeSession get _session => E2eeSession.instance;
 
@@ -40,6 +43,14 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
   void initState() {
     super.initState();
     _loadPending();
+    _loadBiometric();
+  }
+
+  Future<void> _loadBiometric() async {
+    final record = _session.record;
+    if (record == null) return;
+    final enrolled = await BiometricUnlock.instance.enrolled(record);
+    if (mounted) setState(() => _biometric = enrolled);
   }
 
   Future<void> _loadPending() async {
@@ -97,7 +108,11 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
       await _session.unlockWithPassphrase(record, passphrase);
       final repo = widget.state.repo;
       if (repo != null) await _session.openLocalReplica(repo.db);
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        await offerBiometricEnrollment(context);
+        await _loadBiometric();
+      }
       return true;
     } on Object catch (e) {
       if (mounted) setState(() => _error = e is E2eeError ? e.message : 'That passphrase did not unlock the account.');
@@ -308,6 +323,37 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
                     icon: const Icon(Icons.sync_rounded, size: 18),
                     label: const Text('Finish the rewrite'),
                   ),
+                ),
+              if (unlocked && BiometricUnlock.instance.supported)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _biometric
+                      ? Row(
+                          children: [
+                            Icon(Icons.fingerprint_rounded, size: 18, color: scheme.primary),
+                            const SizedBox(width: 6),
+                            const Expanded(child: Text('Fingerprint/face unlock is on')),
+                            TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      await BiometricUnlock.instance.disable();
+                                      if (mounted) setState(() => _biometric = false);
+                                    },
+                              child: const Text('Turn off'),
+                            ),
+                          ],
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  await offerBiometricEnrollment(context);
+                                  await _loadBiometric();
+                                },
+                          icon: const Icon(Icons.fingerprint_rounded, size: 18),
+                          label: const Text('Add fingerprint/face unlock'),
+                        ),
                 ),
               Wrap(
                 spacing: 6,

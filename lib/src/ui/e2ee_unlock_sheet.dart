@@ -1,8 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../e2ee/biometric.dart';
 import '../e2ee/crypto.dart';
 import '../e2ee/keys.dart' as keys;
 import '../e2ee/session.dart';
+import 'biometric_offer.dart';
 
 /// Asks for the passphrase (or the recovery key) the first time this device meets
 /// an encrypted account, and after "Lock this device".
@@ -39,7 +41,16 @@ class _UnlockSheetState extends State<_UnlockSheet> {
   final _secret = TextEditingController();
   bool _recovery = false;
   bool _busy = false;
+  bool _canBiometric = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    BiometricUnlock.instance.enrolled(widget.record).then((enrolled) {
+      if (mounted) setState(() => _canBiometric = enrolled);
+    });
+  }
 
   @override
   void dispose() {
@@ -63,11 +74,32 @@ class _UnlockSheetState extends State<_UnlockSheet> {
       } else {
         await E2eeSession.instance.unlockWithPassphrase(widget.record, secret);
       }
+      if (!mounted) return;
+      await offerBiometricEnrollment(context);
       if (mounted) Navigator.of(context).pop(true);
     } on E2eeError catch (e) {
       setState(() => _error = e.message);
     } on Object {
       setState(() => _error = 'Could not unlock with that ${_recovery ? 'recovery key' : 'passphrase'}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _biometric() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final ok = await E2eeSession.instance.unlockWithBiometrics();
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => _error = 'Fingerprint/face unlock is no longer available. Use the passphrase.');
+        _canBiometric = false;
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -106,6 +138,14 @@ class _UnlockSheetState extends State<_UnlockSheet> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          if (_canBiometric) ...[
+            FilledButton.tonalIcon(
+              onPressed: _busy ? null : _biometric,
+              icon: const Icon(Icons.fingerprint_rounded, size: 20),
+              label: const Text('Unlock with fingerprint or face'),
+            ),
+            const SizedBox(height: 10),
+          ],
           TextField(
             controller: _secret,
             autofocus: true,

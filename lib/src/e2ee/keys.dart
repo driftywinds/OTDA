@@ -14,6 +14,8 @@ class KeyRecord {
     required this.iterations,
     required this.wrappedByPassphrase,
     required this.wrappedByRecovery,
+    this.createdAt = 0,
+    this.updatedAt = 0,
   });
 
   factory KeyRecord.fromJson(Map<String, Object?> json) => KeyRecord(
@@ -23,6 +25,8 @@ class KeyRecord {
         iterations: (json['iterations'] as num?)?.toInt() ?? 0,
         wrappedByPassphrase: json['wrappedByPassphrase']?.toString() ?? '',
         wrappedByRecovery: json['wrappedByRecovery']?.toString() ?? '',
+        createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+        updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
       );
 
   static const kdfPbkdf2Sha256 = 1;
@@ -33,6 +37,11 @@ class KeyRecord {
   final int iterations;
   final String wrappedByPassphrase;
   final String wrappedByRecovery;
+
+  /// When the account's key was first created. A re-wrap (passphrase change)
+  /// keeps it, so it identifies the account key rather than a record version.
+  final int createdAt;
+  final int updatedAt;
 
   Map<String, Object?> toJson() => {
         'version': version,

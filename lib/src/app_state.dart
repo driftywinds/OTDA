@@ -753,6 +753,7 @@ class AppState extends ChangeNotifier {
     final client = _client;
     if (client != null) await _auth.logout(client);
     await _store.clear();
+    await E2eeSession.instance.forget();
     await _db?.close();
     client?.close();
     _client = null;

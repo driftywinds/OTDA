@@ -71,6 +71,7 @@ is the only file that names most of them, and only to encrypt them.
 | Invitations | invite to project or workspace, accept/decline, pending list with revoke |
 | Public links | project links (view/tick, list/board, expiry) and task pages (view/reply/tick), copied once and revocable |
 | E2EE lifecycle | enable with a one-time recovery key, resumable content rewrite (personal scope only), encrypt-on-sight, history purge, disable with re-auth |
+| Biometric unlock | fingerprint/face unlocks the account key from the platform keystore; the passphrase remains a fallback |
 | Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
 | Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
 | Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
@@ -88,7 +89,7 @@ is the only file that names most of them, and only to encrypt them.
 
 | Feature | Server | App |
 |---|---|---|
-| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight and history purge are done; **file bytes, biometric unlock and relay are not** |
+| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight, history purge and biometric unlock are done; **file bytes and relay are not** |
 | **Auth** | OIDC, passkeys, app passwords, sign-out everywhere, trusted-device policy | password + TOTP, 2FA management; no passkeys, OIDC or app passwords |
 | **Project fields** | notes, sharing, templates, timeline, flow, archived | name, colour, icon, trash |
 | **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only |
@@ -165,8 +166,8 @@ Ranked by what a user would notice within a day of real use:
 2. **Notes and comments** — long-form notes, comments and note public pages are not
    reachable; note pages are the one public-link shape left out.
 3. **Calendar beyond a month grid** — no week/day view, no external calendars.
-4. **E2EE file bytes and biometric unlock** — text fields are covered; attachments,
-   the chunked file format and fingerprint/face unlock are not.
+4. **E2EE file bytes and relay** — text fields and biometric unlock are covered; the
+   chunked file format and the device relay are not.
 5. **Time tracking** — absent.
 6. **Push notifications** — reminders only fire from the device that scheduled them.
 7. **Saved views / custom fields** — the app shows only what the server's built-in
@@ -187,5 +188,5 @@ Ranked by what a user would notice within a day of real use:
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
   complete, plus workspace management, project sharing, invitations, public links,
-  statistics, activity, history, export, theming and the text half of the E2EE
-  lifecycle. Notes/comments, attachments/file encryption and biometric unlock remain.
+  statistics, activity, history, export, theming, the text half of the E2EE lifecycle
+  and biometric unlock. Notes/comments, attachments/file encryption and relay remain.

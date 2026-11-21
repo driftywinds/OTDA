@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
 import '../data/db.dart';
+import 'biometric.dart';
 import 'crypto.dart';
 import 'fields.dart';
 import 'keys.dart' as k;
@@ -53,6 +54,9 @@ class E2eeSession {
   bool get unlocked => _accountKey != null;
   bool get sealing => _sealing && record != null;
 
+  /// The key while unlocked, for wrapping it under biometrics.
+  Uint8List? get accountKey => _accountKey;
+
   /// Reads the wrapped record. A 404 (or no record) means the account is not
   /// encrypted, which is the usual case.
   Future<k.KeyRecord?> fetchRecord(ApiClient client) async {
@@ -71,6 +75,7 @@ class E2eeSession {
       if (e.status == 404) {
         e2eeLog('record: 404, not encrypted');
         record = null;
+        await BiometricUnlock.instance.disable();
         return null;
       }
       e2eeLog('record FAILED: $e');
@@ -105,6 +110,17 @@ class E2eeSession {
   Future<void> unlockWithRecoveryKey(k.KeyRecord fromServer, String text) async {
     final key = await _offUiIsolate(() => k.unlockWithRecoveryKey(fromServer, text));
     await _adopt(fromServer, key);
+  }
+
+  /// Unlocks from the biometric-keystore copy, if it still belongs to this key
+  /// record. The platform prompt happens inside the read.
+  Future<bool> unlockWithBiometrics() async {
+    final current = record;
+    if (current == null) return false;
+    final key = await BiometricUnlock.instance.read(current);
+    if (key == null) return false;
+    await _adopt(current, key);
+    return true;
   }
 
   Future<Uint8List> _offUiIsolate(Uint8List Function() work) async {
@@ -147,9 +163,14 @@ class E2eeSession {
     _accountKey = null;
     record = null;
     _sealing = true;
+    await BiometricUnlock.instance.disable();
     if (!persistToKeystore) return;
-    await _storage.delete(key: _keySlot);
-    await _storage.delete(key: _recordSlot);
+    try {
+      await _storage.delete(key: _keySlot);
+      await _storage.delete(key: _recordSlot);
+    } on Object {
+      // A platform without the keystore still forgets the in-memory key.
+    }
   }
 
   /// Stores the record on the server (PUT); the recovery key is shown by the UI.
