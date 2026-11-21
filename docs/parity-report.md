@@ -79,7 +79,7 @@ is the only file that names most of them, and only to encrypt them.
 | Export | JSON and ZIP, streamed to a temp file with progress/cancel, shared through the system sheet |
 | Calendar | **month grid only**, from recurrence projection |
 | Reminders | local notifications with action buttons, exact alarms, boot re-arm, per-task time |
-| Widget | Glance widget, project filter, complete and refresh from the widget, quick-add popup, Anytime section |
+| Widget | RemoteViews widget, project filter, complete and refresh from the widget, quick-add popup, Anytime section |
 | Auth | password, TOTP second factor, API token, session cookie, re-auth for step-up, avatar; 2FA enrolment, recovery codes and trusted devices |
 | Theming | system/light/dark, independent dark/AMOLED, accent swatches, density, row-detail choice, instance-default palette |
 | Admin | users, roles, deactivate, invitations, audit log (first 100), backups, storage |

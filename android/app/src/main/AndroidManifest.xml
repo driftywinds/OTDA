@@ -96,7 +96,8 @@
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false"/>
-        <!-- Home-screen widget. Glance renders it; the receiver only binds it. -->
+        <!-- Home-screen widget: plain RemoteViews with a scrolling list, drawn from the snapshot the app
+             stores. The receiver draws it, the service feeds the list, the activity takes row taps. -->
         <receiver
             android:name=".widget.TasksWidgetReceiver"
             android:exported="false"
@@ -112,6 +113,19 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/tasks_widget_info"/>
         </receiver>
+        <service
+            android:name=".widget.TasksWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS"/>
+        <!-- A row tap on the widget: transparent, no Flutter, finishes at once. -->
+        <activity
+            android:name=".widget.WidgetActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
         <!-- home_widget's background path: widget buttons (refresh, complete) broadcast here,
              and the service starts a Dart isolate to run onWidgetAction. Without these two the
              taps are dropped silently. -->

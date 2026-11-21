@@ -9,9 +9,6 @@ import com.dw.otda.widget.markTaskDone
 import com.dw.otda.widget.requestWidgetUpdate
 import com.dw.otda.widget.updateWidgets
 import io.flutter.embedding.android.FlutterActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import io.flutter.embedding.android.FlutterActivityLaunchConfigs
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -57,12 +54,9 @@ class CompleteActivity : FlutterActivity() {
                 when (call.method) {
                     "uri" -> result.success(intent?.dataString)
                     "updateWidgets" -> {
-                        // Redraw from the snapshots Dart just wrote, and only answer
-                        // once Glance has taken them: this activity closes right after.
-                        CoroutineScope(Dispatchers.Main).launch {
-                            runCatching { updateWidgets(this@CompleteActivity) }
-                            result.success(true)
-                        }
+                        // Redraw from the snapshots Dart just wrote.
+                        runCatching { updateWidgets(this@CompleteActivity) }
+                        result.success(true)
                     }
                     "close" -> {
                         result.success(true)

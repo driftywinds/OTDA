@@ -25,7 +25,7 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.3.1" apply false
     id("org.jetbrains.kotlin.android") version "2.4.20" apply false
-    // Glance widgets are Compose code, so the app module needs the Compose compiler.
+    // Kept from when the widget was Glance (Compose code); see app/build.gradle.kts.
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20" apply false
 }
 

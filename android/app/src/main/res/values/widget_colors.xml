@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Used only by the static widget preview; the live widget paints through Glance. -->
+    <!-- Used only by the static widget preview; the live widget's system-theme layouts use these too, with values-night overriding them. -->
     <color name="widget_surface">#FFFFFFFF</color>
     <color name="widget_tile">#FF34D399</color>
     <color name="widget_on_surface">#FF0F172A</color>

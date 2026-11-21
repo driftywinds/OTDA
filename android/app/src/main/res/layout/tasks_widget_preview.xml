@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shown by the launcher before the first Glance update and in the widget picker. Kept to views
+<!-- Shown by the launcher before the first update and in the widget picker. Kept to views
      RemoteViews supports (LinearLayout, TextView, ImageView). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"

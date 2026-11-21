@@ -66,7 +66,7 @@ Offline-first, with the same data model as the server so every device converges.
 | `lib/src/reminders/` | The reminder planner (pure) and the service that arms it with the OS. |
 | `lib/src/widget/` | The widget snapshot builder (pure) and the widget's look settings. |
 | `lib/src/ui/` | Screens and sheets: home, composer, task sheet, Trash, statistics, activity, invitations, export, workspaces, project sharing, public links, task pages, settings, admin. |
-| `android/.../widget/` | The Glance home-screen widget and its project picker (Kotlin). |
+| `android/.../widget/` | The home-screen widget (plain RemoteViews with a scrolling list) and its project picker (Kotlin). |
 | `test/` | Unit tests, parity fixtures (`inbox`, `views`, `quickadd` vectors), and integration tests against a real server. |
 | `tool/parse_check.dart` | Prints what the parser makes of a line: `dart run tool/parse_check.dart "call Sam tomorrow 3pm p1"`. |
 
@@ -101,7 +101,7 @@ flowchart TB
 
   subgraph Edge["Platform edges"]
     Rem[ReminderService<br/>OS alarms]
-    Wid[Glance widget<br/>+ quick-add popup]
+    Wid[Home-screen widget<br/>+ quick-add popup]
   end
 
   Server[(OpenTodo server<br/>/api/v1)]
@@ -459,7 +459,7 @@ flowchart LR
   R[Repo] --> B[buildWidgetSnapshot<br/>pure: sections, rows, 'more']
   B -->|JSON via home_widget<br/>snapshot_all, snapshot_‹projectId›| P[(HomeWidgetPreferences)]
   S[WidgetSettings<br/>look] --> P
-  P --> G[Glance TasksWidget<br/>never computes anything]
+  P --> G[Widget (RemoteViews)<br/>never computes anything]
   G -->|tap row| Link[otda://task/…]
   G -->|tick circle| C[CompleteAction → otda://complete]
   G -->|+| Q[QuickAddActivity popup]
@@ -467,7 +467,7 @@ flowchart LR
 
 - **Dart decides, Kotlin draws.** `buildWidgetSnapshot` produces the whole list
   (Overdue / Today / Tomorrow / This week / Later, rows sorted by day and time,
-  a `more` count). The Glance code only renders it. Snapshots are written for
+  a `more` count). The widget code only renders it. Snapshots are written for
   "all" and for each project that has a widget (`active_projects`).
 - **No snapshot yet?** The widget asks Dart for one (throttled to once a minute)
   through a background broadcast, so a freshly placed widget fills itself.
@@ -495,7 +495,7 @@ defaults are mirrored in `widget/widget_settings.dart` and `WidgetStyle` in
 | Completed tasks | `widget_show_completed` | bool | true |
 
 Text size scales every font and grows rows and tap targets with it (never below
-their base size). Titles are cut by character count — Glance has no ellipsis —
+their base size). Titles are ellipsized by the TextView itself —
 so a larger font keeps proportionally fewer characters. A section heading with
 nothing left under it (for example after hiding completed tasks) is dropped.
 Values are plain ints, strings and bools so the native side needs no special

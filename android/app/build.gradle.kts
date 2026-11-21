@@ -60,17 +60,12 @@ android {
         }
     }
 
-    // The home-screen widget (android/app/src/main/kotlin/com/dw/otda/widget) is Glance, which is
-    // Compose code.
-    buildFeatures {
-        compose = true
-    }
 }
 
+// The widget is plain RemoteViews now (no Glance). The Compose plugin stays applied only because the
+// build is known to work with it: removing it also changes how Kotlin is applied to this module.
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("androidx.glance:glance-appwidget:1.2.0")
-    implementation("androidx.glance:glance-material3:1.2.0")
 }
 
 kotlin {
