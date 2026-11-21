@@ -70,9 +70,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-v2-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties', 'pubspec.lock') }}
+          key: gradle-v3-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties', 'pubspec.lock') }}
           restore-keys: |
-            gradle-v2-${{ runner.os }}-
+            gradle-v3-${{ runner.os }}-
 
       - name: Configure release signing
         if: env.ANDROID_KEYSTORE_BASE64 != ''
@@ -97,6 +97,11 @@ jobs:
 
       - name: Test
         run: flutter test --exclude-tags integration
+
+      - name: Install Gradle repository mirrors
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp tool/gradle/mirrors.init.gradle ~/.gradle/init.d/otda-mirrors.gradle
 
       - name: Build release APKs
         env:

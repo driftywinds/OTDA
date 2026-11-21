@@ -1,0 +1,28 @@
+// Applied to every build in the composite, including Flutter's included :gradle
+// build. That build otherwise resolves its Kotlin plugin from the Gradle Plugin
+// Portal and Maven Central directly, where shared CI runner IPs receive HTTP 429.
+beforeSettings { settings ->
+    def pluginMirrors = [
+        "https://repo1.maven.org/maven2",
+        "https://maven-central.storage-download.googleapis.com/maven2/",
+    ]
+    def projectMirrors = [
+        "https://repo1.maven.org/maven2",
+        "https://maven-central.storage-download.googleapis.com/maven2/",
+    ]
+
+    settings.pluginManagement.repositories.clear()
+    settings.pluginManagement.repositories {
+        pluginMirrors.each { mirror -> maven { url = uri(mirror) } }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    settings.dependencyResolutionManagement.repositories.clear()
+    settings.dependencyResolutionManagement.repositories {
+        projectMirrors.each { mirror -> maven { url = uri(mirror) } }
+        google()
+        mavenCentral()
+    }
+}
