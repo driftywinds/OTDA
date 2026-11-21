@@ -205,8 +205,7 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
     await _run(() => _service.transfer(client, workspace.id, chosen.userId));
   }
 
-  Future<void> _members(Workspace workspace) => showModalBottomSheet<void>(
-        context: context,
+  Future<void> _members(Workspace workspace) => showModalBottomSheet<void>(        context: context,
         showDragHandle: true,
         builder: (context) => SafeArea(
           child: ListView(
@@ -229,6 +228,67 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
           ),
         ),
       );
+
+  Future<void> _invite(Workspace workspace) async {
+    final client = widget.state.client;
+    if (client == null) return;
+    final result = await showDialog<({String email, String role})>(
+      context: context,
+      builder: (context) => const _WorkspaceInviteDialog(),
+    );
+    if (result == null) return;
+    await _run(() async {
+      await _service.addMember(client, workspace.id, email: result.email, role: result.role);
+      final view = await _service.get(client, workspace.id);
+      final members = (view['members'] as List?) ?? const [];
+      final added = members.any((raw) => raw is Map && raw['email']?.toString().toLowerCase() == result.email.toLowerCase());
+      _say(added
+          ? 'Added ${result.email} to ${workspace.name}.'
+          : 'Invitation sent to ${result.email}.');
+    });
+  }
+
+  Future<void> _pending(Workspace workspace) async {
+    final client = widget.state.client;
+    if (client == null) return;
+    final view = await _service.get(client, workspace.id);
+    final pending = WorkspaceService.pendingOf(view);
+    if (!mounted) return;
+    if (pending.isEmpty) {
+      _say('No invitations are waiting.');
+      return;
+    }
+    final revoke = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text('Waiting for an answer', style: Theme.of(context).textTheme.titleMedium),
+              subtitle: Text(workspace.name),
+            ),
+            const Divider(height: 1),
+            for (final invite in pending)
+              ListTile(
+                leading: const Icon(Icons.mail_outline),
+                title: Text(invite.email),
+                subtitle: Text('As ${invite.role}'),
+                trailing: IconButton(
+                  tooltip: 'Revoke invitation',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => Navigator.of(context).pop(invite.id),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (revoke == null) return;
+    await _run(() => _service.cancelInvitation(client, workspace.id, revoke));
+  }
 
   Future<void> _groups(Workspace workspace) => showModalBottomSheet<void>(
         context: context,
@@ -404,6 +464,10 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
                         _rename(workspace);
                       case 'members':
                         _members(workspace);
+                      case 'invite':
+                        _invite(workspace);
+                      case 'pending':
+                        _pending(workspace);
                       case 'groups':
                         _groups(workspace);
                       case 'leave':
@@ -416,6 +480,10 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
                     if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
                       const PopupMenuItem(value: 'rename', child: Text('Rename')),
                     const PopupMenuItem(value: 'members', child: Text('Members')),
+                    if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
+                      const PopupMenuItem(value: 'invite', child: Text('Invite a person…')),
+                    if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
+                      const PopupMenuItem(value: 'pending', child: Text('Waiting invitations…')),
                     const PopupMenuItem(value: 'groups', child: Text('Groups')),
                     if (workspace.isOwner && !workspace.isDefault)
                       const PopupMenuItem(value: 'transfer', child: Text('Transfer ownership…')),
@@ -466,4 +534,66 @@ extension on Workspace {
         for (final project in projects)
           if ((project.workspaceId ?? defaultId) == id) project,
       ];
+}
+
+class _WorkspaceInviteDialog extends StatefulWidget {
+  const _WorkspaceInviteDialog();
+
+  @override
+  State<_WorkspaceInviteDialog> createState() => _WorkspaceInviteDialogState();
+}
+
+class _WorkspaceInviteDialogState extends State<_WorkspaceInviteDialog> {
+  final _email = TextEditingController();
+  String _role = 'member';
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _email.text.trim();
+    if (!email.contains('@') || email.length < 3) {
+      setState(() => _error = 'Enter an email address.');
+      return;
+    }
+    Navigator.of(context).pop((email: email, role: _role));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Invite a person'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _email,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(labelText: 'Email', errorText: _error),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _role,
+            decoration: const InputDecoration(labelText: 'Role'),
+            items: const [
+              DropdownMenuItem(value: 'member', child: Text('Member')),
+              DropdownMenuItem(value: 'admin', child: Text('Admin — can manage the workspace')),
+            ],
+            onChanged: (value) => setState(() => _role = value ?? 'member'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(onPressed: _submit, child: const Text('Invite')),
+      ],
+    );
+  }
 }

@@ -199,10 +199,71 @@ class ProjectMembership {
       ];
 
   /// Open e-mail invitations, when the caller manages the project.
-  List<Map<String, dynamic>> get pending => [
+  List<PendingMember> get pending => [
         for (final raw in (this.raw['pending'] as List?) ?? const [])
-          if (raw is Map) raw.cast<String, dynamic>(),
+          if (raw is Map) PendingMember.fromJson(raw.cast<String, dynamic>()),
       ];
+}
+
+/// An invitation addressed to me: to a project or a workspace.
+class MemberInvitation {
+  const MemberInvitation({
+    required this.id,
+    required this.kind,
+    required this.targetId,
+    required this.targetName,
+    required this.role,
+    required this.inviterName,
+    required this.expiresAt,
+  });
+
+  final String id;
+
+  /// project or workspace.
+  final String kind;
+  final String targetId;
+  final String targetName;
+  final String role;
+  final String inviterName;
+  final int expiresAt;
+
+  bool get isProject => kind == 'project';
+  String get kindLabel => isProject ? 'Project' : 'Workspace';
+
+  static MemberInvitation fromJson(Map<String, dynamic> json) => MemberInvitation(
+        id: json['id']?.toString() ?? '',
+        kind: json['kind']?.toString() ?? '',
+        targetId: json['targetId']?.toString() ?? '',
+        targetName: json['targetName']?.toString() ?? '',
+        role: json['role']?.toString() ?? '',
+        inviterName: json['inviterName']?.toString() ?? '',
+        expiresAt: (json['expiresAt'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// One open invitation on a project or workspace, as its managers see it.
+class PendingMember {
+  const PendingMember({
+    required this.id,
+    required this.email,
+    required this.role,
+    required this.invitedBy,
+    required this.expiresAt,
+  });
+
+  final String id;
+  final String email;
+  final String role;
+  final String invitedBy;
+  final int expiresAt;
+
+  static PendingMember fromJson(Map<String, dynamic> json) => PendingMember(
+        id: json['id']?.toString() ?? '',
+        email: json['email']?.toString() ?? '',
+        role: json['role']?.toString() ?? '',
+        invitedBy: json['invitedBy']?.toString() ?? '',
+        expiresAt: (json['expiresAt'] as num?)?.toInt() ?? 0,
+      );
 }
 
 /// A directory entry from the sync exchange: projects, labels and views live in

@@ -291,8 +291,19 @@ class _ProjectSharingScreenState extends State<ProjectSharingScreen> {
                           ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: const Icon(Icons.mail_outline),
-                            title: Text(pending['email']?.toString() ?? 'Invited'),
-                            subtitle: Text('Waiting for an answer · ${pending['role'] ?? 'member'}'),
+                            title: Text(pending.email.isEmpty ? 'Invited' : pending.email),
+                            subtitle: Text('Waiting for an answer · ${pending.role}'),
+                            trailing: IconButton(
+                              tooltip: 'Revoke invitation',
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      final client = widget.state.client;
+                                      if (client == null) return;
+                                      await _run(() => _service.cancelInvitation(client, widget.projectId, pending.id));
+                                    },
+                            ),
                           ),
                       ],
                       if (canManage) ...[

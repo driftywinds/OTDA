@@ -1,4 +1,5 @@
 import '../api/api_client.dart';
+import 'models.dart';
 
 /// Project sharing routes. Membership is never an op: these calls change the
 /// server's directory and wake the affected devices.
@@ -32,4 +33,16 @@ class SharingService {
 
   Future<void> remove(ApiClient client, String projectId, String userId) =>
       client.delete('/api/v1/projects/${Uri.encodeComponent(projectId)}/members/${Uri.encodeComponent(userId)}');
+
+  Future<void> cancelInvitation(ApiClient client, String projectId, String invitationId) => client.delete(
+        '/api/v1/projects/${Uri.encodeComponent(projectId)}/member-invitations/'
+        '${Uri.encodeComponent(invitationId)}',
+      );
+
+  /// The `pending` list of a project, typed. The member route returns it for an
+  /// owner or admin.
+  static List<PendingMember> pendingOf(Map<String, dynamic> raw) => [
+        for (final entry in (raw['pending'] as List?) ?? const [])
+          if (entry is Map) PendingMember.fromJson(entry.cast<String, dynamic>()),
+      ];
 }

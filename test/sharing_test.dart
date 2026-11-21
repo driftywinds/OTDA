@@ -34,7 +34,7 @@ void main() {
     expect(membership.members.last.avatarVersion, 3);
     expect(membership.members.last.via.single.name, 'Gardeners');
     expect(membership.grants.single.role, 'viewer');
-    expect(membership.pending.single['email'], 'linus@example.com');
+    expect(membership.pending.single.email, 'linus@example.com');
   });
 
   test('a one-person membership is not shared', () {

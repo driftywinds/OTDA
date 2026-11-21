@@ -11,6 +11,7 @@ import '../e2ee/session.dart';
 import 'activity_screen.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
+import 'invitations_screen.dart';
 import 'project_sharing_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
@@ -1565,6 +1566,16 @@ class _AppDrawer extends StatelessWidget {
                 final navigator = Navigator.of(context);
                 navigator.pop();
                 navigator.push(MaterialPageRoute(builder: (_) => ActivityScreen(state: state)));
+              },
+            ),
+            ListTile(
+              dense: true,
+              leading: mark(const Icon(Icons.mail_outline_rounded, size: 20)),
+              title: const Text('Invitations', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push(MaterialPageRoute(builder: (_) => InvitationsScreen(state: state)));
               },
             ),
             ListTile(

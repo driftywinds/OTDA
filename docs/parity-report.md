@@ -30,9 +30,11 @@ The comparison below is by *feature*, then by the route area it belongs to.
 | `GET /themes/instance` | instance theme as the default palette |
 | `POST/PATCH /workspaces`, `POST /workspaces/{id}/leave`, `/transfer` | create, rename, leave and transfer a workspace |
 | `GET/POST /projects/{id}/members`, `PATCH/DELETE …/members/{userId}` | list, add, re-role and remove project members |
+| `GET /me/member-invitations`, `/accept`, `/decline`; cancel project/workspace invitations | invitations addressed to me, and revoking a pending one |
+| `GET /workspaces/{id}`, `POST …/members` | workspace pending list and inviting a person |
 | 13 admin paths (`/users`, `/invitations`, `/audit`, `/backups`, `/settings/storage`, …) | Settings → Server |
 
-That is **46 route paths of 344**. Everything else the app stores goes through the op log.
+That is **53 route paths of 344**. Everything else the app stores goes through the op log.
 
 ### Entities the app can handle
 
@@ -65,6 +67,7 @@ is the only file that names most of them, and only to encrypt them.
 | Trash | tasks and projects, newest first, subtree restore, project restore, task restored to Inbox when its project is still trashed, purge one, empty |
 | Workspaces | list/switch/create/rename, members and groups read, move a project between workspaces, leave and transfer ownership |
 | Project sharing | members with roles, add by email, change role, remove; shared projects marked, and an encrypted account explains the 409 refusal |
+| Invitations | invite to project or workspace, accept/decline, pending list with revoke |
 | Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
 | Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
 | Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
@@ -116,7 +119,7 @@ Grouped by the server area they belong to (route count in brackets).
 | Feature | Server routes | State |
 |---|---|---|
 | Project group grants | `projects` [20], `workspaces` [21] | grants are listed read-only; no grant UI |
-| Invitations (project, workspace, member) | `invitations` [4], `project-invites` [2], `workspace-invites` [2] | admin invitations only |
+| Invite links | `project-invites` [2], `workspace-invites` [2], `/invitations/{token}` | nothing; these create an account through a public page |
 | Public links | `public` [2] | nothing |
 
 ### Automation and integration
@@ -156,9 +159,8 @@ templates, project-flow views, list/row layout options.
 Ranked by what a user would notice within a day of real use:
 
 1. **Attachments** — no way to add or open a file or a photo from a task.
-2. **Invitations and public links** — a project can be shared with an account, but
-   accept/decline, workspace invites and links for people without an account are not
-   reachable from the app.
+2. **Public links** — a task, project or note page cannot be shared with someone
+   without an account, and the token-based invite pages remain web-only.
 3. **Comments and notes** — collaboration and long-form text are not reachable.
 4. **Calendar beyond a month grid** — no week/day view, no external calendars.
 5. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
@@ -175,10 +177,10 @@ Ranked by what a user would notice within a day of real use:
 - **Data plane**: strong. The op log, recurring-task model, batched apply and offline
   behaviour are the parts most likely to be correct, and they are the parts that took
   the most work. A 10,000-task first copy measured 6–9 s on a local server.
-- **REST plane**: 46 of 344 route paths are used. Most of the remainder are features
+- **REST plane**: 53 of 344 route paths are used. Most of the remainder are features
   whose *data* the app already syncs but never displays — so the cost of adding them is
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
-  complete, plus workspace management, project sharing, statistics, activity, history,
-  export and theming. Invitations, public links, content (files, notes, comments) and
-  the E2EE lifecycle remain.
+  complete, plus workspace management, project sharing, invitations, statistics,
+  activity, history, export and theming. Public links, content (files, notes, comments)
+  and the E2EE lifecycle remain.

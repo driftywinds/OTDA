@@ -10,8 +10,8 @@ plan.
 Status values: **todo** · **doing** · **done**.
 
 **Current state:** Milestone 1 (Trash, task metadata, subtasks) and Milestone 4
-(export, statistics, activity, theming) are done. Milestone 2 is in progress: its
-workspaces and project-sharing screens are done; invitations and public links remain.
+(export, statistics, activity, theming) are done. Milestone 2 is in progress:
+workspaces, project sharing and invitations are done; public links remain.
 Milestone 3 (the E2EE lifecycle) remains.
 
 ---
@@ -177,6 +177,8 @@ sentence. Group grants are listed read-only; group management is the web app's j
 
 ### 2.3 Invitations
 
+**Status: done.**
+
 **Why** invitations exist in the app only for the admin tab (server invitations).
 
 **Scope**
@@ -185,6 +187,14 @@ sentence. Group grants are listed read-only; group management is the web app's j
 - Pending invitation list with revoke.
 - Server routes: `invitations`, `project-invites`, `workspace-invites`,
   `me/member-invitations`.
+
+**Notes** the project sharing screen already adds by email and now shows and revokes
+its `pending` list; the workspace menu gains Invite a person and Waiting invitations
+(the GET route's `pending` list). An **Invitations** row in the sidebar lists what is
+addressed to this account (project or workspace, who invited, role, expiry) and
+accepts or declines; accepting syncs before the toast. The token-based invite pages
+(`project-invites/{token}`, `workspace-invites/{token}`, public signup preview) are
+still web-only: they create an account, which is outside a signed-in app.
 
 ### 2.4 Public links
 
