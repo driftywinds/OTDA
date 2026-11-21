@@ -9,6 +9,10 @@ plan.
 
 Status values: **todo** · **doing** · **done**.
 
+**Current state:** Milestone 1 (Trash, task metadata, subtasks) and Milestone 4
+(export, statistics, activity, theming) are done. Milestone 2 (workspaces and
+sharing) is next; Milestone 3 (the E2EE lifecycle) remains.
+
 ---
 
 ## Milestone 1 — Make the task list trustworthy
@@ -126,6 +130,9 @@ future saved-view tree should query children by parent.
 Turns the app from single-user to something you can hand to a partner or a team.
 
 ### 2.1 Workspaces
+
+**Status: todo** (the sync directory already exposes roles, members and groups; the
+app still filters by workspace and has no management screen).
 
 **Why** `Workspace` is read-only today: the app filters lists by the default workspace
 and nothing else.

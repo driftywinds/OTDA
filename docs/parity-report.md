@@ -2,12 +2,13 @@
 
 Measured against code, not documentation.
 
-- **Server**: `internal/httpapi`, counting every `mux.handle("METHOD /api/v1/…")` in
-  non-test files — **344 routes** across 40 areas.
-- **App**: every `client.get/post/put/delete` in `lib/src`, plus the entities its op
-  log can read and write (`lib/src/data/models.dart`, `repo.dart`).
+- **Server**: `internal/httpapi` in the v1.5.0 research copy, counting every
+  `mux.handle("METHOD /api/v1/…")` in non-test files — **344 route registrations**
+  across 40 areas.
+- **App**: every `ApiClient` call in `lib/src`, plus the entities its op log can read
+  and write (`lib/src/data/models.dart`, `repo.dart`).
 
-The app is sync-first: almost everything travels as field operations through
+The app is sync-first: most data travels as field operations through
 `POST /api/v1/sync`, so a missing REST route is not automatically a missing feature.
 The comparison below is by *feature*, then by the route area it belongs to.
 
@@ -17,30 +18,35 @@ The comparison below is by *feature*, then by the route area it belongs to.
 
 | Call | Used for |
 |---|---|
-| `GET /health` | server version and capabilities |
+| `GET /health`, `GET /healthz` | server version and capabilities |
 | `POST /auth/login`, `/auth/mfa`, `/auth/reauth`, `/auth/logout` | sign-in, second factor, step-up, sign-out |
-| `GET /me`, `GET /me/avatar`, `GET /users/{id}/avatar` | profile and picture |
+| `GET /me`, `GET /users/{id}/avatar` | profile and picture |
+| `GET/POST /mfa`, `/mfa/totp/*`, `/mfa/recovery-codes/*`, `/mfa/trusted-devices/*` | read, enrol, confirm, disable, regenerate, forget browsers |
 | `POST /sync`, `GET /sync/events` | the whole data model, live changes |
 | `GET/PUT /encryption/keys` | end-to-end encryption key record |
-| 13 admin paths (`/users`, `/invitations`, `/audit`, `/backups`, `/settings/storage`, …) | the Settings → Server tab |
+| `GET /export?format=json\|zip` | account export |
+| `GET /activity`, `/tasks/{id}/activity`, `/tasks/{id}/history` | activity feed and per-task history |
+| `DELETE /tasks/{id}/purge`, `/projects/{id}/purge`, `POST /trash/purge` | Trash purge and empty |
+| `GET /themes/instance` | instance theme as the default palette |
+| 13 admin paths (`/users`, `/invitations`, `/audit`, `/backups`, `/settings/storage`, …) | Settings → Server |
 
-That is **25 of 344 routes**. The rest of the app's data goes through the op log.
+That is **38 route paths of 344**. Everything else the app stores goes through the op log.
 
 ### Entities the app can handle
 
 | Entity | Read | Write |
 |---|---|---|
-| `task` | yes, full row | title, description, due (date+time), recurrence, priority, project, completion, deletion, parent (read) |
-| `project` | yes | name, colour, icon, archive flag (read), delete |
-| `label` | yes | name (via `ensureLabel` only) |
-| `workspace` | yes (filtering) | no |
-| `preferences` | yes | priority names only |
+| `task` | yes, full row | title, description, due (date+time), deadline, start/Someday, estimate, energy, priority, project, section, labels, parent, position, completion of a subtree, recurrence, deletion and restore |
+| `project` | yes | name, colour, icon, delete and restore |
+| `label` | yes | create-by-name, and assign/remove on a task |
+| `section` | yes, per project | read only (the task's `section_id` is writable) |
+| `workspace` | yes: role, owner, members, groups (for filtering) | no |
+| `preferences` | yes | priority names and some device-facing prefs |
 
 Everything else the server stores — comments, attachments, notes, time entries,
-custom fields, sections, saved views, objectives, routines, frames, slots, locations,
-review, memory — is **invisible to the app**: it is synced into the replica as raw
-fields and never surfaced, edited, or even validated. `lib/src/e2ee/fields.dart` is
-the only file in the app that names most of them, and only to encrypt them.
+custom fields, saved views, objectives, routines, frames, slots, locations, review,
+memory — is **synced into the replica as raw fields and never surfaced**. `lib/src/e2ee/fields.dart`
+is the only file that names most of them, and only to encrypt them.
 
 ---
 
@@ -48,16 +54,23 @@ the only file in the app that names most of them, and only to encrypt them.
 
 | Area | Notes |
 |---|---|
-| Offline-first sync | op log, cursor, SSE stream, background timer, reseed after a restore, conflict resolution by (timestamp, device) |
+| Offline-first sync | op log, cursor, SSE stream, background timer, reseed after a restore, per-field LWW, one continuous first copy behind the startup gate |
+| First-copy gate | the shell waits for a complete pull and an empty outbox; progress from the server head cursor; resume by stored cursor |
 | Recurring tasks | series model ported from the web client: occurrence records, budgets, skips, three delete scopes, History view |
 | Tasks (core) | create, edit, complete, undo, delete, snooze, priority, project, description, due date and time |
-| Built-in views | Inbox, Today (with Done today), Upcoming, Anytime, Someday, History, Search, project lists |
+| Task metadata | deadline, start (date or Someday), estimate, energy, section, labels (create/assign), in the same LWW write path |
+| Subtasks | create from the row/sheet, indent under the parent, position order, progress over direct children, fold per device, reparent/promote, subtree completion and deletion, project moves carry descendants |
+| Trash | tasks and projects, newest first, subtree restore, project restore, task restored to Inbox when its project is still trashed, purge one, empty |
+| Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
+| Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
+| Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
+| Export | JSON and ZIP, streamed to a temp file with progress/cancel, shared through the system sheet |
 | Calendar | **month grid only**, from recurrence projection |
 | Reminders | local notifications with action buttons, exact alarms, boot re-arm, per-task time |
-| Widget | Glance widget, project filter, complete from the widget, quick add popup |
-| Auth | password, TOTP second factor, API token, session cookie, re-auth for step-up, avatar |
+| Widget | Glance widget, project filter, complete and refresh from the widget, quick-add popup, Anytime section |
+| Auth | password, TOTP second factor, API token, session cookie, re-auth for step-up, avatar; 2FA enrolment, recovery codes and trusted devices |
+| Theming | system/light/dark, independent dark/AMOLED, accent swatches, density, row-detail choice, instance-default palette |
 | Admin | users, roles, deactivate, invitations, audit log (first 100), backups, storage |
-| End-to-end encryption | unlock (passphrase or recovery key), lock, local decrypt, seal/open on sync, key stored in the keystore |
 
 ---
 
@@ -66,14 +79,11 @@ the only file in the app that names most of them, and only to encrypt them.
 | Feature | Server | App |
 |---|---|---|
 | **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | read side only: unlock, decrypt, encrypt new writes. **Cannot turn it on or off**, cannot re-encrypt old plaintext, cannot encrypt attachments, no biometric unlock, no relay |
-| **Subtasks** | full tree, moves, ordering | `parent_id` is read for the Inbox rule and copied to records; no way to create a subtask |
-| **Task fields** | deadline, start date, estimate, energy, sections, labels on tasks, assignees | `deadline`/`start`/`sector`/`energy`/`estimate`/`section_id` exist in the model and are used by views, but the editor cannot set them; labels are only auto-created by the parser |
+| **Workspaces** | 21 routes: create, rename, members, groups, invites, leave, transfer | read-only: filter lists by a workspace, switch the active one; no create/rename/members/transfer UI yet |
+| **Auth** | OIDC, passkeys, app passwords, sign-out everywhere, trusted-device policy | password + TOTP, 2FA management; no passkeys, OIDC or app passwords |
 | **Project fields** | notes, sharing, templates, timeline, flow, archived | name, colour, icon, trash |
-| **Workspaces** | 21 routes: create, rename, members, groups, invites, leave, transfer | read-only: filter lists by the default workspace |
-| **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only; no external calendar can be shown |
-| **Auth** | OIDC, passkeys, MFA enrolment, trusted devices, app passwords, sign-out everywhere | password + TOTP sign-in only; no enrolment, no passkeys, no OIDC, no trusted devices |
-| **Admin** | 31 settings areas, webhooks, SMTP, branding, themes, storage, audit verify and export | users, invitations, audit (read), backups, storage figure |
-| **Trash** | trash list, per-item restore, purge, `POST /trash/purge` | delete moves things to a tombstone; **no Trash screen**, no restore, no purge |
+| **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only |
+| **Admin** | 31 settings areas, webhooks, SMTP, branding, themes, storage, audit verify/export | users, invitations, audit (read), backups, storage figure |
 
 ---
 
@@ -85,13 +95,13 @@ Grouped by the server area they belong to (route count in brackets).
 
 | Feature | Server routes | State in the app |
 |---|---|---|
-| Attachments (files, images, links) | `attachments` [4] | nothing; no picker, no download, no upload, and E2EE file encryption is unimplemented |
+| Attachments (files, images, links) | `attachments` [4] | nothing; no picker, download or upload, and E2EE file encryption is unimplemented |
 | Comments | `comments` [3] | nothing |
 | Notes: standalone, pages, appends, rich text, links, graph | `notes` [10], `pages` [8], `task-pages` [1] | nothing |
 | Time tracking | `time-entries` [6] | nothing |
-| Custom fields | `fields` [3] | nothing; definitions are never fetched, values never shown |
-| Sections and boards | inside `projects` [20] | nothing |
-| Saved views and filters | `views` [3] | nothing; only the built-in views exist |
+| Custom fields | `fields` [3] | nothing |
+| Sections and boards | inside `projects` [20] | sections are read only for the task editor; no board UI |
+| Saved views and filters | `views` [3] | only the built-in views |
 | Habits | `habits` [3] | nothing |
 | Objectives / planner | inside `me` [35] | nothing |
 | Routines and their emails | `routine-emails` [2], `rules` [13] | nothing |
@@ -104,7 +114,7 @@ Grouped by the server area they belong to (route count in brackets).
 |---|---|---|
 | Project sharing, members, groups, grants | `projects` [20], `members` [1] | nothing |
 | Invitations (project, workspace, member) | `invitations` [4], `project-invites` [2], `workspace-invites` [2] | admin invitations only |
-| Workspaces | `workspaces` [21] | read-only filter |
+| Workspace management | `workspaces` [21] | read-only filter |
 | Public links | `public` [2] | nothing |
 
 ### Automation and integration
@@ -124,19 +134,18 @@ Grouped by the server area they belong to (route count in brackets).
 
 | Feature | Server routes | State |
 |---|---|---|
-| Export (zip, pdf) | `export` [2] | nothing |
 | Import (incl. Todoist, preview, undo) | `import` [6] | nothing |
 | Backup restore | `backups` [12] | run a backup and list archives; **no restore** |
-| Trash purge | `trash` [1] | nothing |
-| Activity feed | `activity` [1] | nothing |
-| Statistics | inside `me` | nothing |
+| E2EE history purge | `encryption` [5] | nothing |
+| Instance theme editing | `settings/themes/*` [3] | the app reads the instance default but cannot edit it |
+| `/me/activity` | `me` [35] | not used: this is the security audit log, not task history |
 
 ### Platform niceties
 
-Themes and theme editor, instance branding, demo mode, app sign-in (`app-passwords`,
-`tokens`, `me/apps`), localization, command palette, keyboard shortcuts, bulk actions,
-multi-day tasks, task dependencies, assignment, urgency score, day parts, focus mode,
-weekly review, templates, project-flow views, list/row layout options.
+Instance branding, demo mode, app sign-in (`app-passwords`, `tokens`, `me/apps`),
+localization, command palette, keyboard shortcuts, bulk actions, multi-day tasks,
+task dependencies, assignment, urgency score, day parts, focus mode, weekly review,
+templates, project-flow views, list/row layout options.
 
 ---
 
@@ -145,25 +154,27 @@ weekly review, templates, project-flow views, list/row layout options.
 Ranked by what a user would notice within a day of real use:
 
 1. **Attachments** — no way to add or open a file or a photo from a task.
-2. **Trash** — deleting is a one-way door; nothing can be restored.
-3. **Calendar beyond a month grid** — no week/day view, no external calendars.
-4. **Comments and notes** — collaboration and long-form text are not reachable.
-5. **Task metadata** — deadline, start date, estimate, energy, section, labels are
-   editable on the server and in the web app, but not here.
+2. **Sharing and workspaces** — a project cannot be shared or managed, so the app is
+   single-user in practice even though the workspace list is read.
+3. **Comments and notes** — collaboration and long-form text are not reachable.
+4. **Calendar beyond a month grid** — no week/day view, no external calendars.
+5. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
 6. **Time tracking** — absent.
 7. **Push notifications** — reminders only fire from the device that scheduled them.
-8. **Sharing** — a project cannot be shared, so the app is single-user in practice.
-9. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
-10. **Saved views / custom fields** — the app shows only what the server's built-in
-    views show.
+8. **Saved views / custom fields** — the app shows only what the server's built-in
+   views show.
+9. **Import and backup restore** — export works, bringing data back does not.
+10. **Workspace management** — creating, renaming, members, groups and transfer are
+    not in the app.
 
 ## 6. Honest summary
 
-- **Data plane**: strong. The op log, recurring-task model and offline behaviour are
-  the parts most likely to be correct, and they are the parts that took the most work.
-- **REST plane**: 25 of 344 routes are used. Most of the remainder are features whose
-  *data* the app already syncs but never displays — so the cost of adding them is UI
-  and validation, not protocol.
-- **Feature plane**: of roughly 130 shipped server specs, the app covers the core
-  task/project/label/reminder/widget surface and none of the collaboration, content
-  (files, notes, comments) or integration areas.
+- **Data plane**: strong. The op log, recurring-task model, batched apply and offline
+  behaviour are the parts most likely to be correct, and they are the parts that took
+  the most work. A 10,000-task first copy measured 6–9 s on a local server.
+- **REST plane**: 38 of 344 route paths are used. Most of the remainder are features
+  whose *data* the app already syncs but never displays — so the cost of adding them is
+  UI and validation, not protocol.
+- **Feature plane**: the personal task/project/label/reminder/widget surface is now
+  complete, plus read-only statistics, activity, history, export and theming. The
+  collaboration, content (files, notes, comments) and E2EE-lifecycle areas remain.

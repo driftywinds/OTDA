@@ -9,6 +9,16 @@
 
 Offline-first, with the same data model as the server so every device converges.
 
+- Tasks with deadline, start/Someday, estimate, energy, section, labels, subtasks,
+  a Trash with restore and purge, and repeating occurrences.
+- Inbox, Today, Upcoming (ending with Anytime), Anytime, Someday, History, Search,
+  project lists, a month calendar, reminders and the home-screen widget.
+- Two-factor authentication management (enrol, recovery codes, trusted browsers),
+  statistics, a shared-project activity feed, per-task history, JSON/ZIP export and
+  device-local theming.
+- Not yet: project sharing and workspace management, attachments/notes/comments, and
+  the end-to-end-encryption lifecycle (unlock works; enable/disable/files do not).
+
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
 - Platforms: Android, iOS (the home-screen widget, the quick-add popup and the
@@ -37,12 +47,12 @@ Offline-first, with the same data model as the server so every device converges.
 | `spec/OTDA.openapi.json` | The same surface as OpenAPI 3.1, filtered to what this app uses. |
 | `spec/*.py` | The scripts that produced it (route table of tag `v1.5.0` + live probes + the repo's OpenAPI). |
 | `lib/src/api/` | HTTP client: bearer token or session cookie, error envelope, no redirects. |
-| `lib/src/auth/` | Health check, password sign-in, second factor, step-up (`reauth`), token sign-in. |
-| `lib/src/data/` | The local replica: per-field last-writer-wins, op outbox, hybrid logical clock, sync engine, view rules. |
+| `lib/src/auth/` | Health check, password sign-in, second factor, step-up (`reauth`), token sign-in, TOTP enrolment/recovery codes/trusted devices. |
+| `lib/src/data/` | The local replica: per-field last-writer-wins, op outbox, hybrid logical clock, sync engine, view rules, statistics, activity/history and export clients. |
 | `lib/src/quickadd/` | The quick-add parser, ported from the web app with its shared vectors. |
 | `lib/src/reminders/` | The reminder planner (pure) and the service that arms it with the OS. |
 | `lib/src/widget/` | The widget snapshot builder (pure) and the widget's look settings. |
-| `lib/src/ui/` | Screens and sheets: home, the new-task composer, task sheet, settings, admin. |
+| `lib/src/ui/` | Screens and sheets: home, composer, task sheet, Trash, statistics, activity, export, settings, admin. |
 | `android/.../widget/` | The Glance home-screen widget and its project picker (Kotlin). |
 | `test/` | Unit tests, parity fixtures (`inbox`, `views`, `quickadd` vectors), and integration tests against a real server. |
 | `tool/parse_check.dart` | Prints what the parser makes of a line: `dart run tool/parse_check.dart "call Sam tomorrow 3pm p1"`. |
@@ -485,8 +495,13 @@ Two kinds, shown in one screen:
 - **Account preferences** (`week_start`, `date_format`, `time_format`,
   `row_layout`, …) live in the op log under `user_prefs/me` and **follow you to
   every device** on the next sync. `system` means "follow this phone".
-- **This device** (theme, font, notification options, widget look) is stored
-  locally and never synced.
+- **This device** (theme mode, independent dark/AMOLED style, accent, density, row
+  detail, font, notification options, widget look) is stored locally and never
+  synced. An instance theme read after sign-in supplies the default palette until
+  an accent is chosen.
+- **Security** is account state, not a preference: Settings → Two-factor
+  authentication enrols TOTP, shows recovery codes once, lists remembered browsers
+  and turns the factor off (each change asks for a fresh password or code).
 
 Admins and owners get a second **Server** tab (`admin_view.dart`) over the admin
 API.
@@ -517,7 +532,9 @@ $env:GRADLE_USER_HOME="$PWD\.tmp\gradle"; $env:ANDROID_USER_HOME="$PWD\.tmp\andr
 | --- | --- |
 | Parser | `test/quickadd/` — the shared vectors, a port of the web unit tests, the NLP grammar tests, and `relative_test.dart` (`in 4m`, `in 3d`, …, highlights, the highlighting controller) |
 | Composer | `composer_state_test`, `compose_task_test`, `new_task_sheet_test` |
-| Data and sync | `sync_exchange_test`, `live_update_test`, `series_completion_test`, `occurrences_test`, `recurrence_test`, the `inbox` / `views` vector tests |
+| Data and sync | `sync_exchange_test`, `live_update_test`, `sync_gate_test`, `apply_ops_test`, `series_completion_test`, `occurrences_test`, `recurrence_test`, the `inbox` / `views` vector tests |
+| Tasks and Trash | `task_metadata_test`, `repo_metadata_test`, `subtasks_test`, `trash_test`, `trash_flow_test` |
+| Read and account | `stats_test`, `activity_flow_test`, `export_test`, `export_flow_test`, `mfa_flow_test`, `theme_palette_test` |
 | Reminders and widget | `reminder_planner_test`, `widget_snapshot_test`, `widget_settings_test` |
 | UI | `settings_rows_test`, `theme_smoke_test`, `views_test`, `calendar_month_test` |
 
