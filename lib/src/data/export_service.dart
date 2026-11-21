@@ -33,10 +33,10 @@ class ExportFile {
 /// cancel button can stop reading; the server keeps building its answer until
 /// the connection closes, which is the part a client cannot abort.
 class ExportService {
-  const ExportService({Future<Directory> Function()? directory}) : _directory = directory;
+  const ExportService({this.directory});
 
   /// Test seam: the plugin-backed temporary directory by default.
-  final Future<Directory> Function()? _directory;
+  final Future<Directory> Function()? directory;
 
   Future<ExportFile> download(
     ApiClient client, {
@@ -63,7 +63,7 @@ class ExportService {
       received += chunk.length;
       onProgress?.call(received, total);
     }
-    final dir = await (_directory ?? getTemporaryDirectory)();
+    final dir = await (directory ?? getTemporaryDirectory)();
     final name = format == ExportFormat.zip ? 'opentodo-export.zip' : 'opentodo-export.json';
     final file = File(p.join(dir.path, name));
     await file.writeAsBytes(builder.takeBytes(), flush: true);
