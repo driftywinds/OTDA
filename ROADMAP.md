@@ -68,14 +68,21 @@ fields the same way it carries the current ones.
 but nothing can create a subtask, reorder one, or promote it.
 
 **Scope**
-- Create a subtask from a task, from the list, and from the row menu. A new subtask
-  inherits the parent's project, priority 4, no due date, and appears beneath its
-  parent immediately, offline.
+- Create a subtask from a task, from the list, and from the row menu. The composer
+  has a Parent chip with a searchable task list, and starting it from “Add subtask”
+  pre-fills that parent; the new subtask inherits the parent's project and appears
+  beneath its parent immediately, offline.
 - Show children indented under their parent, ordered by `position`, with progress
   "completed/total" over **direct** children in the row and in the detail sheet.
 - Move a subtask to another parent, promote it to top level, delete it. Moving a
   parent's project moves every descendant (one op per task).
 - Collapse/expand per device, remembered locally, not synced.
+
+**Notes** the composer is reused for subtasks, so a subtask gets every attribute a
+top-level task gets (date, time, duration, repeat, priority) plus a Parent chip. The
+project chip is fixed to the parent's project while a parent is selected, because the
+server refuses a subtask in another project. Quick “create subtask with a title” is
+no longer a separate text dialog.
 
 **Behaviour, taken from the web client's code** (`web/src/lib/ops.ts`,
 `web/src/lib/recurring.ts`, `openspec/specs/subtasks`). These are decided; implement

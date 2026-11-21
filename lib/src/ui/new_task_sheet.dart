@@ -19,11 +19,21 @@ import 'widgets.dart';
 /// clearing the line clears only what the line had contributed — see
 /// [ComposerState].
 class NewTaskSheet extends StatefulWidget {
-  const NewTaskSheet({super.key, required this.repo, required this.projects, this.initialProjectId});
+  const NewTaskSheet({
+    super.key,
+    required this.repo,
+    required this.projects,
+    this.initialProjectId,
+    this.initialParent,
+  });
 
   final Repo repo;
   final List<Project> projects;
   final String? initialProjectId;
+
+  /// A task to nest the new one under: the composer opens with the parent chip
+  /// filled and the project fixed to the parent's.
+  final Task? initialParent;
 
   @override
   State<NewTaskSheet> createState() => _NewTaskSheetState();
@@ -33,7 +43,10 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   final _input = HighlightingController();
   Timer? _debounce;
 
-  late final ComposerState _values = ComposerState(projectId: widget.initialProjectId);
+  late final ComposerState _values;
+  Task? _parent;
+  List<Task> _allTasks = const [];
+  bool _loadingParents = true;
   ParsedLine _parsed = const ParsedLine(title: '');
   bool _saving = false;
   String? _lastParsedText;
@@ -43,6 +56,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   final _repeatKey = GlobalKey();
   final _priorityKey = GlobalKey();
   final _projectKey = GlobalKey();
+  final _parentKey = GlobalKey();
 
   /// Held so the popup can focus the line and raise the keyboard itself: in the
   /// widget's translucent window the autofocus request can land before the window
@@ -52,7 +66,10 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   @override
   void initState() {
     super.initState();
+    _parent = widget.initialParent;
+    _values = ComposerState(projectId: _parent?.projectId ?? widget.initialProjectId);
     _input.addListener(_onChanged);
+    unawaited(_loadParentCandidates());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _titleFocus.requestFocus();
@@ -76,6 +93,41 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     _input.dispose();
     _titleFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadParentCandidates() async {
+    try {
+      final tasks = await widget.repo.tasks();
+      if (!mounted) return;
+      setState(() {
+        _allTasks = [for (final task in tasks) if (!task.isDeleted) task];
+        _loadingParents = false;
+      });
+    } on Object {
+      if (mounted) setState(() => _loadingParents = false);
+    }
+  }
+
+  Future<void> _pickParent() async {
+    if (_loadingParents) return;
+    final chosen = await showModalBottomSheet<Task>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _ParentPicker(
+        tasks: _allTasks,
+        projects: widget.projects,
+        selectedId: _parent?.id,
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _parent = chosen;
+      // A subtask must stay in its parent's project; the project chip is fixed.
+      _values.projectId = chosen.projectId;
+      _values.claim('project');
+    });
   }
 
   /// Parses after a pause, the way the web app does, so the preview follows the
@@ -188,8 +240,17 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       final ids = await widget.repo.resolveLabelNames(named);
       if (ids.isNotEmpty) fields['labels'] = ids;
     }
+    final parent = _parent;
+    if (parent != null) {
+      fields['parent_id'] = parent.id;
+      fields['position'] = await widget.repo.nextChildPosition(parent.id);
+    }
     if (!mounted) return;
-    await widget.repo.createTask(title, projectId: _values.projectId, extra: fields);
+    await widget.repo.createTask(
+      title,
+      projectId: parent?.projectId ?? _values.projectId,
+      extra: fields,
+    );
     if (mounted) Navigator.of(context).pop(true);
   }
 
@@ -203,11 +264,25 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   }
 
   String get _projectName {
+    if (_parent != null) {
+      if (_parent!.projectId == null) return 'Inbox';
+      for (final project in widget.projects) {
+        if (project.id == _parent!.projectId) return project.name;
+      }
+      return 'Parent project';
+    }
     if (_values.projectId == null) return 'Inbox';
     for (final project in widget.projects) {
       if (project.id == _values.projectId) return project.name;
     }
     return 'Project';
+  }
+
+  String get _parentLabel {
+    final parent = _parent;
+    if (parent == null) return 'Parent';
+    final title = parent.title;
+    return title.length > 28 ? '${title.substring(0, 27)}…' : title;
   }
 
   /// The line under the input: what the line was understood to mean.
@@ -374,12 +449,25 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                         : null,
                   ),
                   PropChip(
+                    key: _parentKey,
+                    icon: Icons.account_tree_outlined,
+                    label: _parentLabel,
+                    active: _parent != null,
+                    onTap: _loadingParents ? null : _pickParent,
+                    onClear: _parent == null
+                        ? null
+                        : () => setState(() {
+                              _parent = null;
+                              _values.release('project');
+                            }),
+                  ),
+                  PropChip(
                     key: _projectKey,
                     icon: Icons.folder_outlined,
                     label: _projectName,
                     active: _values.projectId != null,
-                    onTap: () => _showProjectMenu(_projectKey),
-                    onClear: _values.projectId == null
+                    onTap: _parent == null ? () => _showProjectMenu(_projectKey) : null,
+                    onClear: _parent != null || _values.projectId == null
                         ? null
                         : () => setState(() {
                               _values.projectId = null;
@@ -477,6 +565,111 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       _values.projectId = choice;
       _values.claim('project');
     });
+  }
+}
+
+/// A searchable list of the tasks a new task can nest under.
+class _ParentPicker extends StatefulWidget {
+  const _ParentPicker({required this.tasks, required this.projects, this.selectedId});
+
+  final List<Task> tasks;
+  final List<Project> projects;
+  final String? selectedId;
+
+  @override
+  State<_ParentPicker> createState() => _ParentPickerState();
+}
+
+class _ParentPickerState extends State<_ParentPicker> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final query = _search.text.trim().toLowerCase();
+    final projectNames = {for (final project in widget.projects) project.id: project.name};
+    final shown = [
+      for (final task in widget.tasks)
+        if (query.isEmpty ||
+            task.title.toLowerCase().contains(query) ||
+            (projectNames[task.projectId] ?? '').toLowerCase().contains(query))
+          task,
+    ].take(300).toList();
+
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.72,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Make it a subtask of…', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _search,
+                  autofocus: false,
+                  decoration: const InputDecoration(
+                    hintText: 'Search tasks or projects',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: widget.tasks.isEmpty
+                ? Center(
+                    child: Text(
+                      'No tasks to nest under yet.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : shown.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No task matches “${_search.text.trim()}”.',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        itemCount: shown.length,
+                        itemBuilder: (context, index) {
+                          final task = shown[index];
+                          return ListTile(
+                            leading: Icon(
+                              task.parentId == null ? Icons.check_circle_outline : Icons.subdirectory_arrow_right,
+                              size: 20,
+                            ),
+                            title: Text(task.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              [
+                                projectNames[task.projectId] ?? 'Inbox',
+                                if (task.parentId != null) 'already a subtask',
+                                if (task.isCompleted) 'completed',
+                              ].join(' · '),
+                            ),
+                            trailing: task.id == widget.selectedId ? const Icon(Icons.check_rounded, size: 20) : null,
+                            onTap: () => Navigator.of(context).pop(task),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

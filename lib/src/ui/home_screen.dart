@@ -506,28 +506,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _addSubtask(Task parent) async {
     final repo = widget.state.repo;
     if (repo == null) return;
-    final title = TextEditingController();
-    final text = await showDialog<String>(
+    final projects = await repo.projects();
+    if (!mounted) return;
+    final saved = await showModalBottomSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Subtask of “${parent.title}”'),
-        content: TextField(
-          controller: title,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'What needs doing?'),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(title.text), child: const Text('Add')),
-        ],
-      ),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => NewTaskSheet(repo: repo, projects: projects, initialParent: parent),
     );
-    title.dispose();
-    final value = text?.trim() ?? '';
-    if (value.isEmpty) return;
-    await repo.createSubtask(parent, value);
+    if (saved != true) return;
     // Show the new row where it belongs, even if the parent was folded.
     if (_collapsed.remove(parent.id)) {
       await repo.db.setMeta('ui.collapsed', _collapsed.join(','));

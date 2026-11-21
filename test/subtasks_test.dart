@@ -47,6 +47,38 @@ void main() {
     expect((await repo.childrenOf(parent.id)).map((t) => t.title), ['Edges', 'Clippings']);
   });
 
+  test('a subtask created through the composer keeps all its fields', () async {
+    final project = await repo.createProject('Garden');
+    final parent = await repo.createTask('Mow', projectId: project.id);
+    final first = await repo.createTask(
+      'Edges',
+      projectId: parent.projectId,
+      extra: {
+        'parent_id': parent.id,
+        'position': await repo.nextChildPosition(parent.id),
+        'due': {'date': '2026-01-02'},
+        'estimate_minutes': 30,
+        'priority': 2,
+      },
+    );
+    final second = await repo.createTask(
+      'Clippings',
+      projectId: parent.projectId,
+      extra: {
+        'parent_id': parent.id,
+        'position': await repo.nextChildPosition(parent.id),
+      },
+    );
+
+    expect(first.parentId, parent.id);
+    expect(first.dueDate, '2026-01-02');
+    expect(first.estimateMinutes, 30);
+    expect(first.priority, 2);
+    expect(second.parentId, parent.id);
+    expect((second.raw['position'] as num).toDouble(),
+        greaterThan((first.raw['position'] as num).toDouble()));
+  });
+
   test('progress counts direct live children only, and never stored', () async {
     final parent = await repo.createTask('Mow');
     final first = await repo.createSubtask(parent, 'Edges');

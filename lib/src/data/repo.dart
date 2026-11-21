@@ -233,6 +233,12 @@ class Repo {
     return (done: children.where((c) => c.isCompleted).length, total: children.length);
   }
 
+  /// The position a new child of [parentId] takes: after the last sibling.
+  Future<double> nextChildPosition(String parentId) async {
+    final siblings = await childrenOf(parentId);
+    return siblings.isEmpty ? 0 : _position(siblings.last) + 1;
+  }
+
   /// Moves a task under another parent, or to the top level. The server's rule
   /// is the same as the web client's: same project, no cycle, no self.
   Future<void> setParent(Task task, String? parentId) async {

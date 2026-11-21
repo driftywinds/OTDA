@@ -10,6 +10,7 @@ import 'package:otda/src/api/api_client.dart';
 import 'package:otda/src/api/cookie_jar.dart';
 import 'package:otda/src/data/clock.dart';
 import 'package:otda/src/data/db.dart';
+import 'package:otda/src/data/models.dart';
 import 'package:otda/src/data/repo.dart';
 import 'package:otda/src/data/sync_engine.dart';
 import 'package:otda/src/ui/new_task_sheet.dart';
@@ -72,8 +73,23 @@ void main() {
       home: Scaffold(body: NewTaskSheet(repo: repo, projects: const [])),
     ));
 
-    for (final label in ['Date', 'Time', 'Duration', 'Repeat', 'Priority', 'Inbox']) {
+    for (final label in ['Date', 'Time', 'Duration', 'Repeat', 'Priority', 'Parent', 'Inbox']) {
       expect(find.text(label), findsWidgets, reason: 'the $label control is missing');
     }
+  });
+
+  testWidgets('a started-from-parent composer fills the parent chip and project', (tester) async {
+    final repo = await buildRepo(tester);
+    late Task parent;
+    await tester.runAsync(() async {
+      parent = await repo.createTask('Mow the lawn');
+    });
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: NewTaskSheet(repo: repo, projects: const [], initialParent: parent)),
+    ));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Mow the lawn'), findsOneWidget);
+    expect(find.text('Inbox'), findsOneWidget);
   });
 }

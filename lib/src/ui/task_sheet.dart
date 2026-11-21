@@ -4,6 +4,7 @@ import '../data/models.dart';
 import '../data/repo.dart';
 import '../quickadd/rule.dart' as rules;
 import 'format.dart';
+import 'new_task_sheet.dart';
 import 'task_history_screen.dart';
 import 'task_page_screen.dart';
 import 'theme.dart';
@@ -496,29 +497,18 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   Future<void> _addSubtask() async {
-    final title = TextEditingController();
-    final text = await showDialog<String>(
+    final saved = await showModalBottomSheet<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Subtask of “${widget.task.title}”'),
-        content: TextField(
-          controller: title,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(hintText: 'What needs doing?'),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(title.text), child: const Text('Add')),
-        ],
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => NewTaskSheet(
+        repo: widget.repo,
+        projects: widget.projects,
+        initialParent: widget.task,
       ),
     );
-    title.dispose();
-    final value = text?.trim() ?? '';
-    if (value.isEmpty) return;
-    await widget.repo.createSubtask(widget.task, value);
-    await _loadProgress();
+    if (saved == true) await _loadProgress();
   }
 
   String get _projectName {
