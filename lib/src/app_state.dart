@@ -11,6 +11,7 @@ import 'api/api_client.dart';
 import 'api/api_exception.dart';
 import 'api/cookie_jar.dart';
 import 'auth/auth_service.dart';
+import 'auth/mfa_service.dart';
 import 'auth/session_store.dart';
 import 'data/clock.dart';
 import 'data/db.dart';
@@ -56,6 +57,13 @@ class AppState extends ChangeNotifier {
   /// Resolves when this launch's encryption record check is done, so the first
   /// pull never starts before the device knows it is allowed to store plaintext.
   Future<void> _encryptionReady = Future<void>.value();
+
+  /// The second-factor state of the signed-in account, read once per launch and
+  /// after an enrolment. A restricted session may only enrol, so the shell has
+  /// to route there before opening the replica.
+  MfaStatus? _mfaStatus;
+  MfaStatus? get mfaStatus => _mfaStatus;
+  bool get mfaEnrolmentRequired => _mfaStatus?.restricted == true;
 
   /// Decides when a failure is worth showing; see [FailureMeter].
   final _failures = FailureMeter();
@@ -159,6 +167,39 @@ class AppState extends ChangeNotifier {
     if (_engine == null) return;
     _failures.reset();
     await _runBootstrap();
+  }
+
+  /// Reads the account's second-factor state. A server that predates the route
+  /// answers 404 and is treated as having none.
+  Future<void> refreshMfaStatus() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      _mfaStatus = await const MfaService().status(client);
+    } on ApiException catch (e) {
+      if (e.status == 404) _mfaStatus = MfaStatus.off;
+    } on Object {
+      // Offline: keep what we know and let sync report the real state.
+    }
+    notifyListeners();
+  }
+
+  /// Re-confirms identity for the server's step-up routes (second factor,
+  /// tokens, passkeys, secret-holding settings). A session cookie is required;
+  /// an API token cannot step up.
+  Future<void> reauth({String? password, String? code}) async {
+    final client = _client;
+    if (client == null) throw const ApiException(0, 'not_signed_in', 'sign in first');
+    await _auth.reauth(client, password: password, code: code);
+  }
+
+  /// Called after the restricted session confirmed an enrolment: the replica can
+  /// now open and the first copy begins.
+  Future<void> finishMfaEnrolment() async {
+    await refreshMfaStatus();
+    if (_mfaStatus?.restricted == true) return; // still required: stay here
+    await _openReplica();
+    notifyListeners();
   }
 
   /// The servers this device has signed in to, most recent first.
@@ -273,6 +314,10 @@ class AppState extends ChangeNotifier {
         _account = stored;
       }
       _client = client;
+      // A policy-restricted session may only enrol; opening a replica would just
+      // collect 403s, so the shell routes to the enrolment screen instead.
+      await refreshMfaStatus();
+      if (mfaEnrolmentRequired) return;
       // Before the replica opens: a pull that runs while this device still thinks
       // the account is unencrypted stores ciphertext in the replica. The record is
       // cached after the first read, so on later launches this is a local check.
@@ -331,7 +376,14 @@ class AppState extends ChangeNotifier {
     unawaited(_loadAvatar());
     otdaLog('auth: account stored, reading the server');
     _server = await _auth.health(client);
-    otdaLog('auth: server ${_server?.version}, reading the key record');
+    otdaLog('auth: server ${_server?.version}, reading the second factor');
+    await refreshMfaStatus();
+    if (mfaEnrolmentRequired) {
+      otdaLog('auth: the server requires two-factor enrolment before anything else');
+      notifyListeners();
+      return;
+    }
+    otdaLog('auth: reading the key record');
     // Before the replica opens and syncs: an account that is encrypted asks for the
     // passphrase now, and an ordinary account answers 404 and carries on unchanged.
     _encryptionReady = loadEncryption();
@@ -449,6 +501,19 @@ class AppState extends ChangeNotifier {
       otdaLog('replica: first copy failed: $e');
       if (e.isUnauthenticated) {
         await signOut();
+        return;
+      }
+      if (e.code == 'mfa_enrolment_required') {
+        // The policy turned on while this device was signed out, or the status
+        // read was skipped offline. The shell routes to enrolment.
+        _mfaStatus = const MfaStatus(
+          enrolled: false,
+          recoveryCodesRemaining: 0,
+          policy: 'all',
+          required: true,
+          restricted: true,
+        );
+        notifyListeners();
         return;
       }
       _recordFailure(e);
@@ -606,6 +671,7 @@ class AppState extends ChangeNotifier {
     _engine = null;
     _repo = null;
     _syncError = null;
+    _mfaStatus = null;
     _gate = SyncGate.syncing;
     _gateProgress = null;
     _gateError = null;

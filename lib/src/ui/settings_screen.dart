@@ -9,8 +9,12 @@ import '../system_bridge.dart';
 import '../widget/widget_settings.dart';
 
 import '../app_state.dart';
+import '../api/api_client.dart';
+import '../api/api_exception.dart';
+import '../auth/mfa_service.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
+import 'reauth.dart';
 import 'settings_rows.dart';
 import '../e2ee/session.dart';
 import 'e2ee_unlock_sheet.dart';
@@ -128,6 +132,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SettingsRow(label: 'Server', value: Uri.parse(account?.serverUrl ?? '').host),
                     SettingsRow(label: 'Server version', value: server?.version ?? ''),
                   ],
+                ),
+                _Section(
+                  title: 'Two-factor authentication',
+                  children: [_TwoFactorCard(state: widget.state)],
                 ),
                 _Section(
                   title: 'Dates and times',
@@ -941,3 +949,486 @@ class _EncryptionCardState extends State<_EncryptionCard> {
     );
   }
 }
+
+/// The account's second factor: enrol, recovery codes, remembered browsers and
+/// turning it off. Every mutating route needs a recent password or code, so the
+/// card asks for one when the server answers `reauth_required`.
+class _TwoFactorCard extends StatefulWidget {
+  const _TwoFactorCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_TwoFactorCard> createState() => _TwoFactorCardState();
+}
+
+class _TwoFactorCardState extends State<_TwoFactorCard> {
+  static const _service = MfaService();
+
+  MfaStatus? _status;
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final client = widget.state.client;
+    if (client == null) return;
+    try {
+      final status = await _service.status(client);
+      if (mounted) setState(() => _status = status);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.status == 404 ? null : e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Runs a step-up route, asking for the password once when it has expired.
+  Future<T> _sensitive<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on ApiException catch (e) {
+      if (!e.needsReauth) rethrow;
+      final ok = await askReauth(
+        context,
+        widget.state,
+        enrolled: _status?.enrolled ?? false,
+      );
+      if (!ok) throw const ApiException(0, 'cancelled', 'cancelled');
+      return await action();
+    }
+  }
+
+  void _say(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _turnOn() async {
+    final client = widget.state.client;
+    if (client == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final enrolment = await _sensitive(() => _service.enroll(client));
+      if (!mounted) return;
+      final confirmation = await _askForCode(client, enrolment);
+      if (confirmation == null) return;
+      await _showCodes(confirmation.recoveryCodes);
+      await _load();
+    } on ApiException catch (e) {
+      if (e.code != 'cancelled') setState(() => _error = _explain(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<MfaConfirmation?> _askForCode(
+    ApiClient client,
+    TotpEnrollment enrolment,
+  ) async {
+    final code = TextEditingController();
+    final busy = ValueNotifier<bool>(false);
+    final error = ValueNotifier<String?>(null);
+    final result = await showDialog<MfaConfirmation>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Add this key to your authenticator'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'In your authenticator app choose "enter a setup key", then type the six-digit '
+                'code it shows.',
+              ),
+              const SizedBox(height: 14),
+              SelectableText(
+                enrolment.secret,
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontFamily: 'monospace', letterSpacing: 1.5),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: enrolment.secret),
+                  );
+                  _say('Key copied');
+                },
+                child: const Text('Copy key'),
+              ),
+              TextField(
+                controller: code,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Six-digit code'),
+              ),
+              ValueListenableBuilder<String?>(
+                valueListenable: error,
+                builder: (context, message, _) => message == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          message,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: busy,
+            builder: (context, working, _) => FilledButton(
+              onPressed: working
+                  ? null
+                  : () async {
+                      busy.value = true;
+                      error.value = null;
+                      try {
+                        final confirmed = await _service.confirm(
+                          client,
+                          code.text,
+                        );
+                        if (context.mounted) {
+                          Navigator.of(context).pop(confirmed);
+                        }
+                      } on ApiException catch (e) {
+                        error.value = _explain(e);
+                      } finally {
+                        busy.value = false;
+                      }
+                    },
+              child: Text(working ? 'Checking…' : 'Turn on'),
+            ),
+          ),
+        ],
+      ),
+    );
+    code.dispose();
+    busy.dispose();
+    error.dispose();
+    return result;
+  }
+
+  Future<void> _showCodes(List<String> codes) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save your recovery codes'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Shown once. Each code signs you in if the authenticator is lost.',
+              ),
+              const SizedBox(height: 12),
+              SelectableText(
+                codes.join('\n'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontFamily: 'monospace',
+                  letterSpacing: 1.2,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: codes.join('\n')));
+              _say('Recovery codes copied');
+            },
+            child: const Text('Copy all'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('I saved them'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _regenerate() async {
+    final client = widget.state.client;
+    if (client == null) return;
+    setState(() => _busy = true);
+    try {
+      final codes = await _sensitive(
+        () => _service.regenerateRecoveryCodes(client),
+      );
+      await _showCodes(codes);
+      await _load();
+    } on ApiException catch (e) {
+      if (e.code != 'cancelled') _say(_explain(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _turnOff() async {
+    final client = widget.state.client;
+    if (client == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Turn off two-factor authentication?'),
+        content: const Text(
+          'Signing in will need only the password. Remembered browsers and recovery codes stop '
+          'working.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Turn off'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await _sensitive(() => _service.disable(client));
+      _say('Two-factor authentication is off');
+      await _load();
+    } on ApiException catch (e) {
+      if (e.code != 'cancelled') {
+        _say(
+          e.code == 'mfa_required_by_policy'
+              ? 'The server owner requires it for this account.'
+              : _explain(e),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _devices() async {
+    final client = widget.state.client;
+    if (client == null) return;
+    List<TrustedDevice> devices;
+    try {
+      devices = await _sensitive(() => _service.trustedDevices(client));
+    } on ApiException catch (e) {
+      if (e.code != 'cancelled') _say(_explain(e));
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Remembered browsers'),
+          content: SizedBox(
+            width: 420,
+            child: devices.isEmpty
+                ? const Text(
+                    'None. A browser that ticked "trust this device" will appear here.',
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final device in devices)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            device.userAgent.isEmpty
+                                ? 'Unknown browser'
+                                : device.userAgent,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'Added ${_day(device.createdAt)} · expires ${_day(device.expiresAt)}',
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Forget this browser',
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () async {
+                              try {
+                                await _sensitive(
+                                  () => _service.forgetTrustedDevice(
+                                    client,
+                                    device.id,
+                                  ),
+                                );
+                                setDialogState(() => devices.remove(device));
+                              } on ApiException catch (e) {
+                                if (e.code != 'cancelled') _say(_explain(e));
+                              }
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            if (devices.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await _sensitive(
+                      () => _service.forgetAllTrustedDevices(client),
+                    );
+                    setDialogState(devices.clear);
+                  } on ApiException catch (e) {
+                    if (e.code != 'cancelled') _say(_explain(e));
+                  }
+                },
+                child: const Text('Forget all'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _day(int ms) {
+    if (ms <= 0) return '—';
+    final date = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _explain(ApiException e) => switch (e.code) {
+    'mfa_code_invalid' => 'That code did not match. Check the phone\'s clock.',
+    'mfa_already_enrolled' => 'Two-factor authentication is already on.',
+    'mfa_not_enrolled' => 'Two-factor authentication is not on.',
+    'reauth_required' => 'Confirm your password to continue.',
+    'rate_limited' => 'Too many attempts. Wait a minute.',
+    'invalid_input' => 'That was not accepted. Try again.',
+    _ => e.message,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+    final status = _status;
+
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final on = status?.enrolled ?? false;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                on ? Icons.verified_user_rounded : Icons.shield_outlined,
+                size: 18,
+                color: on
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Two-factor authentication', style: style)),
+              Text(
+                on ? 'On' : 'Off',
+                style: style?.copyWith(
+                  color: on
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            on
+                ? '${status!.recoveryCodesRemaining} recovery code'
+                      '${status.recoveryCodesRemaining == 1 ? '' : 's'} left. '
+                      '${status.required ? 'The server owner requires it.' : 'Optional for this account.'}'
+                : 'A six-digit code from an authenticator app, asked for after the password. '
+                      '${status?.required == true ? 'The server owner requires it.' : 'Optional for this account.'}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _error!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (!on)
+                FilledButton.tonal(
+                  onPressed: _busy ? null : _turnOn,
+                  child: Text(_busy ? 'Starting…' : 'Turn on'),
+                ),
+              if (on) ...[
+                OutlinedButton(
+                  onPressed: _busy ? null : _regenerate,
+                  child: const Text('New recovery codes'),
+                ),
+                OutlinedButton(
+                  onPressed: _busy ? null : _devices,
+                  child: const Text('Remembered browsers'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : _turnOff,
+                  child: const Text('Turn off'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
