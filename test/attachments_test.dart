@@ -128,6 +128,31 @@ void main() {
     expect(decryptFileBytes(key: key, attachmentId: attachment.id, envelope: local), plain);
   });
 
+  test('a plaintext file is re-uploaded encrypted and back as a new row', () async {
+    final task = await repo.createTask('Migrate');
+    final plain = Uint8List.fromList(utf8.encode('migrate me'));
+    final old = await service().add(taskId: task.id, name: 'm.txt', mime: 'text/plain', bytes: plain);
+    expect(old.encrypted, isFalse);
+
+    enableEncryption();
+    var progress = <String>[];
+    await service().migrate(encrypt: true, onProgress: (done, total) => progress.add('$done/$total'));
+    final encrypted = (await repo.attachments(task.id)).single;
+    expect(encrypted.id, isNot(old.id));
+    expect(encrypted.encrypted, isTrue);
+    expect(encrypted.uploadedAt, isNull);
+    expect(uploaded!.sublist(0, 5), utf8.encode('OTAT1'));
+    expect(progress.last, '1/1');
+
+    served = uploaded;
+    expect((await service().open(encrypted)).bytes, plain);
+
+    await service().migrate(encrypt: false);
+    final back = (await repo.attachments(task.id)).single;
+    expect(back.encrypted, isFalse);
+    expect(uploaded, plain);
+  });
+
   test('a shared project keeps the file plaintext even on an encrypted account', () async {
     enableEncryption();
     final project = await repo.createProject('Shared');

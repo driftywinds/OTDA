@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../api/api_exception.dart';
 import '../app_state.dart';
+import '../e2ee/attachments.dart';
 import '../e2ee/biometric.dart';
 import '../e2ee/crypto.dart';
 import '../e2ee/keys.dart';
@@ -36,7 +37,15 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
     final client = widget.state.client;
     final engine = widget.state.engine;
     if (repo == null || client == null || engine == null) return null;
-    return E2eeLifecycle(repo: repo, client: client, engine: engine);
+    final author = widget.state.account?.userId ?? '';
+    return E2eeLifecycle(
+      repo: repo,
+      client: client,
+      engine: engine,
+      attachments: author.isEmpty
+          ? null
+          : AttachmentService(repo: repo, client: client, authorId: author),
+    );
   }
 
   @override

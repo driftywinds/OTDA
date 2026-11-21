@@ -181,8 +181,68 @@ class AttachmentService {
     return file;
   }
 
-  Future<void> remove(Attachment attachment) async {
-    try {
+  /// Re-uploads every personal file in the new form. A new attachment row with
+  /// the same task, name and creation time replaces the old one, and the old row
+  /// is tombstoned, so a stopped run resumes from the rows themselves.
+  Future<void> migrate({
+    required bool encrypt,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final scope = await E2eeScope.load(db);
+    final all = await repo.allAttachments();
+    final pending = <Attachment>[];
+    for (final attachment in all) {
+      if (attachment.isLink || attachment.encrypted == encrypt) continue;
+      if (!await scope.personal('task', attachment.taskId)) continue;
+      pending.add(attachment);
+    }
+    onProgress?.call(0, pending.length);
+    for (var index = 0; index < pending.length; index++) {
+      final old = pending[index];
+      Uint8List plain;
+      final local = await _storedFile(old.fileKey);
+      if (await local.exists()) {
+        final stored = await local.readAsBytes();
+        plain = old.encrypted
+            ? decryptFileBytes(key: session.accountKey!, attachmentId: old.fileKey, envelope: stored)
+            : stored;
+      } else {
+        if (old.uploadedAt == null) {
+          throw AttachmentError('missing_file', '“${old.name}” is not on this device and was never uploaded.');
+        }
+        plain = (await open(old)).bytes;
+      }
+      final id = Repo.newId();
+      final stored = encrypt ? encryptFileBytes(key: session.accountKey!, attachmentId: id, plaintext: plain) : plain;
+      await (await _storedFile(id)).writeAsBytes(stored, flush: true);
+      await repo.createEntity('attachment', id, {
+        'task_id': old.taskId,
+        'comment_id': null,
+        'note_id': null,
+        'file_id': null,
+        'name': old.name,
+        'mime': old.mime,
+        'size': stored.length,
+        'sha256': sha256Hex(stored),
+        'url': null,
+        'encrypted': encrypt,
+        'author_id': old.authorId,
+        'created_at': old.createdAt,
+        'uploaded_at': null,
+        'deleted_at': null,
+      });
+      await repo.setField('attachment', old.id, 'deleted_at', DateTime.now().millisecondsSinceEpoch);
+      try {
+        await upload(id);
+      } on ApiException {
+        // The new row and bytes stay; the upload is retried from the task sheet.
+      }
+      if (await local.exists()) await local.delete();
+      onProgress?.call(index + 1, pending.length);
+    }
+  }
+
+  Future<void> remove(Attachment attachment) async {    try {
       await client.delete('/api/v1/attachments/${Uri.encodeComponent(attachment.id)}');
     } on ApiException {
       // The local tombstone still hides it; the next sync settles the server.

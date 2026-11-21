@@ -28,8 +28,9 @@ Offline-first, with the same data model as the server so every device converges.
   After an unlock, keep the key behind fingerprint/face; the passphrase still works.
 - Attachments: pick files, encrypt personal ones with the `OTAT1` chunked format, upload
   with size/sha256, verify every chunk on open, view images in-app and share the rest.
-- Not yet: notes/comments, re-uploading existing files when encryption changes, an
-  in-app PDF viewer, note public pages, and the device relay.
+  Enabling or disabling encryption re-uploads existing files as new rows first.
+- Not yet: notes/comments, link attachments, an in-app PDF viewer, note public pages,
+  and the device relay.
 
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)

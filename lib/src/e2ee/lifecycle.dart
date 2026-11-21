@@ -36,12 +36,14 @@ class E2eeLifecycle {
     required this.repo,
     required this.client,
     required this.engine,
+    this.attachments,
     E2eeSession? session,
   }) : session = session ?? E2eeSession.instance;
 
   final Repo repo;
   final ApiClient client;
   final SyncEngine engine;
+  final AttachmentService? attachments;
   final E2eeSession session;
 
   OtdaDb get db => repo.db;
@@ -58,7 +60,9 @@ class E2eeLifecycle {
     NewKeyRecord prepared, {
     void Function(E2eeMigrationProgress)? onProgress,
   }) async {
-    await _guardFiles(encrypting: true);
+    if (attachments == null) {
+      await _guardFiles(encrypting: true);
+    }
     await session.putRecord(client, prepared.record);
     final stored = session.record;
     if (stored == null) {
@@ -67,6 +71,7 @@ class E2eeLifecycle {
     await session.adoptRecord(stored, prepared.accountKey);
     await db.setMeta(migrationKey, jsonEncode({'mode': 'encrypt'}));
     try {
+      await attachments?.migrate(encrypt: true);
       await migrate(mode: E2eeMigrationMode.encrypt, onProgress: onProgress);
     } on Object {
       // The local kit is consistent; the remaining outbox and plaintext fields
@@ -195,7 +200,14 @@ class E2eeLifecycle {
     if (!session.unlocked) {
       throw const ApiException(409, 'locked', 'unlock this device before turning encryption off');
     }
-    await _guardFiles(encrypting: false);
+    if (attachments == null) {
+      await _guardFiles(encrypting: false);
+    } else {
+      // The roadmap's order: decrypt and re-upload every file first, while the key
+      // still exists, then delete the record.
+      await attachments!.migrate(encrypt: false);
+      await _drain();
+    }
     try {
       await client.delete('/api/v1/encryption/keys');
     } on ApiException catch (e) {

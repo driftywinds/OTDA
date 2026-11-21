@@ -90,7 +90,7 @@ is the only file that names most of them, and only to encrypt them.
 
 | Feature | Server | App |
 |---|---|---|
-| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight, history purge and biometric unlock are done; attachments encrypt/open, but files are not re-uploaded on enable/disable and relay is absent |
+| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight, history purge, biometric unlock and file encryption/migration are done; the device relay is absent |
 | **Auth** | OIDC, passkeys, app passwords, sign-out everywhere, trusted-device policy | password + TOTP, 2FA management; no passkeys, OIDC or app passwords |
 | **Project fields** | notes, sharing, templates, timeline, flow, archived | name, colour, icon, trash |
 | **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only |
@@ -106,7 +106,7 @@ Grouped by the server area they belong to (route count in brackets).
 
 | Feature | Server routes | State in the app |
 |---|---|---|
-| Attachments (files, images, links) | `attachments` [4] | files can be added, opened and removed; **no re-upload migration on enable/disable, link attachments and PDF in-app viewer** |
+| Attachments (files, images, links) | `attachments` [4] | files are added, encrypted, uploaded, verified/opened, migrated on enable/disable and removed; **link attachments and an in-app PDF renderer are missing** |
 | Comments | `comments` [3] | nothing |
 | Notes: standalone, pages, appends, rich text, links, graph | `notes` [10], `pages` [8], `task-pages` [1] | nothing |
 | Time tracking | `time-entries` [6] | nothing |
@@ -165,11 +165,11 @@ Ranked by what a user would notice within a day of real use:
 
 1. **Notes and comments** — long-form notes, comments and note public pages are not
    reachable; note pages are the one public-link shape left out.
-2. **E2EE file migration and relay** — new files are encrypted, but existing files are
-   not re-uploaded when encryption is enabled or disabled, and the device relay is absent.
+2. **Device relay** — an encrypted account's assistant/CLI relay is absent; the app's
+   own text, file and biometric lifecycle is complete.
 3. **Calendar beyond a month grid** — no week/day view, no external calendars.
-4. **E2EE file migration and relay** — text fields, biometric unlock and new file
-   encryption are covered; re-uploading existing files and the device relay are not.
+4. **Device relay** — text fields, biometric unlock and file migration are covered;
+   the relay that lets an assistant decrypt through a device is not.
 5. **Time tracking** — absent.
 6. **Push notifications** — reminders only fire from the device that scheduled them.
 7. **Saved views / custom fields** — the app shows only what the server's built-in
@@ -190,5 +190,6 @@ Ranked by what a user would notice within a day of real use:
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
   complete, plus workspace management, project sharing, invitations, public links,
-  statistics, activity, history, export, theming, the E2EE lifecycle, biometric unlock
-  and attachments. Notes/comments, file re-encryption and relay remain.
+  statistics, activity, history, export, theming, the full E2EE client lifecycle,
+  biometric unlock and encrypted attachments. Notes/comments and the device relay
+  remain.
