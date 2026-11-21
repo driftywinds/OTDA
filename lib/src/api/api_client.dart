@@ -57,8 +57,11 @@ class ApiClient {
       send('GET', path, query: query);
 
   Future<dynamic> post(String path,
-          {Object? body, Map<String, dynamic>? query, String? idempotencyKey}) =>
-      send('POST', path, body: body, query: query, idempotencyKey: idempotencyKey);
+          {Object? body,
+          Map<String, dynamic>? query,
+          String? idempotencyKey,
+          Duration? timeout}) =>
+      send('POST', path, body: body, query: query, idempotencyKey: idempotencyKey, timeout: timeout);
 
   Future<dynamic> patch(String path, {Object? body}) =>
       send('PATCH', path, body: body);
@@ -66,7 +69,7 @@ class ApiClient {
   Future<dynamic> put(String path, {Object? body}) =>
       send('PUT', path, body: body);
 
-  Future<dynamic> delete(String path) => send('DELETE', path);
+  Future<dynamic> delete(String path, {Duration? timeout}) => send('DELETE', path, timeout: timeout);
 
   Future<dynamic> send(
     String method,
@@ -75,6 +78,7 @@ class ApiClient {
     Map<String, dynamic>? query,
     String? idempotencyKey,
     Map<String, String> extraHeaders = const {},
+    Duration? timeout,
   }) async {
     // A cookie write with no `Origin` and no `Sec-Fetch-Site` is only accepted by
     // the server when it declares a JSON body; a bodiless DELETE or POST is
@@ -91,7 +95,7 @@ class ApiClient {
 
     final http.StreamedResponse streamed;
     try {
-      streamed = await _http.send(request).timeout(_timeout);
+      streamed = await _http.send(request).timeout(timeout ?? _timeout);
     } on TimeoutException {
       throw ApiException(0, 'timeout', 'the server did not answer in time');
     } on http.ClientException catch (e) {

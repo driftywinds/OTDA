@@ -7,7 +7,7 @@ not listed here is deliberately out of scope for now.
 Companion to `docs/parity-report.md`, which records the full diff; this file is the
 plan.
 
-Status values: **todo** · **doing** · **done**. Nothing here is started yet.
+Status values: **todo** · **doing** · **done**.
 
 ---
 
@@ -17,6 +17,8 @@ The cheapest parity, and the things a user hits in the first week.
 
 ### 1.1 Trash
 
+**Status: done.**
+
 **Why** deleting is currently a one-way door: `Repo.trash()` writes a tombstone and
 nothing in the app can list or restore it.
 
@@ -25,11 +27,14 @@ nothing in the app can list or restore it.
 - Restore one item (`deleted_at = null`), restore a project with its tasks.
 - Empty the trash, and purge one item for good.
 - Reachable from Settings → Lists and from the sidebar footer.
-- Server: `POST /api/v1/trash/purge`, `DELETE /api/v1/trash/task/{id}`, and the
-  `deleted`/`include_deleted` query flags; the op log already carries `deleted_at`.
+- Server: `POST /api/v1/trash/purge`, `DELETE /api/v1/tasks/{id}/purge`,
+  `DELETE /api/v1/projects/{id}/purge`, and the `deleted`/`include_deleted` query
+  flags; the op log already carries `deleted_at`.
 
 **Notes** restoring must re-emit the field ops so other devices see it, not just clear
-the local row.
+the local row. The server's route for one item is the collection path with `/purge`,
+not `/trash/task/{id}`; the app uses the routes the server actually registers. Purging
+a project removes every task that references it, and the app mirrors that locally.
 
 ### 1.2 Task metadata in the editor
 

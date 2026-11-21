@@ -11,6 +11,7 @@ import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'settings_screen.dart';
 import 'task_sheet.dart';
+import 'trash_screen.dart';
 import 'calendar_month.dart';
 import '../data/occurrences.dart';
 import '../reminders/service.dart';
@@ -1084,6 +1085,16 @@ class _AppDrawer extends StatelessWidget {
               ),
             ),
             rule,
+            ListTile(
+              dense: true,
+              leading: mark(const Icon(Icons.delete_outline_rounded, size: 20)),
+              title: const Text('Trash', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push(MaterialPageRoute(builder: (_) => TrashScreen(state: state)));
+              },
+            ),
             ListTile(
               dense: true,
               leading: AccountAvatar(state: state, size: 30),

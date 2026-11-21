@@ -19,11 +19,56 @@ class Repo {
   final HybridClock clock;
   final SyncEngine engine;
 
-  Future<List<Task>> tasks() async =>
-      (await db.entities('task')).map((e) => Task(e['id'] as String, e)).toList();
+  Future<List<Task>> tasks() async {
+    final rows = await db.entities('task');
+    // A project in the Trash hides its tasks: they keep their project_id, and
+    // restoring the project (one field) brings them back. Filtering here keeps
+    // Today, reminders and the widget honest without touching the rows.
+    final projects = await db.entities('project', includeDeleted: true);
+    final trashed = {
+      for (final project in projects)
+        if (project['deleted_at'] != null) project['id'] as String,
+    };
+    return [
+      for (final row in rows)
+        if (row['project_id'] == null || !trashed.contains(row['project_id']))
+          Task(row['id'] as String, row),
+    ];
+  }
 
   Future<List<Project>> projects() async =>
       (await db.entities('project')).map((e) => Project(e['id'] as String, e)).toList();
+
+  /// Every project, tombstones included, for the Trash view.
+  Future<List<Project>> allProjects() async => (await db.entities('project', includeDeleted: true))
+      .map((e) => Project(e['id'] as String, e))
+      .toList();
+
+  /// Deleted tasks, newest deletion first.
+  Future<List<Task>> trashedTasks() async {
+    final rows = await db.entities('task', includeDeleted: true);
+    final tasks = [
+      for (final row in rows)
+        if (row['deleted_at'] != null) Task(row['id'] as String, row),
+    ];
+    tasks.sort((a, b) => _deletedAt(b.raw).compareTo(_deletedAt(a.raw)));
+    return tasks;
+  }
+
+  /// Deleted projects, newest deletion first.
+  Future<List<Project>> trashedProjects() async {
+    final projects = [
+      for (final project in await allProjects())
+        if (project.isDeleted) project,
+    ];
+    projects.sort((a, b) => _deletedAt(b.raw).compareTo(_deletedAt(a.raw)));
+    return projects;
+  }
+
+  static int _deletedAt(Map<String, Object?> raw) {
+    final value = raw['deleted_at'];
+    return value is num ? value.toInt() : 0;
+  }
 
   Future<List<Label>> labels() async =>
       (await db.entities('label')).map((e) => Label(e['id'] as String, e)).toList();
@@ -295,8 +340,170 @@ class Repo {
 
   Future<void> trash(Task task) async {
     final ts = await clock.next();
-    await db.putField('task', task.id, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Deleting a task tombstones its whole subtree, one op per task, with the
+    // same clock. That is what lets a restore bring back exactly what was
+    // deleted together (the web client's deleteTask does the same).
+    final rows = await db.entities('task', includeDeleted: true);
+    final children = <String, List<String>>{};
+    for (final row in rows) {
+      final parent = row['parent_id']?.toString();
+      if (parent != null && parent.isNotEmpty) {
+        children.putIfAbsent(parent, () => []).add(row['id'] as String);
+      }
+    }
+    final ids = <String>{task.id};
+    final queue = [task.id];
+    while (queue.isNotEmpty) {
+      for (final child in children[queue.removeLast()] ?? const <String>[]) {
+        if (ids.add(child)) queue.add(child);
+      }
+    }
+    for (final id in ids) {
+      await db.putField('task', id, 'deleted_at', now, ts, engine.device);
+    }
   }
+
+  /// Puts a trashed task back, with the descendants that were deleted with it
+  /// (same `deleted_at`), in one batch. A task whose project is still in the
+  /// Trash goes to the Inbox, because a live task must not point at a dead
+  /// project; a task whose parent is still deleted comes back at the top level.
+  Future<void> restoreTask(Task task) async {
+    // Read the row again: the Task the caller holds may predate the delete.
+    final row = await db.entity('task', task.id);
+    final deletedAt = row?['deleted_at'];
+    if (deletedAt == null) return;
+    final stamp = deletedAt.toString();
+    final rows = await db.entities('task', includeDeleted: true);
+    final byId = {for (final row in rows) row['id'] as String: row};
+    final self = byId[task.id] ?? row!;
+    final children = <String, List<String>>{};
+    for (final row in rows) {
+      final parent = row['parent_id']?.toString();
+      if (parent != null && parent.isNotEmpty) {
+        children.putIfAbsent(parent, () => []).add(row['id'] as String);
+      }
+    }
+    final subtree = <String>{task.id};
+    final queue = [task.id];
+    while (queue.isNotEmpty) {
+      for (final child in children[queue.removeLast()] ?? const <String>[]) {
+        final row = byId[child];
+        if (row != null && row['deleted_at']?.toString() == stamp && subtree.add(child)) {
+          queue.add(child);
+        }
+      }
+    }
+
+    final projectId = self['project_id']?.toString();
+    final project = projectId == null ? null : await db.entity('project', projectId);
+    final projectGone = project != null && project['deleted_at'] != null;
+    final parentId = self['parent_id']?.toString();
+    final parent = parentId == null ? null : byId[parentId];
+    final parentGone = parentId != null &&
+        !subtree.contains(parentId) &&
+        (parent == null || parent['deleted_at'] != null);
+
+    final ts = await clock.next();
+    for (final id in subtree) {
+      await db.putField('task', id, 'deleted_at', null, ts, engine.device);
+      if (projectGone) {
+        await db.putField('task', id, 'project_id', null, ts, engine.device);
+        // A section belongs to the project that is still in the Trash.
+        if (byId[id]?['section_id'] != null) {
+          await db.putField('task', id, 'section_id', null, ts, engine.device);
+        }
+      }
+    }
+    if (parentGone) {
+      await db.putField('task', task.id, 'parent_id', null, ts, engine.device);
+    }
+  }
+
+  /// Clearing a project's tombstone is the whole restore: its tasks kept their
+  /// `project_id`, so they reappear on their own.
+  Future<void> restoreProject(Project project) async {
+    if (!project.isDeleted) return;
+    await setField('project', project.id, 'deleted_at', null);
+  }
+
+  /// Permanently deletes one trashed task and the deleted descendants the
+  /// server removes with it. The server is the one that can purge; offline this
+  /// throws and the row stays in the Trash.
+  Future<void> purgeTask(Task task) async {
+    await engine.client.delete('/api/v1/tasks/${Uri.encodeComponent(task.id)}/purge',
+        timeout: const Duration(seconds: 90));
+    final rows = await db.entities('task', includeDeleted: true);
+    final children = <String, List<String>>{};
+    for (final row in rows) {
+      final parent = row['parent_id']?.toString();
+      if (parent != null && parent.isNotEmpty) {
+        children.putIfAbsent(parent, () => []).add(row['id'] as String);
+      }
+    }
+    final ids = <String>{task.id};
+    final queue = [task.id];
+    while (queue.isNotEmpty) {
+      for (final child in children[queue.removeLast()] ?? const <String>[]) {
+        final row = rows.where((r) => r['id'] == child).firstOrNull;
+        if (row != null && row['deleted_at'] != null && ids.add(child)) queue.add(child);
+      }
+    }
+    for (final id in ids) {
+      await db.purgeEntity('task', id);
+    }
+  }
+
+  /// Purging a project removes the project and every task referencing it, as
+  /// the server does.
+  Future<void> purgeProject(Project project) async {
+    await engine.client.delete('/api/v1/projects/${Uri.encodeComponent(project.id)}/purge',
+        timeout: const Duration(seconds: 90));
+    await _purgeProjectLocally(project.id);
+  }
+
+  /// Empties the whole Trash on the server, then removes the same rows here so
+  /// the view does not wait for the next exchange.
+  Future<void> emptyTrash() async {
+    await engine.client.post('/api/v1/trash/purge', timeout: const Duration(minutes: 2));
+    for (final project in await trashedProjects()) {
+      await _purgeProjectLocally(project.id);
+    }
+    const entities = {
+      'task',
+      'project',
+      'section',
+      'field',
+      'note',
+      'comment',
+      'attachment',
+      'time_entry',
+      'view',
+      'label',
+      'reminder',
+      'rule',
+    };
+    for (final entity in entities) {
+      for (final row in await db.entities(entity, includeDeleted: true)) {
+        if (row['deleted_at'] != null) await db.purgeEntity(entity, row['id'] as String);
+      }
+    }
+  }
+
+  Future<void> _purgeProjectLocally(String id) async {
+    await db.purgeEntity('project', id);
+    for (final entity in const ['task', 'section', 'field', 'note']) {
+      for (final row in await db.entities(entity, includeDeleted: true)) {
+        if (row['project_id']?.toString() == id) {
+          await db.purgeEntity(entity, row['id'] as String);
+        }
+      }
+    }
+  }
+
+  /// How many items wait in the Trash, for the Settings row.
+  Future<int> trashCount() async =>
+      (await trashedTasks()).length + (await trashedProjects()).length;
 
   /// Snoozes one occurrence on this device. Never synced: a snooze is a local
   /// decision, and the plan reads it back through [snoozes]. The keys live in one

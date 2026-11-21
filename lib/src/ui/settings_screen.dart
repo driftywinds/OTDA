@@ -16,6 +16,7 @@ import '../data/repo.dart';
 import 'admin_view.dart';
 import 'reauth.dart';
 import 'settings_rows.dart';
+import 'trash_screen.dart';
 import '../e2ee/session.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'theme.dart';
@@ -185,6 +186,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'detailed': 'Detailed',
                       },
                       onChanged: (value) => _set('row_layout', value),
+                    ),
+                    ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      leading: const Icon(Icons.delete_outline_rounded, size: 20),
+                      title: Text(
+                        'Trash',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => TrashScreen(state: widget.state)),
+                      ),
                     ),
                   ],
                 ),
