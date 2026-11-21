@@ -10,29 +10,58 @@ const _lightCard = Color(0xFFFFFFFF);
 const _darkPage = Color(0xFF0F0F13);
 const _darkCard = Color(0xFF1A1A20);
 
+/// A palette read from the server's instance theme: the four seeds the web
+/// theme format exposes. The app uses these when the person has not picked an
+/// accent of their own.
+class OtdaPalette {
+  const OtdaPalette({required this.accent, required this.page, required this.card, required this.text});
+
+  final Color accent;
+  final Color page;
+  final Color card;
+  final Color text;
+
+  static OtdaPalette fromSeeds(Map<String, dynamic> seeds) {
+    Color? color(String key) {
+      final value = seeds[key]?.toString() ?? '';
+      if (!value.startsWith('#') || (value.length != 7 && value.length != 9)) return null;
+      final parsed = int.tryParse(value.substring(1), radix: 16);
+      if (parsed == null) return null;
+      return Color(value.length == 9 ? parsed : 0xFF000000 | parsed);
+    }
+
+    return OtdaPalette(
+      accent: color('accent') ?? _seed,
+      page: color('canvas') ?? _lightPage,
+      card: color('surface') ?? _lightCard,
+      text: color('text') ?? const Color(0xFF17171C),
+    );
+  }
+}
+
 /// Surface tokens the stock [ColorScheme] has no good slot for.
 extension OtdaColors on ColorScheme {
   bool get _isDark => brightness == Brightness.dark;
 
-  /// The page behind everything.
-  /// AMOLED is signalled by a pure-black surface, so the palette can follow
-  /// without every call site carrying a flag.
-  bool get _amoled => _isDark && surface == const Color(0xFF000000);
-
-  Color get page => _isDark ? (_amoled ? Colors.black : _darkPage) : _lightPage;
+  /// The page behind everything. AMOLED is signalled by a pure-black surface, so
+  /// the palette can follow without every call site carrying a flag.
+  Color get page => surface;
 
   /// A row or panel sitting on the page.
-  Color get card => _isDark ? (_amoled ? const Color(0xFF0A0A0A) : _darkCard) : _lightCard;
+  Color get card => surfaceContainerLow;
 
   /// A hairline between things on a card.
   Color get hairline => outlineVariant.withValues(alpha: _isDark ? 0.5 : 0.7);
 
   /// A fill for inputs and unselected controls, slightly off the card.
-  Color get field => _isDark ? const Color(0xFF25252D) : const Color(0xFFEDEDF3);
+  Color get field => Color.alphaBlend(
+        (_isDark ? Colors.white : Colors.black).withValues(alpha: _isDark ? 0.06 : 0.035),
+        card,
+      );
 
   /// The outline that separates a card from the page.
   Color get cardBorder => _isDark
-      ? (_amoled ? const Color(0xFF232329) : const Color(0xFF2A2A33))
+      ? (_isDark && surface == Colors.black ? const Color(0xFF232329) : const Color(0xFF2A2A33))
       : const Color(0xFFE7E7EE);
 
   /// A soft lift for cards; dark surfaces separate by outline alone.
@@ -64,19 +93,28 @@ Color priorityColor(int priority, ColorScheme scheme) => switch (priority) {
 /// platform's own font.
 const alloFont = 'Allo';
 
-ThemeData buildTheme(Brightness brightness, {String? fontFamily, bool amoled = false}) {
-  final base = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
+ThemeData buildTheme(
+  Brightness brightness, {
+  String? fontFamily,
+  bool amoled = false,
+  Color? seed,
+  OtdaPalette? palette,
+  VisualDensity? density,
+}) {
   final dark = brightness == Brightness.dark;
-  final surface = !dark ? _lightPage : (amoled ? const Color(0xFF000000) : _darkPage);
+  final base = ColorScheme.fromSeed(seedColor: palette?.accent ?? seed ?? _seed, brightness: brightness);
+  final surface = palette?.page ?? (!dark ? _lightPage : (amoled ? const Color(0xFF000000) : _darkPage));
+  final cardColor = palette?.card ?? (!dark ? _lightCard : (amoled ? const Color(0xFF0A0A0A) : _darkCard));
   final scheme = base.copyWith(
     surface: surface,
-    // Keep the containers black too: the bottom bar and sheets would otherwise
-    // stay grey against an otherwise black page.
+    onSurface: palette?.text ?? base.onSurface,
+    // Every container is explicit: the page and the row colour now come from
+    // the palette, not from a constant, so an instance theme can change them.
     surfaceContainerLowest: surface,
-    surfaceContainerLow: dark && amoled ? const Color(0xFF070707) : null,
-    surfaceContainer: dark && amoled ? const Color(0xFF0A0A0A) : null,
-    surfaceContainerHigh: dark && amoled ? const Color(0xFF101014) : null,
-    surfaceContainerHighest: dark && amoled ? const Color(0xFF16161B) : null,
+    surfaceContainerLow: cardColor,
+    surfaceContainer: cardColor,
+    surfaceContainerHigh: cardColor,
+    surfaceContainerHighest: dark ? Color.alphaBlend(Colors.white.withValues(alpha: 0.06), cardColor) : const Color(0xFFEDEDF3),
   );
   final radius = BorderRadius.circular(14);
   final cardShape = RoundedRectangleBorder(
@@ -108,7 +146,7 @@ ThemeData buildTheme(Brightness brightness, {String? fontFamily, bool amoled = f
     brightness: brightness,
     scaffoldBackgroundColor: scheme.page,
     textTheme: textTheme,
-    visualDensity: VisualDensity.standard,
+    visualDensity: density ?? VisualDensity.standard,
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.page,
       surfaceTintColor: Colors.transparent,

@@ -66,17 +66,30 @@ class _OtdaAppState extends State<OtdaApp> {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _color(_state.accentHex);
+    final lightPalette = _palette(_state.instanceLightSeeds, accent);
+    final darkPalette = _palette(_state.instanceDarkSeeds, accent);
+    final density = _state.compact ? VisualDensity.compact : VisualDensity.standard;
     return AnimatedBuilder(
       animation: _state,
       builder: (context, _) => MaterialApp(
         title: 'OTDA',
         debugShowCheckedModeBanner: false,
         themeMode: _state.themeMode,
-        theme: buildTheme(Brightness.light, fontFamily: _state.useAllo ? alloFont : null),
+        theme: buildTheme(
+          Brightness.light,
+          fontFamily: _state.useAllo ? alloFont : null,
+          seed: accent,
+          palette: lightPalette,
+          density: density,
+        ),
         darkTheme: buildTheme(
           Brightness.dark,
           fontFamily: _state.useAllo ? alloFont : null,
           amoled: _state.amoled,
+          seed: accent,
+          palette: darkPalette,
+          density: density,
         ),
         home: _state.isRestoring
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
@@ -89,5 +102,19 @@ class _OtdaAppState extends State<OtdaApp> {
                         : SyncGateScreen(state: _state),
       ),
     );
+  }
+
+  static Color? _color(String? hex) {
+    if (hex == null || hex.length != 7 || !hex.startsWith('#')) return null;
+    final value = int.tryParse(hex.substring(1), radix: 16);
+    return value == null ? null : Color(0xFF000000 | value);
+  }
+
+  static OtdaPalette? _palette(Map<String, dynamic>? seeds, Color? accent) {
+    if (seeds == null) return null;
+    final base = OtdaPalette.fromSeeds(seeds);
+    return accent == null
+        ? base
+        : OtdaPalette(accent: accent, page: base.page, card: base.card, text: base.text);
   }
 }

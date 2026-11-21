@@ -16,6 +16,7 @@ import 'auth/session_store.dart';
 import 'data/clock.dart';
 import 'data/db.dart';
 import 'data/failure_meter.dart';
+import 'data/instance_theme.dart';
 import 'data/server_history.dart';
 import 'data/repo.dart';
 import 'e2ee/session.dart';
@@ -73,16 +74,45 @@ class AppState extends ChangeNotifier {
   static const _fontPref = 'ui.font';
   static const _serversPref = 'servers.recent';
   static const _themePref = 'ui.theme';
+  static const _accentPref = 'ui.accent';
+  static const _darkPref = 'ui.dark';
+  static const _densityPref = 'ui.density';
+  static const _rowDetailsPref = 'ui.row_details';
 
-  /// system, light, dark or amoled.
-  String _themeChoice = 'amoled';
+  /// system, light or dark.
+  String _themeChoice = 'dark';
+
+  /// The dark palette: `dark` or `amoled`, chosen independently of the mode.
+  String _darkStyle = 'amoled';
+
+  /// comfortable or compact.
+  String _density = 'comfortable';
+
+  /// all, dates or minimal: how much of a task row the list shows.
+  String _rowDetails = 'all';
+
+  /// The accent the person picked, `#rrggbb`, or null to follow the instance.
+  String? _accentHex;
+
+  /// The instance theme's seeds for each side, when its default is an
+  /// `instance:` theme. The app uses these only while no accent is chosen.
+  Map<String, dynamic>? _instanceLightSeeds;
+  Map<String, dynamic>? _instanceDarkSeeds;
+
   String get themeChoice => _themeChoice;
   ThemeMode get themeMode => switch (_themeChoice) {
         'light' => ThemeMode.light,
-        'dark' || 'amoled' => ThemeMode.dark,
+        'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       };
-  bool get amoled => _themeChoice == 'amoled';
+  String get darkStyle => _darkStyle;
+  bool get amoled => _darkStyle == 'amoled';
+  String get density => _density;
+  bool get compact => _density == 'compact';
+  String get rowDetails => _rowDetails;
+  String? get accentHex => _accentHex;
+  Map<String, dynamic>? get instanceLightSeeds => _instanceLightSeeds;
+  Map<String, dynamic>? get instanceDarkSeeds => _instanceDarkSeeds;
 
   /// The signed-in account's picture, downloaded once per version. Zero versions
   /// mean the account has none, and the avatar falls back to initials.
@@ -228,7 +258,18 @@ class AppState extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _useAllo = (prefs.getString(_fontPref) ?? 'allo') == 'allo';
-      _themeChoice = prefs.getString(_themePref) ?? 'amoled';
+      _themeChoice = prefs.getString(_themePref) ?? 'dark';
+      // `amoled` used to be a value of ui.theme; it is now a separate dark style.
+      if (_themeChoice == 'amoled') {
+        _themeChoice = 'dark';
+        _darkStyle = 'amoled';
+      } else {
+        _darkStyle = prefs.getString(_darkPref) ?? 'amoled';
+      }
+      _density = prefs.getString(_densityPref) ?? 'comfortable';
+      _rowDetails = prefs.getString(_rowDetailsPref) ?? 'all';
+      final accent = prefs.getString(_accentPref) ?? '';
+      _accentHex = accent.isEmpty ? null : accent;
     } on Object {
       _useAllo = true; // a missing store keeps the default look
     }
@@ -265,11 +306,58 @@ class AppState extends ChangeNotifier {
   Future<void> setThemeChoice(String choice) async {
     _themeChoice = choice;
     notifyListeners();
+    await _setPref(_themePref, choice);
+  }
+
+  /// `dark` or `amoled`, independent of whether the app is in light or dark.
+  Future<void> setDarkStyle(String style) async {
+    _darkStyle = style;
+    notifyListeners();
+    await _setPref(_darkPref, style);
+  }
+
+  Future<void> setDensity(String value) async {
+    _density = value;
+    notifyListeners();
+    await _setPref(_densityPref, value);
+  }
+
+  Future<void> setRowDetails(String value) async {
+    _rowDetails = value;
+    notifyListeners();
+    await _setPref(_rowDetailsPref, value);
+  }
+
+  /// The accent colour (`#rrggbb`), or null to follow the instance default.
+  Future<void> setAccent(String? hex) async {
+    _accentHex = hex;
+    notifyListeners();
+    await _setPref(_accentPref, hex ?? '');
+  }
+
+  Future<void> _setPref(String key, String value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themePref, choice);
+      await prefs.setString(key, value);
     } on Object {
       // the choice stays in memory for this run
+    }
+  }
+
+  /// Reads the instance theme and keeps the seeds of its default light/dark
+  /// theme. Only `instance:<id>` defaults are used; a built-in default keeps
+  /// the app's own palette, which is the same OpenTodo look.
+  Future<void> loadInstanceTheme() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final json = await client.get('/api/v1/themes/instance') as Map<String, dynamic>;
+      final seeds = instanceThemeSeeds(json);
+      _instanceLightSeeds = seeds.light;
+      _instanceDarkSeeds = seeds.dark;
+      notifyListeners();
+    } on Object {
+      // Older servers, offline, or no instance theme: keep the app's palette.
     }
   }
 
@@ -324,6 +412,7 @@ class AppState extends ChangeNotifier {
       _encryptionReady = loadEncryption();
       await _encryptionReady;
       await _openReplica();
+      unawaited(loadInstanceTheme());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
       unawaited(_loadAvatar());
@@ -390,6 +479,8 @@ class AppState extends ChangeNotifier {
     await _encryptionReady;
     otdaLog('auth: encrypted=${E2eeSession.instance.enabled} unlocked=${E2eeSession.instance.unlocked}');
     await _openReplica();
+    // The instance theme is decoration: it never delays opening the app.
+    unawaited(loadInstanceTheme());
     otdaLog('auth: replica open, engine=${_engine != null}');
     notifyListeners();
   }
@@ -672,6 +763,8 @@ class AppState extends ChangeNotifier {
     _repo = null;
     _syncError = null;
     _mfaStatus = null;
+    _instanceLightSeeds = null;
+    _instanceDarkSeeds = null;
     _gate = SyncGate.syncing;
     _gateProgress = null;
     _gateError = null;

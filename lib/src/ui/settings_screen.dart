@@ -245,9 +245,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'system': 'System',
                         'light': 'Light',
                         'dark': 'Dark',
-                        'amoled': 'AMOLED black',
                       },
                       onChanged: (value) => widget.state.setThemeChoice(value),
+                    ),
+                    SettingsChoiceRow(
+                      label: 'Dark style',
+                      value: widget.state.darkStyle,
+                      options: const {
+                        'dark': 'Dark grey',
+                        'amoled': 'AMOLED black',
+                      },
+                      onChanged: (value) => widget.state.setDarkStyle(value),
+                    ),
+                    _AccentRow(state: widget.state),
+                    SettingsChoiceRow(
+                      label: 'Density',
+                      value: widget.state.density,
+                      options: const {
+                        'comfortable': 'Comfortable',
+                        'compact': 'Compact',
+                      },
+                      onChanged: (value) => widget.state.setDensity(value),
+                    ),
+                    SettingsChoiceRow(
+                      label: 'Task row',
+                      value: widget.state.rowDetails,
+                      options: const {
+                        'all': 'Everything',
+                        'dates': 'Dates and priority only',
+                        'minimal': 'Title only',
+                      },
+                      onChanged: (value) => widget.state.setRowDetails(value),
                     ),
                     SettingsChoiceRow(
                       label: 'Font',
@@ -262,8 +290,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'These preferences are stored on your server with your tasks and reach your other '
-                  'devices on the next sync. "Device" means follow this phone.',
+                  'Appearance is stored on this device. Preferences marked as synced follow your '
+                  'account and reach your other devices on the next sync.',
                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
@@ -984,7 +1012,79 @@ class _EncryptionCardState extends State<_EncryptionCard> {
   }
 }
 
-/// The account's second factor: enrol, recovery codes, remembered browsers and
+/// The accent swatches: the instance default (no choice) plus a short palette.
+/// The choice is device-local, so it applies without a sync.
+class _AccentRow extends StatelessWidget {
+  const _AccentRow({required this.state});
+
+  final AppState state;
+
+  static const _accents = <String?, String>{
+    null: 'Instance',
+    '#5B5BD6': 'Indigo',
+    '#3E8BE0': 'Blue',
+    '#14B8A6': 'Teal',
+    '#22C55E': 'Green',
+    '#F59E0B': 'Amber',
+    '#EF4444': 'Red',
+    '#EC4899': 'Pink',
+    '#8B5CF6': 'Violet',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Accent', style: style),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final entry in _accents.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Tooltip(
+                      message: entry.value,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => state.setAccent(entry.key),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: entry.key == null ? theme.colorScheme.field : parseHexColor(entry.key),
+                            border: Border.all(
+                              color: state.accentHex == entry.key
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.cardBorder,
+                              width: state.accentHex == entry.key ? 2 : 1,
+                            ),
+                          ),
+                          child: entry.key == null
+                              ? Icon(Icons.auto_awesome_rounded, size: 16, color: theme.colorScheme.onSurfaceVariant)
+                              : state.accentHex == entry.key
+                                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                                  : null,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 /// turning it off. Every mutating route needs a recent password or code, so the
 /// card asks for one when the server answers `reauth_required`.
 class _TwoFactorCard extends StatefulWidget {

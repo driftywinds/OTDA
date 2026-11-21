@@ -291,6 +291,8 @@ tokens), not task history, so it is not used for this screen.
 
 ### 4.4 Local theming
 
+**Status: done.**
+
 **Why** the app has four theme choices and two fonts; the server has a theme editor and
 instance themes the app ignores.
 
@@ -301,6 +303,14 @@ instance themes the app ignores.
   round trip for appearance.
 - Instance themes: read the server's theme and use it as the default palette when the
   user has not chosen one.
+
+**Notes** `ui.theme` is now system/light/dark and `ui.dark` picks dark grey or AMOLED
+independently (a stored `amoled` value migrates). Accent choices are the instance
+default plus eight swatches; density is `VisualDensity` plus tighter row padding; the
+row choice is Everything / Dates and priority / Title only. `GET
+/api/v1/themes/instance` is read after sign-in: an `instance:<id>` default supplies
+accent/canvas/surface/text from its `seeds`; a `builtin:` or empty default keeps the
+app's own OpenTodo-like palette, because built-in documents are not in that response.
 
 ---
 

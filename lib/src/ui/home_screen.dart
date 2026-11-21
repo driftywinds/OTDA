@@ -987,6 +987,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       hasChildren: row.hasChildren,
                       collapsed: row.collapsed,
                       progress: _subtaskProgress[task.id],
+                      details: widget.state.rowDetails,
+                      compact: widget.state.compact,
                       projectName: task.projectId == null ? null : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
                       dueOverride: switch (_view) {
@@ -1247,6 +1249,8 @@ class _TaskRow extends StatelessWidget {
     this.collapsed = false,
     this.onToggleCollapse,
     this.progress,
+    this.details = 'all',
+    this.compact = false,
     this.projectName,
     this.projectColor,
     this.dueOverride,
@@ -1262,6 +1266,10 @@ class _TaskRow extends StatelessWidget {
 
   /// "2/3" over direct children, or null when there are none.
   final String? progress;
+
+  /// all, dates or minimal: how much of the row's metadata to show.
+  final String details;
+  final bool compact;
 
   /// The day to show instead of `due` (Upcoming projects a repeating task).
   final String? dueOverride;
@@ -1285,23 +1293,25 @@ class _TaskRow extends StatelessWidget {
     final estimate = task.estimateMinutes;
 
     final meta = <Widget>[
-      if (progress != null)
+      if (progress != null && details != 'minimal')
         MetaPill(icon: Icons.account_tree_outlined, label: progress!),
-      if (date != null)
+      if (date != null && details != 'minimal')
         MetaPill(
           icon: Icons.event_rounded,
           label: [friendlyDate(date, today), ?task.dueTime].join(' · '),
           color: overdue ? scheme.error : (days == 0 ? scheme.primary : null),
         ),
-      if (estimate != null) MetaPill(icon: Icons.timelapse_rounded, label: durationLabel(estimate)),
-      if (isRecurring(task))
-        MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabel(task)),
-      if (projectName != null)
-        MetaPill(label: projectName!, dot: projectColor ?? scheme.primary),
+      if (details == 'all') ...[
+        if (estimate != null) MetaPill(icon: Icons.timelapse_rounded, label: durationLabel(estimate)),
+        if (isRecurring(task))
+          MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabel(task)),
+        if (projectName != null)
+          MetaPill(label: projectName!, dot: projectColor ?? scheme.primary),
+      ],
     ];
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16 + depth * 18.0, 4, 16, 4),
+      padding: EdgeInsets.fromLTRB(16 + depth * 18.0, compact ? 2 : 4, 16, compact ? 2 : 4),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
