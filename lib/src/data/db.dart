@@ -108,27 +108,52 @@ class OtdaDb {
 
   /// Applies a pulled page in one transaction. A page is up to 1000 ops; one
   /// commit per op made a first copy take half a minute.
+  ///
+  /// The winner check does one read per entity type for the whole page instead
+  /// of one per op: on the 10,000-task fixture a page touches about a hundred
+  /// entities and a thousand fields, so this removes ~1,000 round trips per
+  /// page. The inserts go through one batch for the same reason.
   Future<int> applyOps(List<Map<String, dynamic>> ops) async {
     if (ops.isEmpty) return 0;
     var written = 0;
     await _db.transaction((txn) async {
+      final current = <String, (int, String)>{};
+      final byEntity = <String, Set<String>>{};
       for (final op in ops) {
-        final ts = (op['ts'] as num).toInt();
-        final device = op['device'] as String;
+        final entity = op['entity'] as String;
+        byEntity.putIfAbsent(entity, () => <String>{}).add(op['entityId'] as String);
+      }
+      for (final entry in byEntity.entries) {
+        final ids = entry.value.toList();
+        for (var start = 0; start < ids.length; start += 400) {
+          final chunk = ids.sublist(start, start + 400 > ids.length ? ids.length : start + 400);
+          final rows = await txn.query(
+            'fields',
+            columns: ['entity_id', 'field', 'ts', 'device'],
+            where: 'entity = ? AND entity_id IN (${List.filled(chunk.length, '?').join(',')})',
+            whereArgs: [entry.key, ...chunk],
+          );
+          for (final row in rows) {
+            current[_fieldKey(entry.key, row['entity_id'] as String, row['field'] as String)] =
+                (row['ts'] as int, row['device'] as String);
+          }
+        }
+      }
+
+      final batch = txn.batch();
+      for (final op in ops) {
         final entity = op['entity'] as String;
         final entityId = op['entityId'] as String;
         final field = op['field'] as String;
-        final current = await txn.query('fields',
-            columns: ['ts', 'device'],
-            where: 'entity = ? AND entity_id = ? AND field = ?',
-            whereArgs: [entity, entityId, field],
-            limit: 1);
-        if (current.isNotEmpty) {
-          final curTs = current.first['ts'] as int;
-          final curDevice = current.first['device'] as String;
-          if (!(ts > curTs || (ts == curTs && device.compareTo(curDevice) > 0))) continue;
+        final ts = (op['ts'] as num).toInt();
+        final device = op['device'] as String;
+        final key = _fieldKey(entity, entityId, field);
+        final stored = current[key];
+        if (stored != null && !(ts > stored.$1 || (ts == stored.$1 && device.compareTo(stored.$2) > 0))) {
+          continue;
         }
-        await txn.insert(
+        current[key] = (ts, device);
+        batch.insert(
           'fields',
           {
             'entity': entity,
@@ -142,9 +167,13 @@ class OtdaDb {
         );
         written++;
       }
+      await batch.commit(noResult: true);
     });
     return written;
   }
+
+  static String _fieldKey(String entity, String entityId, String field) =>
+      '$entity\u0000$entityId\u0000$field';
 
   Future<int> maxTs() async {
     final rows = await _db.rawQuery('SELECT MAX(ts) AS m FROM fields');

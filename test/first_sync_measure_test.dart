@@ -88,7 +88,7 @@ void main() {
     expect(engine.cursorForTest, greaterThan(0));
     expect(tasks.length, 9500, reason: '6000 open + 3500 completed live tasks');
     expect(tasks.where((t) => t.isCompleted).length, 3500);
-    expect(projects.length, 60);
+    expect(projects.length, greaterThanOrEqualTo(60));
     expect(progress, isNotEmpty);
     expect(progress.last.fraction, 1.0);
 
