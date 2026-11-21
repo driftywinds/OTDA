@@ -1,5 +1,6 @@
 import '../data/models.dart';
 import '../data/recurrence.dart';
+import '../data/views.dart';
 
 /// The widget's JSON, built here so the native side never decides what is due.
 ///
@@ -28,16 +29,17 @@ Map<String, Object?> buildWidgetSnapshot(
         (task.isCompleted || isRecurring(task) ? null : due);
     if (day == null) {
       // A task added from the widget's own "+" often has no date yet; hiding it
-      // would make the widget look like the add did nothing.
-      if (!task.isCompleted && !isRecurring(task) && task.dueDate == null) {
-        rows.add(('Later', '', task));
+      // would make the widget look like the add did nothing. It waits under
+      // Anytime at the end, like the Upcoming view.
+      if (inAnytime(task.raw, today)) {
+        rows.add(('Anytime', '', task));
       }
       continue;
     }
     rows.add((_sectionFor(day, today), day, task));
   }
 
-  final order = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later'];
+  final order = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Anytime'];
   rows.sort((a, b) {
     final section = order.indexOf(a.$1).compareTo(order.indexOf(b.$1));
     if (section != 0) return section;

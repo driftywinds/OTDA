@@ -108,14 +108,15 @@ void main() {
     expect(titles, ['Mine']);
   });
 
-  test('a task added with no date still appears, under Later', () {
+  test('a task added with no date still appears, under Anytime', () {
     final snapshot = buildWidgetSnapshot([
       task('n', {'title': 'Buy milk'}),
+      task('d', {'title': 'Due today', 'due': {'date': today}}),
     ], const [], today: today);
     final rows = (snapshot['rows'] as List).cast<Map>();
-    final section = rows.firstWhere((r) => r['t'] == 'section');
-    final row = rows.firstWhere((r) => r['t'] == 'task');
-    expect(section['label'], 'Later');
+    final labels = [for (final r in rows) if (r['t'] == 'section') r['label']];
+    expect(labels, ['Today', 'Anytime']);
+    final row = rows.last;
     expect(row['title'], 'Buy milk');
     expect(row['right'], '');
   });

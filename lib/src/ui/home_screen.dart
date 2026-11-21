@@ -271,7 +271,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ]..sort((a, b) => '${a.$1}${a.$2.dueTime ?? '99:99'}'
             .compareTo('${b.$1}${b.$2.dueTime ?? '99:99'}'));
         _upcomingDays = {for (final e in dated) e.$2.id: e.$1};
-        return [for (final e in dated) e.$2];
+        // Everything with no date at all comes last, under Anytime, so the view
+        // that answers "what is coming" also lists what has no day yet.
+        final anytime = _tasks.where((t) => inAnytime(t.raw, today)).toList()
+          ..sort((a, b) => _position(a).compareTo(_position(b)));
+        return [for (final e in dated) e.$2, ...anytime];
       case TaskView.history:
         // The occurrence records: what was actually done or skipped, and when.
         final records = [
@@ -504,6 +508,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           last = day;
         }
         out.add(task);
+      }
+      final anytime = [
+        for (final task in tasks)
+          if (_upcomingDays[task.id] == null && inAnytime(task.raw, today)) task,
+      ];
+      if (anytime.isNotEmpty) {
+        out.add('Anytime');
+        out.addAll(anytime);
       }
       return out;
     }
