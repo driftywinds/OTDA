@@ -235,11 +235,21 @@ minimum is an in-app viewer for images and PDFs plus a share sheet for the rest.
 
 ### 4.1 Export
 
+**Status: done (JSON and ZIP; the server has no PDF format).**
+
 **Scope**
 - Export the account as zip and as PDF (`GET /api/v1/export?format=zip|pdf`), written
   to a file the user can share, with progress and a cancel.
 - Works for an encrypted account by exporting ciphertext plus the wrapped key record,
   and say so in the UI.
+
+**Notes** the 1.5.0 handler accepts `format=json` and `format=zip` only and refuses
+anything else with `400 invalid_input`; there is no PDF route, so the app offers the
+two formats that exist rather than a button that always fails. The response is
+streamed to a temporary file with real progress and a cancel that stops reading (the
+server keeps building until the connection closes). The finished file goes through
+the system share sheet. For an encrypted account the screen says the file holds
+ciphertext plus the wrapped key record.
 
 ### 4.2 Statistics
 

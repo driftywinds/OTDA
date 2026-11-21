@@ -14,6 +14,7 @@ import '../api/api_exception.dart';
 import '../auth/mfa_service.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
+import 'export_screen.dart';
 import 'reauth.dart';
 import 'settings_rows.dart';
 import 'trash_screen.dart';
@@ -215,6 +216,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _Section(title: 'End-to-end encryption', children: [_EncryptionCard(state: widget.state)]),
                 _Section(title: 'Notifications', children: [_NotificationsCard(state: widget.state)]),
                 const _Section(title: 'Home screen widget', children: [_WidgetCard()]),
+                _Section(
+                  title: 'Your data',
+                  children: [
+                    ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      leading: const Icon(Icons.download_rounded, size: 20),
+                      title: Text(
+                        'Export your account',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13),
+                      ),
+                      subtitle: const Text('ZIP with attachments, or a JSON document'),
+                      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => ExportScreen(state: widget.state)),
+                      ),
+                    ),
+                  ],
+                ),
                 _Section(
                   title: 'Appearance',
                   children: [
