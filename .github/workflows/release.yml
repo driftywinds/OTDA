@@ -70,9 +70,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties', 'pubspec.lock') }}
+          key: gradle-v2-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties', 'pubspec.lock') }}
           restore-keys: |
-            gradle-${{ runner.os }}-
+            gradle-v2-${{ runner.os }}-
 
       - name: Configure release signing
         if: env.ANDROID_KEYSTORE_BASE64 != ''
