@@ -606,7 +606,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => TaskSheet(task: task, repo: repo, projects: projects),
+      builder: (_) => TaskSheet(
+        task: task,
+        repo: repo,
+        projects: projects,
+        authorId: widget.state.account?.userId ?? '',
+      ),
     );
     await _load();
   }

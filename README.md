@@ -26,8 +26,10 @@ Offline-first, with the same data model as the server so every device converges.
   existing content with progress (interrupted runs resume), encrypt plaintext as it
   arrives, purge old content history, and turn it off again with a fresh confirmation.
   After an unlock, keep the key behind fingerprint/face; the passphrase still works.
-- Not yet: notes/comments/attachments, encrypted file bytes, note public pages, and the
-  device relay.
+- Attachments: pick files, encrypt personal ones with the `OTAT1` chunked format, upload
+  with size/sha256, verify every chunk on open, view images in-app and share the rest.
+- Not yet: notes/comments, re-uploading existing files when encryption changes, an
+  in-app PDF viewer, note public pages, and the device relay.
 
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
@@ -546,7 +548,7 @@ $env:GRADLE_USER_HOME="$PWD\.tmp\gradle"; $env:ANDROID_USER_HOME="$PWD\.tmp\andr
 | Tasks and Trash | `task_metadata_test`, `repo_metadata_test`, `subtasks_test`, `trash_test`, `trash_flow_test` |
 | Workspaces | `workspace_test`, `workspace_flow_test` |
 | Sharing | `sharing_test`, `sharing_flow_test`, `invitation_test`, `invitation_flow_test`, `public_links_test`, `public_links_flow_test` |
-| Read and account | `stats_test`, `activity_flow_test`, `export_test`, `export_flow_test`, `mfa_flow_test`, `theme_palette_test`, `e2ee_lifecycle_test`, `biometric_test` |
+| Read and account | `stats_test`, `activity_flow_test`, `export_test`, `export_flow_test`, `mfa_flow_test`, `theme_palette_test`, `e2ee_lifecycle_test`, `biometric_test`, `file_crypto_test`, `attachments_test` |
 | Reminders and widget | `reminder_planner_test`, `widget_snapshot_test`, `widget_settings_test` |
 | UI | `settings_rows_test`, `theme_smoke_test`, `views_test`, `calendar_month_test` |
 

@@ -104,6 +104,121 @@ String decryptValue({
 
 bool isEnvelope(Object? value) => value is String && value.startsWith('enc:');
 
+/// The digest the server records for an attachment's stored bytes.
+String sha256Hex(Uint8List bytes) {
+  final digest = SHA256Digest().process(bytes);
+  return digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+}
+
+// ---- attachment files (OTAT1) ---------------------------------------------
+
+const fileMagic = 'OTAT1';
+const fileChunkSize = 1 << 20;
+const _fileHeaderLength = 17;
+const _tagBytes = 16;
+
+Uint8List _fileNonce(Uint8List prefix, int index, bool finalChunk) {
+  if (index >= (1 << 24)) {
+    throw const E2eeError('file_too_large', 'the file is too large for the attachment envelope');
+  }
+  final nonce = Uint8List(12)..setAll(0, prefix);
+  nonce[8] = (index >> 16) & 0xff;
+  nonce[9] = (index >> 8) & 0xff;
+  nonce[10] = index & 0xff;
+  nonce[11] = finalChunk ? 1 : 0;
+  return nonce;
+}
+
+Uint8List _fileAad(String attachmentId, Uint8List header) {
+  final label = utf8.encode('attachment\u0000$attachmentId\u0000');
+  return Uint8List.fromList([...label, ...header]);
+}
+
+/// Seals file bytes into the `OTAT1` envelope, in 1 MiB AES-GCM chunks. [prefix]
+/// and [chunkSize] exist for the known-answer vector.
+Uint8List encryptFileBytes({
+  required Uint8List key,
+  required String attachmentId,
+  required Uint8List plaintext,
+  Uint8List? prefix,
+  int chunkSize = fileChunkSize,
+}) {
+  if (chunkSize <= 0) throw const E2eeError('bad_file_size', 'the chunk size must be positive');
+  final p = prefix ?? randomBytes(8);
+  if (p.length != 8) throw const E2eeError('bad_file_prefix', 'the file prefix must be 8 bytes');
+  final header = Uint8List(_fileHeaderLength)
+    ..setAll(0, utf8.encode(fileMagic))
+    ..setAll(9, p);
+  final size = ByteData.sublistView(header);
+  size.setUint32(5, chunkSize, Endian.big);
+  final aad = _fileAad(attachmentId, header);
+  final out = BytesBuilder(copy: false)..add(header);
+  for (var index = 0;; index++) {
+    final start = index * chunkSize;
+    final end = min(start + chunkSize, plaintext.length);
+    final finalChunk = end == plaintext.length;
+    final chunk = plaintext.sublist(start, end);
+    final sealed = _gcm(
+      encrypt: true,
+      key: key,
+      nonce: _fileNonce(p, index, finalChunk),
+      data: chunk,
+      aad: aad,
+    );
+    out.add(sealed);
+    if (finalChunk) break;
+  }
+  return out.takeBytes();
+}
+
+/// Verifies and decrypts every chunk. A wrong key, id, reordered, altered or
+/// missing chunk, a truncated file or bytes after the final chunk all throw; the
+/// caller must show nothing in that case.
+Uint8List decryptFileBytes({
+  required Uint8List key,
+  required String attachmentId,
+  required Uint8List envelope,
+}) {
+  if (envelope.length < _fileHeaderLength + _tagBytes) {
+    throw const E2eeError('cannot_decrypt_file', 'the file is too short to be an attachment');
+  }
+  if (utf8.decode(envelope.sublist(0, 5)) != fileMagic) {
+    throw const E2eeError('cannot_decrypt_file', 'this is not an OTDA attachment; the app may need an update');
+  }
+  final header = envelope.sublist(0, _fileHeaderLength);
+  final chunkSize = ByteData.sublistView(header).getUint32(5, Endian.big);
+  if (chunkSize == 0) throw const E2eeError('cannot_decrypt_file', 'the file has an invalid chunk size');
+  final prefix = header.sublist(9, _fileHeaderLength);
+  final aad = _fileAad(attachmentId, header);
+  final sealedSize = chunkSize + _tagBytes;
+  final body = envelope.length - _fileHeaderLength;
+  final count = max(1, (body / sealedSize).ceil());
+  final out = BytesBuilder(copy: false);
+  for (var index = 0; index < count; index++) {
+    final start = _fileHeaderLength + index * sealedSize;
+    final end = min(start + sealedSize, envelope.length);
+    final chunk = envelope.sublist(start, end);
+    if (chunk.length < _tagBytes) {
+      throw const E2eeError('cannot_decrypt_file', 'the file is truncated');
+    }
+    try {
+      out.add(_gcm(
+        encrypt: false,
+        key: key,
+        nonce: _fileNonce(prefix, index, index == count - 1),
+        data: chunk,
+        aad: aad,
+      ));
+    } on Object {
+      throw const E2eeError(
+        'cannot_decrypt_file',
+        'a chunk of the file failed its check; nothing was opened',
+      );
+    }
+  }
+  return out.takeBytes();
+}
+
 // ---- key derivation -------------------------------------------------------
 
 /// The accepted iteration range the app enforces on a key record. A broken or

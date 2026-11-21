@@ -121,14 +121,14 @@ class ApiClient {
   }
 
   /// A response body that is not JSON, such as a profile picture.
-  Future<Uint8List> getBytes(String path) async {
+  Future<Uint8List> getBytes(String path, {Duration? timeout}) async {
     final request = http.Request('GET', _uri(path))
       ..headers.addAll(_headers(json: false))
       ..followRedirects = false;
 
     final http.StreamedResponse streamed;
     try {
-      streamed = await _http.send(request).timeout(_timeout);
+      streamed = await _http.send(request).timeout(timeout ?? _timeout);
     } on TimeoutException {
       throw ApiException(0, 'timeout', 'the server did not answer in time');
     } on http.ClientException catch (e) {
@@ -140,6 +140,42 @@ class ApiClient {
       throw ApiException.fromBody(response.statusCode, response.body);
     }
     return response.bodyBytes;
+  }
+
+  /// Sends raw bytes (an attachment's content) and reads a JSON answer or none.
+  Future<dynamic> putBytes(
+    String path,
+    Uint8List bytes, {
+    String contentType = 'application/octet-stream',
+    Duration? timeout,
+  }) async {
+    final request = http.Request('PUT', _uri(path))
+      ..headers.addAll({..._headers(), 'Content-Type': contentType})
+      ..followRedirects = false
+      ..bodyBytes = bytes;
+    final http.StreamedResponse streamed;
+    try {
+      streamed = await _http.send(request).timeout(timeout ?? const Duration(minutes: 2));
+    } on TimeoutException {
+      throw ApiException(0, 'timeout', 'the server did not answer in time');
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'network', e.message);
+    }
+    final response = await http.Response.fromStream(streamed);
+    jar.absorb(response.headers['set-cookie']);
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      throw ApiException(response.statusCode, 'redirect',
+          'unexpected redirect to ${response.headers['location'] ?? '?'}');
+    }
+    if (response.statusCode >= 400) {
+      throw ApiException.fromBody(response.statusCode, response.body);
+    }
+    if (response.statusCode == 204 || response.body.isEmpty) return null;
+    try {
+      return jsonDecode(response.body);
+    } on FormatException {
+      return null;
+    }
   }
 
   /// Opens a server-sent event stream (the sync wake-up channel).

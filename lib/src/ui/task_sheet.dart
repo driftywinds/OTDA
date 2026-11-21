@@ -1,7 +1,14 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:mime/mime.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
+import '../e2ee/attachments.dart';
+import '../e2ee/session.dart';
 import '../quickadd/rule.dart' as rules;
 import 'format.dart';
 import 'new_task_sheet.dart';
@@ -13,11 +20,18 @@ import 'widgets.dart';
 /// One task, editable: the fields the API takes, written as ops as you change
 /// them, so the sheet works offline and never blocks on the network.
 class TaskSheet extends StatefulWidget {
-  const TaskSheet({super.key, required this.task, required this.repo, required this.projects});
+  const TaskSheet({
+    super.key,
+    required this.task,
+    required this.repo,
+    required this.projects,
+    this.authorId = '',
+  });
 
   final Task task;
   final Repo repo;
   final List<Project> projects;
+  final String authorId;
 
   @override
   State<TaskSheet> createState() => _TaskSheetState();
@@ -53,12 +67,28 @@ class _TaskSheetState extends State<TaskSheet> {
   /// empty for a one-off task.
   late String _recurrence = widget.task.raw['recurrence']?.toString() ?? '';
 
+  bool _attachmentsBusy = false;
+  List<Attachment> _attachments = const [];
+
   @override
   void initState() {
     super.initState();
     _loadLabels();
     _loadSections();
     _loadProgress();
+    _loadAttachments();
+  }
+
+  AttachmentService? get _attachmentService {
+    final client = widget.repo.engine.client;
+    if (widget.authorId.isEmpty) return null;
+    return AttachmentService(repo: widget.repo, client: client, authorId: widget.authorId);
+  }
+
+  Future<void> _loadAttachments() async {
+    final items = await widget.repo.attachments(widget.task.id);
+    if (!mounted) return;
+    setState(() => _attachments = items);
   }
 
   Future<void> _loadProgress() async {
@@ -511,6 +541,117 @@ class _TaskSheetState extends State<TaskSheet> {
     if (saved == true) await _loadProgress();
   }
 
+  Future<void> _addFiles() async {
+    final service = _attachmentService;
+    if (service == null || _attachmentsBusy) return;
+    final picked = await FilePicker.pickFiles();
+    if (picked.isEmpty || !mounted) return;
+    setState(() => _attachmentsBusy = true);
+    try {
+      for (final file in picked) {
+        final bytes = await file.readAsBytes();
+        final mime = lookupMimeType(file.name, headerBytes: bytes) ?? 'application/octet-stream';
+        await service.add(taskId: widget.task.id, name: file.name, mime: mime, bytes: bytes);
+      }
+      await _loadAttachments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(picked.length == 1 ? 'File attached.' : '${picked.length} files attached.')),
+        );
+      }
+    } on AttachmentError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } on Object catch (e) {
+      if (mounted) {
+        final message = e is Exception && e.toString().contains('attachments_disabled')
+            ? 'Attachments are turned off on this server.'
+            : 'The file could not be attached: $e';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _attachmentsBusy = false);
+    }
+  }
+
+  Future<void> _openAttachment(Attachment attachment) async {
+    final service = _attachmentService;
+    if (service == null) return;
+    if (attachment.isLink) {
+      await SharePlus.instance.share(ShareParams(text: attachment.url));
+      return;
+    }
+    setState(() => _attachmentsBusy = true);
+    try {
+      if (attachment.uploadedAt == null) {
+        await service.upload(attachment.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Uploaded. The server confirms it on the next sync.')),
+          );
+        }
+        return;
+      }
+      final opened = await service.open(attachment);
+      final file = await service.materialize(opened);
+      if (!mounted) return;
+      if (opened.mime.startsWith('image/')) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => Dialog(
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: Image.file(File(file.path), fit: BoxFit.contain),
+            ),
+          ),
+        );
+      } else {
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(file.path, mimeType: opened.mime)], subject: opened.name),
+        );
+      }
+    } on AttachmentError catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } on Object catch (e) {
+      if (mounted) {
+        final message = e is Exception && e.toString().contains('attachments_disabled')
+            ? 'Attachments are turned off on this server.'
+            : 'The file could not be opened: $e';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _attachmentsBusy = false);
+    }
+  }
+
+  Future<void> _removeAttachment(Attachment attachment) async {
+    final service = _attachmentService;
+    if (service == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this file?'),
+        content: Text(attachment.name),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await service.remove(attachment);
+    await _loadAttachments();
+  }
+
+  String _attachmentState(Attachment attachment) {
+    if (attachment.isLink) return 'Link';
+    if (attachment.encrypted && !E2eeSession.instance.unlocked) return 'Encrypted · unlock to open';
+    if (attachment.uploadedAt == null) return 'Uploading · tap to retry';
+    final kb = attachment.size / 1024;
+    return attachment.encrypted ? '${_sizeLabel(kb)} · encrypted' : _sizeLabel(kb);
+  }
+
+  static String _sizeLabel(double kb) => kb < 1024 ? '${kb.round()} KB' : '${(kb / 1024).toStringAsFixed(1)} MB';
+
   String get _projectName {
     if (_projectId == null) return 'Inbox';
     for (final project in widget.projects) {
@@ -766,7 +907,65 @@ class _TaskSheetState extends State<TaskSheet> {
                   onTapOutside: (_) => _saveNotes(),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'ATTACHMENTS${_attachments.isEmpty ? '' : ' (${_attachments.length})'}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (_attachmentService != null)
+                      IconButton(
+                        tooltip: 'Add a file',
+                        onPressed: _attachmentsBusy ? null : _addFiles,
+                        icon: _attachmentsBusy
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.attach_file_rounded, size: 20),
+                      ),
+                  ],
+                ),
+              ),
+              if (_attachments.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Text(
+                    'No files yet.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                )
+              else
+                for (final attachment in _attachments)
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    leading: Icon(
+                      attachment.encrypted && !E2eeSession.instance.unlocked
+                          ? Icons.lock_outline
+                          : attachment.mime.startsWith('image/')
+                              ? Icons.image_outlined
+                              : attachment.isLink
+                                  ? Icons.link_rounded
+                                  : Icons.insert_drive_file_outlined,
+                      size: 20,
+                    ),
+                    title: Text(attachment.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(_attachmentState(attachment)),
+                    trailing: IconButton(
+                      tooltip: 'Remove',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: _attachmentsBusy ? null : () => _removeAttachment(attachment),
+                    ),
+                    onTap: _attachmentsBusy ? null : () => _openAttachment(attachment),
+                  ),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Row(

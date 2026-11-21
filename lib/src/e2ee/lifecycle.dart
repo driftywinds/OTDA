@@ -5,6 +5,7 @@ import '../api/api_exception.dart';
 import '../data/db.dart';
 import '../data/repo.dart';
 import '../data/sync_engine.dart';
+import 'attachments.dart';
 import 'crypto.dart';
 import 'fields.dart';
 import 'keys.dart';
@@ -57,6 +58,7 @@ class E2eeLifecycle {
     NewKeyRecord prepared, {
     void Function(E2eeMigrationProgress)? onProgress,
   }) async {
+    await _guardFiles(encrypting: true);
     await session.putRecord(client, prepared.record);
     final stored = session.record;
     if (stored == null) {
@@ -170,12 +172,30 @@ class E2eeLifecycle {
     }
   }
 
+  /// File bytes are not re-uploaded by this build yet. Refuse the lifecycle
+  /// rather than leave a file in the wrong form: enabling would keep an existing
+  /// file plaintext on an encrypted account, disabling would leave it
+  /// ciphertext with no key.
+  Future<void> _guardFiles({required bool encrypting}) async {
+    final files = [
+      for (final attachment in await repo.allAttachments())
+        if (!attachment.isLink && (encrypting ? !attachment.encrypted : attachment.encrypted)) attachment,
+    ];
+    if (files.isEmpty) return;
+    throw AttachmentError(
+      'files_pending',
+      'This account has ${files.length} file(s) in the wrong form. File re-upload is not implemented in '
+          'this build yet; remove them or change encryption in the web app first.',
+    );
+  }
+
   /// Disabling: delete the record first so no device keeps encrypting, keep the
   /// key, rewrite every field as plaintext, then forget the key.
   Future<void> disable({void Function(E2eeMigrationProgress)? onProgress}) async {
     if (!session.unlocked) {
       throw const ApiException(409, 'locked', 'unlock this device before turning encryption off');
     }
+    await _guardFiles(encrypting: false);
     try {
       await client.delete('/api/v1/encryption/keys');
     } on ApiException catch (e) {

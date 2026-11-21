@@ -63,8 +63,39 @@ class Project {
   String? get workspaceId => raw['workspace_id']?.toString();
 }
 
-class Label {
-  Label(this.id, this.raw);
+/// A file or link attached to a task. The bytes live outside the replica: an
+/// encrypted account's personal file is stored as an `OTAT1` envelope.
+class Attachment {
+  Attachment(this.raw);
+
+  final Map<String, dynamic> raw;
+
+  String get id => raw['id']?.toString() ?? '';
+  String get taskId => raw['task_id']?.toString() ?? '';
+  String get name => raw['name']?.toString() ?? '';
+  String get mime => raw['mime']?.toString() ?? 'application/octet-stream';
+  int get size => (raw['size'] as num?)?.toInt() ?? 0;
+  String get sha256 => raw['sha256']?.toString() ?? '';
+  bool get encrypted => raw['encrypted'] == true;
+  String get url => raw['url']?.toString() ?? '';
+  String get authorId => raw['author_id']?.toString() ?? '';
+  String get fileId => raw['file_id']?.toString() ?? '';
+  int get createdAt => (raw['created_at'] as num?)?.toInt() ?? 0;
+  int? get uploadedAt => (raw['uploaded_at'] as num?)?.toInt();
+  bool get isDeleted => raw['deleted_at'] != null;
+
+  /// A link rather than stored bytes.
+  bool get isLink => url.isNotEmpty;
+
+  /// The id the bytes are stored and encrypted under (a copy shares the original).
+  String get fileKey => fileId.isEmpty ? id : fileId;
+
+  /// uploaded_at is the server's word that the file is stored. A link needs no
+  /// upload.
+  bool get isAvailable => isLink || uploadedAt != null;
+}
+
+class Label {  Label(this.id, this.raw);
 
   final String id;
   final Map<String, Object?> raw;

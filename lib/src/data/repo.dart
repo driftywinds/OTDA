@@ -83,6 +83,36 @@ class Repo {
     ]..sort((a, b) => a.position.compareTo(b.position));
   }
 
+  /// The live attachments of a task, oldest first.
+  Future<List<Attachment>> attachments(String taskId) async {
+    final rows = await db.entities('attachment');
+    final out = [
+      for (final row in rows)
+        if (row['task_id']?.toString() == taskId && row['deleted_at'] == null)
+          Attachment(row),
+    ];
+    out.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return out;
+  }
+
+  /// Every live attachment, for the lifecycle's file guard.
+  Future<List<Attachment>> allAttachments() async {
+    final rows = await db.entities('attachment');
+    return [
+      for (final row in rows)
+        if (row['deleted_at'] == null) Attachment(row),
+    ];
+  }
+
+  /// Creates an entity from a field map, one op per field. Used for an
+  /// attachment row, whose fields are all known at creation.
+  Future<void> createEntity(String entity, String id, Map<String, Object?> fields) async {
+    for (final entry in fields.entries) {
+      final ts = await clock.next();
+      await db.putField(entity, id, entry.key, entry.value, ts, engine.device);
+    }
+  }
+
   /// The workspaces the sync exchange last reported, in the server's order.
   Future<List<Workspace>> workspaces() async {
     final raw = await db.meta('sync.workspaces');

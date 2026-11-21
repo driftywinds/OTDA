@@ -12,8 +12,9 @@ Status values: **todo** · **doing** · **done**.
 **Current state:** Milestone 1 (Trash, task metadata, subtasks), Milestone 2
 (workspaces, project sharing, invitations, public links) and Milestone 4 (export,
 statistics, activity, theming) are done, except that note pages await the notes
-feature. Milestone 3 is mostly done: enable/disable, the resumable rewrite and
-biometric unlock work; encrypted file bytes remain.
+feature. Milestone 3 is nearly done: enable/disable, the resumable rewrite, biometrics
+and attachment encryption/opening work; re-uploading existing files on enable/disable
+and the relay remain.
 
 ---
 
@@ -284,6 +285,9 @@ button is on the same card.
 
 ### 3.3 File encryption
 
+**Status: mostly done: attach, upload, verify/decrypt, view images and share; file
+re-upload during enable/disable is not.**
+
 **Why** attachments arrive through the op log but the app cannot decrypt or store the
 bytes; `lib/src/e2ee/fields.dart` encrypts only the metadata.
 
@@ -296,6 +300,17 @@ bytes; `lib/src/e2ee/fields.dart` encrypts only the metadata.
 
 **Notes** this needs a way to *open* a file, which the app does not have yet; the
 minimum is an in-app viewer for images and PDFs plus a share sheet for the rest.
+
+**Implemented** `encryptFileBytes`/`decryptFileBytes` match the shared vector byte for
+byte (1 MiB chunks, 8-byte prefix, 3-byte chunk index, final marker, AAD binds the
+attachment id and header). The task sheet lists attachments, picks files, encrypts
+personal ones, records size/sha256 and uploads; opening verifies the whole envelope
+before anything is shown, images open in an in-app zoomable viewer, and other files
+go to the share sheet. A locked device labels an encrypted row instead of trying to
+open it. A shared project's files stay plaintext. **Not yet:** re-uploading existing
+files when encryption is enabled or disabled (the lifecycle refuses with a sentence
+instead of leaving a file in the wrong form), and an in-app PDF renderer (a PDF opens
+in the share sheet).
 
 ### 3.4 Biometric unlock
 

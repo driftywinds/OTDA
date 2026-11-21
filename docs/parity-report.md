@@ -72,6 +72,7 @@ is the only file that names most of them, and only to encrypt them.
 | Public links | project links (view/tick, list/board, expiry) and task pages (view/reply/tick), copied once and revocable |
 | E2EE lifecycle | enable with a one-time recovery key, resumable content rewrite (personal scope only), encrypt-on-sight, history purge, disable with re-auth |
 | Biometric unlock | fingerprint/face unlocks the account key from the platform keystore; the passphrase remains a fallback |
+| Attachments | pick, encrypt personal files (OTAT1), record size/sha256 and upload; open verifies every chunk, images view in-app, other files share; remove tombstones |
 | Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
 | Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
 | Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
@@ -89,7 +90,7 @@ is the only file that names most of them, and only to encrypt them.
 
 | Feature | Server | App |
 |---|---|---|
-| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight, history purge and biometric unlock are done; **file bytes and relay are not** |
+| **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | enable/disable, recovery key, resumable rewrite, encrypt-on-sight, history purge and biometric unlock are done; attachments encrypt/open, but files are not re-uploaded on enable/disable and relay is absent |
 | **Auth** | OIDC, passkeys, app passwords, sign-out everywhere, trusted-device policy | password + TOTP, 2FA management; no passkeys, OIDC or app passwords |
 | **Project fields** | notes, sharing, templates, timeline, flow, archived | name, colour, icon, trash |
 | **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only |
@@ -105,7 +106,7 @@ Grouped by the server area they belong to (route count in brackets).
 
 | Feature | Server routes | State in the app |
 |---|---|---|
-| Attachments (files, images, links) | `attachments` [4] | nothing; no picker, download or upload, and E2EE file encryption is unimplemented |
+| Attachments (files, images, links) | `attachments` [4] | files can be added, opened and removed; **no re-upload migration on enable/disable, link attachments and PDF in-app viewer** |
 | Comments | `comments` [3] | nothing |
 | Notes: standalone, pages, appends, rich text, links, graph | `notes` [10], `pages` [8], `task-pages` [1] | nothing |
 | Time tracking | `time-entries` [6] | nothing |
@@ -162,12 +163,13 @@ templates, project-flow views, list/row layout options.
 
 Ranked by what a user would notice within a day of real use:
 
-1. **Attachments** — no way to add or open a file or a photo from a task.
-2. **Notes and comments** — long-form notes, comments and note public pages are not
+1. **Notes and comments** — long-form notes, comments and note public pages are not
    reachable; note pages are the one public-link shape left out.
+2. **E2EE file migration and relay** — new files are encrypted, but existing files are
+   not re-uploaded when encryption is enabled or disabled, and the device relay is absent.
 3. **Calendar beyond a month grid** — no week/day view, no external calendars.
-4. **E2EE file bytes and relay** — text fields and biometric unlock are covered; the
-   chunked file format and the device relay are not.
+4. **E2EE file migration and relay** — text fields, biometric unlock and new file
+   encryption are covered; re-uploading existing files and the device relay are not.
 5. **Time tracking** — absent.
 6. **Push notifications** — reminders only fire from the device that scheduled them.
 7. **Saved views / custom fields** — the app shows only what the server's built-in
@@ -188,5 +190,5 @@ Ranked by what a user would notice within a day of real use:
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
   complete, plus workspace management, project sharing, invitations, public links,
-  statistics, activity, history, export, theming, the text half of the E2EE lifecycle
-  and biometric unlock. Notes/comments, attachments/file encryption and relay remain.
+  statistics, activity, history, export, theming, the E2EE lifecycle, biometric unlock
+  and attachments. Notes/comments, file re-encryption and relay remain.
