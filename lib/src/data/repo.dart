@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
 
+import '../api/api_exception.dart';
 import 'clock.dart';
 import '../util/log.dart';
 import 'db.dart';
@@ -172,6 +173,117 @@ class Repo {
     await db.putField(entity, entityId, field, value, ts, engine.device);
   }
 
+  /// The live direct children of a task, in manual order.
+  Future<List<Task>> childrenOf(String parentId) async {
+    final rows = await db.entities('task');
+    final children = [
+      for (final row in rows)
+        if (row['parent_id']?.toString() == parentId) Task(row['id'] as String, row),
+    ];
+    children.sort((a, b) {
+      final byPosition = _position(a).compareTo(_position(b));
+      if (byPosition != 0) return byPosition;
+      return (a.createdAt ?? 0).compareTo(b.createdAt ?? 0);
+    });
+    return children;
+  }
+
+  static double _position(Task task) => (task.raw['position'] as num?)?.toDouble() ?? 0;
+
+  /// A new subtask: the parent's project, priority 4 and no due date, placed
+  /// after its last sibling. It exists locally at once, like any other write.
+  Future<Task> createSubtask(Task parent, String title) async {
+    final siblings = await childrenOf(parent.id);
+    final position = siblings.isEmpty ? 0.0 : _position(siblings.last) + 1;
+    return createTask(
+      title,
+      projectId: parent.projectId,
+      extra: {'parent_id': parent.id, 'priority': 4, 'position': position},
+    );
+  }
+
+  /// Direct children progress: completed / total, deleted children count
+  /// nowhere. Derived, never stored.
+  Future<({int done, int total})> subtaskProgress(String taskId) async {
+    final children = await childrenOf(taskId);
+    return (done: children.where((c) => c.isCompleted).length, total: children.length);
+  }
+
+  /// Moves a task under another parent, or to the top level. The server's rule
+  /// is the same as the web client's: same project, no cycle, no self.
+  Future<void> setParent(Task task, String? parentId) async {
+    final rows = await db.entities('task');
+    final byId = {for (final row in rows) row['id'] as String: Task(row['id'] as String, row)};
+    if (parentId != null) {
+      if (parentId == task.id) throw const ApiException(400, 'invalid_parent', 'a task cannot be its own parent');
+      final parent = byId[parentId];
+      if (parent == null || parent.isDeleted) {
+        throw const ApiException(404, 'parent_not_found', 'that parent no longer exists');
+      }
+      if (parent.projectId != task.projectId) {
+        throw const ApiException(400, 'parent_other_project', 'a subtask must stay in its parent\'s project');
+      }
+      // A task may not move under its own descendant.
+      var cursor = parent.parentId;
+      for (var depth = 0; cursor != null && depth < 64; depth++) {
+        if (cursor == task.id) {
+          throw const ApiException(400, 'parent_cycle', 'that would put the task under itself');
+        }
+        cursor = byId[cursor]?.parentId;
+      }
+    }
+    final siblings = parentId == null
+        ? [
+            for (final candidate in byId.values)
+              if (candidate.parentId == null && candidate.id != task.id) candidate,
+          ]
+        : [
+            for (final candidate in byId.values)
+              if (candidate.parentId == parentId && candidate.id != task.id) candidate,
+          ];
+    siblings.sort((a, b) => _position(a).compareTo(_position(b)));
+    final position = siblings.isEmpty ? 0.0 : _position(siblings.last) + 1;
+    final ts = await clock.next();
+    await db.putField('task', task.id, 'parent_id', parentId, ts, engine.device);
+    await db.putField('task', task.id, 'position', position, ts, engine.device);
+  }
+
+  /// Moves a task and every live descendant to another project, one op per
+  /// task. A section belongs to its project, so it is cleared with the move.
+  Future<void> moveToProject(Task task, String? projectId) async {
+    final rows = await db.entities('task');
+    final children = <String, List<String>>{};
+    for (final row in rows) {
+      final parent = row['parent_id']?.toString();
+      if (parent != null && parent.isNotEmpty) {
+        children.putIfAbsent(parent, () => []).add(row['id'] as String);
+      }
+    }
+    final ids = <String>{task.id};
+    final queue = [task.id];
+    while (queue.isNotEmpty) {
+      for (final child in children[queue.removeLast()] ?? const <String>[]) {
+        if (ids.add(child)) queue.add(child);
+      }
+    }
+    final ts = await clock.next();
+    for (final id in ids) {
+      await db.putField('task', id, 'project_id', projectId, ts, engine.device);
+      final row = await db.entity('task', id);
+      if (row?['section_id'] != null) {
+        await db.putField('task', id, 'section_id', null, ts, engine.device);
+      }
+    }
+    // A parent stays in its own project; a task moved elsewhere leaves it.
+    final parentId = task.parentId;
+    if (parentId != null) {
+      final parent = await db.entity('task', parentId);
+      if (parent?['project_id']?.toString() != projectId?.toString()) {
+        await db.putField('task', task.id, 'parent_id', null, ts, engine.device);
+      }
+    }
+  }
+
   /// Marks one occurrence done.
   ///
   /// A plain task gets `completed_at` and is finished. A repeating one is a
@@ -214,7 +326,34 @@ class Repo {
 
     if (!recurring) {
       final ts = await clock.next();
-      await db.putField('task', task.id, 'completed_at', completed ? now : null, ts, engine.device);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (!completed) {
+        // Reopening a parent reopens only the parent; never its subtasks.
+        await db.putField('task', task.id, 'completed_at', null, ts, engine.device);
+        return;
+      }
+      // Completing a plain task completes its open descendants too: one
+      // completion op per task, so the result converges on every device.
+      final rows = await db.entities('task');
+      final children = <String, List<String>>{};
+      for (final row in rows) {
+        final parent = row['parent_id']?.toString();
+        if (parent != null && parent.isNotEmpty) {
+          children.putIfAbsent(parent, () => []).add(row['id'] as String);
+        }
+      }
+      final ids = <String>{task.id};
+      final queue = [task.id];
+      while (queue.isNotEmpty) {
+        for (final child in children[queue.removeLast()] ?? const <String>[]) {
+          if (ids.add(child)) queue.add(child);
+        }
+      }
+      for (final id in ids) {
+        final row = await db.entity('task', id);
+        if (row == null || row['completed_at'] != null) continue;
+        await db.putField('task', id, 'completed_at', now, ts, engine.device);
+      }
       return;
     }
 

@@ -43,6 +43,8 @@ class _TaskSheetState extends State<TaskSheet> {
   late String? _sectionId = widget.task.sectionId;
   List<Label> _allLabels = const [];
   List<Section> _sections = const [];
+  int _subtaskDone = 0;
+  int _subtaskTotal = 0;
 
   /// The repeat rule as stored (`every month`, `every 3 days after completion`),
   /// empty for a one-off task.
@@ -53,6 +55,16 @@ class _TaskSheetState extends State<TaskSheet> {
     super.initState();
     _loadLabels();
     _loadSections();
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    final progress = await widget.repo.subtaskProgress(widget.task.id);
+    if (!mounted) return;
+    setState(() {
+      _subtaskDone = progress.done;
+      _subtaskTotal = progress.total;
+    });
   }
 
   Future<void> _loadLabels() async {
@@ -481,6 +493,32 @@ class _TaskSheetState extends State<TaskSheet> {
     if (mounted) setState(() => _sectionId = id);
   }
 
+  Future<void> _addSubtask() async {
+    final title = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Subtask of “${widget.task.title}”'),
+        content: TextField(
+          controller: title,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'What needs doing?'),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(title.text), child: const Text('Add')),
+        ],
+      ),
+    );
+    title.dispose();
+    final value = text?.trim() ?? '';
+    if (value.isEmpty) return;
+    await widget.repo.createSubtask(widget.task, value);
+    await _loadProgress();
+  }
+
   String get _projectName {
     if (_projectId == null) return 'Inbox';
     for (final project in widget.projects) {
@@ -660,14 +698,20 @@ class _TaskSheetState extends State<TaskSheet> {
                       tooltip: 'Project',
                       onSelected: (value) async {
                         if (value == _projectId) return;
+                        final messenger = ScaffoldMessenger.of(context);
                         setState(() => _projectId = value);
-                        await widget.repo.setField('task', widget.task.id, 'project_id', value);
-                        if (_sectionId != null) {
-                          // A section belongs to one project; the task leaves it.
-                          await widget.repo.setField('task', widget.task.id, 'section_id', null);
-                          if (mounted) setState(() => _sectionId = null);
+                        try {
+                          // Moving a parent carries every descendant; a subtask
+                          // that leaves its parent's project loses the parent.
+                          await widget.repo.moveToProject(widget.task, value);
+                          if (_sectionId != null) {
+                            await widget.repo.setField('task', widget.task.id, 'section_id', null);
+                            if (mounted) setState(() => _sectionId = null);
+                          }
+                          await _loadSections();
+                        } on Object catch (e) {
+                          messenger.showSnackBar(SnackBar(content: Text('$e')));
                         }
-                        await _loadSections();
                       },
                       itemBuilder: (_) => [
                         const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
@@ -703,6 +747,14 @@ class _TaskSheetState extends State<TaskSheet> {
                       active: _labels.isNotEmpty,
                       onTap: _editLabels,
                       onClear: _labels.isEmpty ? null : () => _setLabels(const []),
+                    ),
+                    PropChip(
+                      icon: Icons.account_tree_outlined,
+                      label: _subtaskTotal == 0
+                          ? 'Add subtask'
+                          : '$_subtaskDone/$_subtaskTotal subtasks',
+                      active: _subtaskTotal > 0,
+                      onTap: _addSubtask,
                     ),
                   ],
                 ),

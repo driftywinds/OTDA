@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 
 import '../app_state.dart';
+import '../api/api_exception.dart';
 import '../data/models.dart';
 import '../data/views.dart';
 import '../e2ee/session.dart';
@@ -64,6 +65,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// shortcut: the window is today -3 to +9 months; a grid scrolled further than
   /// that shows no dots. Give MonthCalendar a month callback to make it exact.
   List<(String, Task)> _calendarOccurrences = const [];
+
+  /// Direct-children progress per parent, "2/3". Derived from the replica.
+  Map<String, String> _subtaskProgress = const {};
+
+  /// Tasks whose children are folded away, per device and not synced.
+  Set<String> _collapsed = {};
 
   /// The sync line is a flicker on success and stays while there is a problem.
   bool _syncFlash = false;
@@ -202,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final tasks = await repo.tasks();
     final projects = await repo.projects();
     final workspaces = await repo.workspaces();
+    final collapsedRaw = await repo.db.meta('ui.collapsed');
     if (!mounted) return;
     final defaultWorkspace = workspaces.where((w) => w.isDefault).map((w) => w.id).firstOrNull ??
         workspaces.map((w) => w.id).firstOrNull;
@@ -213,8 +221,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       otdaLog('list: record ${t.id} series=${t.raw['series_id']} '
           'occ=${t.raw['occurrence_date']} due=${t.dueDate} done=${t.isCompleted} del=${t.isDeleted}');
     }
+    final byParent = <String, List<Task>>{};
+    for (final task in tasks) {
+      final parent = task.parentId;
+      if (parent != null && parent.isNotEmpty) byParent.putIfAbsent(parent, () => []).add(task);
+    }
     setState(() {
       _tasks = tasks;
+      _collapsed = (collapsedRaw ?? '').split(',').where((id) => id.isNotEmpty).toSet();
+      _subtaskProgress = {
+        for (final entry in byParent.entries)
+          entry.key: '${entry.value.where((t) => t.isCompleted).length}/${entry.value.length}',
+      };
       _workspaces = workspaces;
       _workspaceId ??= defaultWorkspace;
       // A project without a workspace belongs to the account's default one.
@@ -345,9 +363,224 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ));
       return;
     }
-    await widget.state.repo?.setCompleted(task, !task.isCompleted);
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final completing = !task.isCompleted;
+    await repo.setCompleted(task, completing);
+    // Completing the last open subtask never completes the parent silently; offer
+    // it instead (the web client's one-key action).
+    if (completing && task.parentId != null) {
+      final parent = await repo.task(task.parentId!);
+      if (parent != null && !parent.isCompleted) {
+        final siblings = await repo.childrenOf(parent.id);
+        if (siblings.every((s) => s.isCompleted) && mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              content: Text('All subtasks done: “${parent.title}” is still open.'),
+              action: SnackBarAction(
+                label: 'Complete parent',
+                onPressed: () async {
+                  await repo.setCompleted(parent, true);
+                  await _load();
+                },
+              ),
+            ));
+        }
+      }
+    }
     await _load();
   }
+
+  Future<void> _toggleCollapse(String id) async {
+    setState(() {
+      if (!_collapsed.remove(id)) _collapsed.add(id);
+    });
+    await widget.state.repo?.db.setMeta('ui.collapsed', _collapsed.join(','));
+  }
+
+  /// The row's long-press menu: subtask, move/promote, delete.
+  Future<void> _taskMenu(Task task) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(task.title.isEmpty ? 'Untitled' : task.title,
+                  style: Theme.of(context).textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: task.parentId == null ? const Text('Top level') : const Text('Subtask'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.subdirectory_arrow_right_rounded),
+              title: const Text('Add subtask'),
+              onTap: () => Navigator.of(context).pop('subtask'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.swap_vert_rounded),
+              title: const Text('Move under another task…'),
+              onTap: () => Navigator.of(context).pop('move'),
+            ),
+            if (task.parentId != null)
+              ListTile(
+                leading: const Icon(Icons.vertical_align_top_rounded),
+                title: const Text('Move to top level'),
+                onTap: () => Navigator.of(context).pop('promote'),
+              ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: Theme.of(context).colorScheme.error),
+              title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () => Navigator.of(context).pop('delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'subtask':
+        await _addSubtask(task);
+      case 'move':
+        await _moveTask(task);
+      case 'promote':
+        try {
+          await repo.setParent(task, null);
+          await _load();
+        } on Object catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_errorText(e))));
+          }
+        }
+      case 'delete':
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Move to the Trash?'),
+            content: Text('“${task.title}”${task.parentId == null ? ' and its subtasks' : ''} can be restored from Settings → Lists → Trash.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep')),
+              FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+            ],
+          ),
+        );
+        if (confirmed == true) {
+          await repo.trash(task);
+          await _load();
+        }
+    }
+  }
+
+  Future<void> _addSubtask(Task parent) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final title = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Subtask of “${parent.title}”'),
+        content: TextField(
+          controller: title,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'What needs doing?'),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(title.text), child: const Text('Add')),
+        ],
+      ),
+    );
+    title.dispose();
+    final value = text?.trim() ?? '';
+    if (value.isEmpty) return;
+    await repo.createSubtask(parent, value);
+    // Show the new row where it belongs, even if the parent was folded.
+    if (_collapsed.remove(parent.id)) {
+      await repo.db.setMeta('ui.collapsed', _collapsed.join(','));
+    }
+    await _load();
+  }
+
+  Future<void> _moveTask(Task task) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    final byId = {for (final t in _tasks) t.id: t};
+    // A task cannot move under itself or one of its own descendants.
+    final forbidden = <String>{task.id};
+    for (final candidate in _tasks) {
+      var parent = candidate.parentId;
+      for (var depth = 0; parent != null && depth < 64; depth++) {
+        if (parent == task.id) {
+          forbidden.add(candidate.id);
+          break;
+        }
+        parent = byId[parent]?.parentId;
+      }
+    }
+    final candidates = [
+      for (final candidate in _tasks)
+        if (!forbidden.contains(candidate.id) &&
+            !candidate.isCompleted &&
+            candidate.projectId == task.projectId)
+          candidate,
+    ]..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.vertical_align_top_rounded),
+                title: const Text('Top level'),
+                trailing: task.parentId == null ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.of(context).pop('__top'),
+              ),
+              const Divider(height: 1),
+              if (candidates.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No other task in this project can be the parent.'),
+                ),
+              for (final candidate in candidates)
+                ListTile(
+                  title: Text(candidate.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: candidate.parentId == null ? null : const Text('Subtask'),
+                  trailing: task.parentId == candidate.id ? const Icon(Icons.check_rounded) : null,
+                  onTap: () => Navigator.of(context).pop(candidate.id),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == null) return;
+    try {
+      await repo.setParent(task, choice == '__top' ? null : choice);
+      if (choice != '__top' && _collapsed.remove(choice)) {
+        await repo.db.setMeta('ui.collapsed', _collapsed.join(','));
+      }
+      await _load();
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_errorText(e))));
+      }
+    }
+  }
+
+  String _errorText(Object error) => error is ApiException ? error.message : 'That move was not possible.';
 
   Future<void> _open(Task task) async {
     final repo = widget.state.repo;
@@ -482,8 +715,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String get _title =>
       _view == TaskView.project ? (_projectNames[_projectId] ?? 'Project') : _titles[_view]!;
 
-  /// Today's list splits into what slipped and what is due now; the other
-  /// views are flat. A String entry is a section header, a Task is a row.
+  /// Today's list splits into what slipped and what is due now; Upcoming groups
+  /// by day and ends with Anytime. Inside each group a task whose parent is also
+  /// in the group goes under it; a child whose parent is not in the group stays
+  /// at the top level, with no write.
   List<Object> _entries(List<Task> tasks) {
     final today = _today;
     if (_view == TaskView.today) {
@@ -492,22 +727,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final overdue = open.where((t) => (t.dueDate ?? '9999').compareTo(today) < 0).toList();
       final rest = open.where((t) => !overdue.contains(t)).toList();
       return [
-        if (overdue.isNotEmpty) ...['Overdue', ...overdue],
-        if (rest.isNotEmpty) ...['Today', ...rest],
-        if (done.isNotEmpty) ...['Done today', ...done],
+        if (overdue.isNotEmpty) ...['Overdue', ..._nest(overdue)],
+        if (rest.isNotEmpty) ...['Today', ..._nest(rest)],
+        if (done.isNotEmpty) ...['Done today', ..._nest(done)],
       ];
     }
     if (_view == TaskView.upcoming) {
       final out = <Object>[];
-      String? last;
+      final grouped = <String, List<Task>>{};
       for (final task in tasks) {
         final day = _upcomingDays[task.id] ?? task.dueDate;
         if (day == null) continue;
-        if (day != last) {
-          out.add(friendlyDate(day, today));
-          last = day;
-        }
-        out.add(task);
+        grouped.putIfAbsent(day, () => []).add(task);
+      }
+      for (final entry in grouped.entries) {
+        out.add(friendlyDate(entry.key, today));
+        out.addAll(_nest(entry.value));
       }
       final anytime = [
         for (final task in tasks)
@@ -515,11 +750,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
       if (anytime.isNotEmpty) {
         out.add('Anytime');
-        out.addAll(anytime);
+        out.addAll(_nest(anytime));
       }
       return out;
     }
-    return tasks;
+    return _nest(tasks);
+  }
+
+  /// Depth-first rows for one group: roots keep the list's order, children go
+  /// under their parent by position, folded parents hide their subtree.
+  List<_TaskRowEntry> _nest(List<Task> tasks) {
+    final byId = {for (final task in tasks) task.id: task};
+    final rank = {for (var i = 0; i < tasks.length; i++) tasks[i].id: i};
+    final children = <String, List<Task>>{};
+    final roots = <Task>[];
+    for (final task in tasks) {
+      final parent = task.parentId;
+      if (parent != null && parent != task.id && byId.containsKey(parent)) {
+        children.putIfAbsent(parent, () => []).add(task);
+      } else {
+        roots.add(task);
+      }
+    }
+    roots.sort((a, b) => (rank[a.id] ?? 0).compareTo(rank[b.id] ?? 0));
+    for (final list in children.values) {
+      list.sort((a, b) {
+        final byPosition = _position(a).compareTo(_position(b));
+        if (byPosition != 0) return byPosition;
+        return (a.createdAt ?? 0).compareTo(b.createdAt ?? 0);
+      });
+    }
+    final out = <_TaskRowEntry>[];
+    final seen = <String>{};
+    void walk(Task task, int depth) {
+      if (!seen.add(task.id)) return;
+      final kids = children[task.id] ?? const <Task>[];
+      final collapsed = _collapsed.contains(task.id);
+      out.add(_TaskRowEntry(task, depth, kids.isNotEmpty, collapsed));
+      if (collapsed) return;
+      for (final child in kids) {
+        walk(child, depth + 1);
+      }
+    }
+
+    for (final root in roots) {
+      walk(root, 0);
+    }
+    // A cycle (only possible in a damaged log) still shows every row once.
+    for (final task in tasks) {
+      if (!seen.contains(task.id)) walk(task, 0);
+    }
+    return out;
   }
 
   @override
@@ -672,11 +953,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     if (entry is String) {
                       return SectionLabel(entry, color: entry == 'Overdue' ? scheme.error : null);
                     }
-                    final task = entry as Task;
+                    final row = entry as _TaskRowEntry;
+                    final task = row.task;
                     return _TaskRow(
                       key: ValueKey(task.id),
                       task: task,
                       today: _today,
+                      depth: row.depth,
+                      hasChildren: row.hasChildren,
+                      collapsed: row.collapsed,
+                      progress: _subtaskProgress[task.id],
                       projectName: task.projectId == null ? null : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
                       dueOverride: switch (_view) {
@@ -689,6 +975,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       showDone: !(_view == TaskView.upcoming && isRecurring(task)),
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
+                      onMenu: () => _taskMenu(task),
+                      onToggleCollapse: () => _toggleCollapse(task.id),
                     );
                   },
                   childCount: entries.length,
@@ -840,6 +1128,17 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+/// One row of a nested list: the task, how deep it is, and whether it has
+/// children in this group and is folded.
+class _TaskRowEntry {
+  const _TaskRowEntry(this.task, this.depth, this.hasChildren, this.collapsed);
+
+  final Task task;
+  final int depth;
+  final bool hasChildren;
+  final bool collapsed;
+}
+
 class _TaskRow extends StatelessWidget {
   const _TaskRow({
     super.key,
@@ -847,6 +1146,12 @@ class _TaskRow extends StatelessWidget {
     required this.today,
     required this.onToggle,
     required this.onOpen,
+    required this.onMenu,
+    this.depth = 0,
+    this.hasChildren = false,
+    this.collapsed = false,
+    this.onToggleCollapse,
+    this.progress,
     this.projectName,
     this.projectColor,
     this.dueOverride,
@@ -855,6 +1160,13 @@ class _TaskRow extends StatelessWidget {
 
   final Task task;
   final String today;
+  final int depth;
+  final bool hasChildren;
+  final bool collapsed;
+  final VoidCallback? onToggleCollapse;
+
+  /// "2/3" over direct children, or null when there are none.
+  final String? progress;
 
   /// The day to show instead of `due` (Upcoming projects a repeating task).
   final String? dueOverride;
@@ -864,6 +1176,7 @@ class _TaskRow extends StatelessWidget {
   final bool showDone;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
+  final VoidCallback onMenu;
   final String? projectName;
   final Color? projectColor;
 
@@ -877,6 +1190,8 @@ class _TaskRow extends StatelessWidget {
     final estimate = task.estimateMinutes;
 
     final meta = <Widget>[
+      if (progress != null)
+        MetaPill(icon: Icons.account_tree_outlined, label: progress!),
       if (date != null)
         MetaPill(
           icon: Icons.event_rounded,
@@ -891,7 +1206,7 @@ class _TaskRow extends StatelessWidget {
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: EdgeInsets.fromLTRB(16 + depth * 18.0, 4, 16, 4),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -906,11 +1221,28 @@ class _TaskRow extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onOpen,
+            onLongPress: onMenu,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 14, 4),
+              padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  SizedBox(
+                    width: 24,
+                    child: hasChildren
+                        ? IconButton(
+                            tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+                            iconSize: 18,
+                            icon: Icon(
+                              collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            onPressed: onToggleCollapse,
+                          )
+                        : null,
+                  ),
                   TaskCheck(done: task.isCompleted && showDone, priority: task.priority, onChanged: onToggle),
                   Expanded(
                     child: Padding(
@@ -936,6 +1268,14 @@ class _TaskRow extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Task actions',
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    icon: Icon(Icons.more_horiz_rounded, color: scheme.onSurfaceVariant),
+                    onPressed: onMenu,
                   ),
                 ],
               ),
