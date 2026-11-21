@@ -588,6 +588,14 @@ String _todayString() {
 /// Why the last widget push failed, or null. Shown nowhere yet but kept for logs.
 String? lastWidgetError;
 
+/// Re-arms reminders and redraws the widget after a task changes in the UI. Every
+/// completion path goes through here: without it, ticking a task in the app left
+/// the widget showing the old row until some unrelated sync or reminder re-armed.
+Future<void> refreshTaskSurfaces(Repo repo) async {
+  await ReminderService.instance.rearmFrom(repo);
+  await pushWidgetsFromRepo(repo);
+}
+
 /// Reads the replica and pushes every widget snapshot from it. Works with no UI.
 Future<void> pushWidgetsFromRepo(Repo repo) async {
   final tasks = await repo.tasks();

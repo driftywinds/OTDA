@@ -35,6 +35,7 @@ class _HeadlessActionAppState extends State<HeadlessActionApp> {
       // An action that cannot run must still close: the activity is invisible, and a
       // stuck one would hold the process.
     } finally {
+      await SystemBridge.refreshCompleteWidget();
       await SystemBridge.closeComplete();
     }
   }

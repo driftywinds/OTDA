@@ -10,6 +10,7 @@ import '../data/repo.dart';
 import '../e2ee/attachments.dart';
 import '../e2ee/session.dart';
 import '../quickadd/rule.dart' as rules;
+import '../reminders/service.dart';
 import 'format.dart';
 import 'new_task_sheet.dart';
 import 'task_history_screen.dart';
@@ -692,6 +693,7 @@ class _TaskSheetState extends State<TaskSheet> {
                         if (_completed) return;
                         final messenger = ScaffoldMessenger.of(context);
                         await widget.repo.setCompleted(widget.task, true);
+                        await refreshTaskSurfaces(widget.repo);
                         messenger.showSnackBar(
                           const SnackBar(content: Text('Done for now — it comes round again')),
                         );
@@ -699,6 +701,7 @@ class _TaskSheetState extends State<TaskSheet> {
                       }
                       setState(() => _completed = !_completed);
                       await widget.repo.setCompleted(widget.task, _completed);
+                      await refreshTaskSurfaces(widget.repo);
                     },
                   ),
                   Expanded(

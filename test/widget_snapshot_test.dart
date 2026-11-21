@@ -86,6 +86,43 @@ void main() {
     expect(rows.firstWhere((r) => r['t'] == 'section')['label'], 'Today');
   });
 
+  test('today’s done tasks come first, above Today, including a series occurrence', () {
+    final doneAt = DateTime(2026, 11, 19, 10, 30).millisecondsSinceEpoch;
+    final snapshot = buildWidgetSnapshot([
+      task('open', {'title': 'Still open', 'due': {'date': today}}),
+      task('done', {'title': 'Finished', 'due': {'date': '2026-11-18'}, 'completed_at': doneAt}),
+      task('record', {
+        'title': 'Post e paper',
+        'series_id': 's',
+        'occurrence_date': today,
+        'due': {'date': today},
+        'completed_at': doneAt + 1,
+      }),
+    ], const [], today: today);
+
+    final rows = (snapshot['rows'] as List).cast<Map>();
+    final labels = [for (final row in rows) if (row['t'] == 'section') row['label']];
+    expect(labels, ['Done today', 'Today']);
+    final tasks = [for (final row in rows) if (row['t'] == 'task') row];
+    expect(tasks.map((row) => row['title']), ['Post e paper', 'Finished', 'Still open']);
+    expect(tasks[0]['done'], isTrue);
+    expect(tasks[1]['done'], isTrue);
+    expect(tasks[2]['done'], isFalse);
+  });
+
+  test('a done task is not also listed under its old Overdue section', () {
+    final snapshot = buildWidgetSnapshot([
+      task('done', {
+        'title': 'Late but done',
+        'due': {'date': '2026-11-18'},
+        'completed_at': DateTime(2026, 11, 19, 9, 0).millisecondsSinceEpoch,
+      }),
+    ], const [], today: today);
+    final rows = (snapshot['rows'] as List).cast<Map>();
+    expect(rows.where((row) => row['t'] == 'section').map((row) => row['label']), ['Done today']);
+    expect(rows.where((row) => row['t'] == 'task'), hasLength(1));
+  });
+
   test('the list is capped and the remainder is counted', () {
     final snapshot = buildWidgetSnapshot([
       for (var i = 0; i < 40; i++)

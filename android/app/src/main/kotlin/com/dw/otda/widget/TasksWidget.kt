@@ -88,11 +88,14 @@ internal fun requestWidgetUpdate(context: Context) {
     // Update the Glance instances directly. The ACTION_APPWIDGET_UPDATE broadcast
     // used to be the only signal here, and a widget whose row was just ticked could
     // keep the old snapshot until the next broadcast or the app's own push.
+    CoroutineScope(Dispatchers.Default).launch { updateWidgets(context) }
+}
+
+/** Redraws every instance and returns when Glance has taken the new content. */
+internal suspend fun updateWidgets(context: Context) {
     val manager = GlanceAppWidgetManager(context)
-    CoroutineScope(Dispatchers.Default).launch {
-        for (id in manager.getGlanceIds(TasksWidget::class.java)) {
-            TasksWidget().update(context, id)
-        }
+    for (id in manager.getGlanceIds(TasksWidget::class.java)) {
+        TasksWidget().update(context, id)
     }
 }
 
@@ -470,8 +473,9 @@ private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Box(
-            modifier = GlanceModifier.size(style.grow(40))
-                .clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task)))),
+            modifier = GlanceModifier.size(style.grow(40)).let {
+                if (task.done) it else it.clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task))))
+            },
             contentAlignment = Alignment.Center,
         ) {
             if (task.done) {

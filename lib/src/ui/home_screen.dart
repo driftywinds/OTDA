@@ -394,6 +394,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (repo == null) return;
     final completing = !task.isCompleted;
     await repo.setCompleted(task, completing);
+    await refreshTaskSurfaces(repo);
     // Completing the last open subtask never completes the parent silently; offer
     // it instead (the web client's one-key action).
     if (completing && task.parentId != null) {
@@ -409,6 +410,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 label: 'Complete parent',
                 onPressed: () async {
                   await repo.setCompleted(parent, true);
+                  await refreshTaskSurfaces(repo);
                   await _load();
                 },
               ),

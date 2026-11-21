@@ -91,6 +91,16 @@ class SystemBridge {
     }
   }
 
+  /// Redraws the widget from the snapshots Dart just wrote, before the invisible
+  /// activity closes. The broadcast alone can be delivered after the process dies.
+  static Future<void> refreshCompleteWidget() async {
+    try {
+      await _complete.invokeMethod<bool>('updateWidgets');
+    } on Object {
+      // not running inside CompleteActivity
+    }
+  }
+
   /// Asks CompleteActivity to finish and stay out of the recents list.
   static Future<void> closeComplete() async {
     try {

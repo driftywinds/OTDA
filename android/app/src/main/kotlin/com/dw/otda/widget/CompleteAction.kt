@@ -70,9 +70,29 @@ private fun markRows(rows: JSONArray, taskId: String, day: String?): Int {
         val rowDay = row.opt("day")?.toString()
         if (day != null && rowDay != null && rowDay != day) continue
         row.put("done", true)
+        // Move the row to "Done today" at once: the app pushes a rebuilt snapshot a
+        // moment later, but the widget must not look frozen (or leave the tick in
+        // Today) while that invisible activity runs.
+        val moved = JSONObject(row.toString())
+        rows.remove(index)
+        moveToDoneToday(rows, moved)
         touched++
+        break
     }
     return touched
+}
+
+/** Puts a finished row under "Done today", creating the section at the top. */
+private fun moveToDoneToday(rows: JSONArray, row: JSONObject) {
+    for (index in 0 until rows.length()) {
+        val candidate = rows.optJSONObject(index) ?: continue
+        if (candidate.optString("t") == "section" && candidate.optString("label") == "Done today") {
+            rows.put(index + 1, row)
+            return
+        }
+    }
+    rows.put(0, row)
+    rows.put(0, JSONObject().put("t", "section").put("label", "Done today"))
 }
 
 internal val SNAPSHOT_ROW_KEYS = listOf("rows", "items", "tasks")

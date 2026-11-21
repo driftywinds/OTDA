@@ -16,9 +16,27 @@ Map<String, Object?> buildWidgetSnapshot(
 }) {
   final names = {for (final project in projects) project.id: project.name};
   final rows = <(String, String, Task)>[]; // section, day, task
+  bool finishedToday(Task task) {
+    final millis = task.completedAt;
+    if (millis == null || task.isDeleted) return false;
+    final when = DateTime.fromMillisecondsSinceEpoch(millis);
+    final day = '${when.year.toString().padLeft(4, '0')}-'
+        '${when.month.toString().padLeft(2, '0')}-'
+        '${when.day.toString().padLeft(2, '0')}';
+    return day == today;
+  }
+
   for (final task in tasks) {
-    if (task.isDeleted || task.raw['series_id'] != null) continue;
+    if (task.isDeleted) continue;
     if (projectId != null && projectId != 'all' && task.projectId != projectId) continue;
+    // A finished row stays in front of the person who ticked it: today's done
+    // tasks get their own section above Overdue and Today, including a repeating
+    // task's finished occurrence record.
+    if (finishedToday(task)) {
+      rows.add(('Done today', task.dueDate ?? today, task));
+      continue;
+    }
+    if (task.raw['series_id'] != null) continue;
     // Upcoming offers what is *ahead*, so a repeating task due today is projected to
     // tomorrow. A glance surface needs the occurrence in front of you, so the widget
     // takes the current occurrence when it is due today or already overdue and only
@@ -39,10 +57,14 @@ Map<String, Object?> buildWidgetSnapshot(
     rows.add((_sectionFor(day, today), day, task));
   }
 
-  final order = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Anytime'];
+  final order = ['Done today', 'Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Anytime'];
   rows.sort((a, b) {
     final section = order.indexOf(a.$1).compareTo(order.indexOf(b.$1));
     if (section != 0) return section;
+    if (a.$1 == 'Done today') {
+      // Most recently ticked first.
+      return (b.$3.completedAt ?? 0).compareTo(a.$3.completedAt ?? 0);
+    }
     return '${a.$2}${a.$3.dueTime ?? ''}'.compareTo('${b.$2}${b.$3.dueTime ?? ''}');
   });
 
