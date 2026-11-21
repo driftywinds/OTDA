@@ -207,12 +207,17 @@ internal fun enqueuePendingOp(
 
 /**
  * The whole tap, start to finish and entirely local: queue the change (the widget draws it at once,
- * because drawing overlays the queue), redraw the lists, and wake the app so it can save and sync it.
+ * because drawing overlays the queue), redraw the widget, and wake the app so it can save and sync it.
  * Nothing here edits a stored snapshot, so nothing the app writes can race with it.
+ *
+ * The redraw is a full render, not only [refreshWidgetLists]: a collection data-changed notification
+ * is delivered to the launcher asynchronously and can sit behind its own work, while updateAppWidget
+ * replaces the RemoteViews immediately. The first tap after a placement used to look instant only
+ * because the app's first snapshot push did that full update; later taps waited for the next push.
  */
 internal fun toggleTask(context: Context, taskId: String, day: String?, sid: String?, occ: String?, done: Boolean) {
     enqueuePendingOp(context, taskId, day, sid, occ, done)
-    refreshWidgetLists(context)
+    updateWidgets(context)
     val uri = Uri.parse("otda://complete").buildUpon().appendQueryParameter("id", taskId).apply {
         if (!day.isNullOrBlank()) appendQueryParameter("day", day)
         if (!done) appendQueryParameter("done", "0")

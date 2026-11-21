@@ -765,6 +765,13 @@ Future<void> _runPushLoop() async {
     } while (_pushAgain);
   } finally {
     _pushLoop = null;
+    // A caller may have arrived after the loop's last check but before this
+    // clear; without the second look that request would be dropped and the
+    // widget would keep the old snapshot until some unrelated push.
+    if (_pushAgain) {
+      _pushAgain = false;
+      unawaited(pushWidgetsFromRepo(_pushRepo!));
+    }
   }
 }
 
