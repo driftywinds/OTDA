@@ -10,6 +10,37 @@ import 'clock.dart';
 import 'db.dart';
 import '../util/log.dart';
 
+/// How far a running exchange has got. [total] is the number of operation-log
+/// positions the server said were left when the exchange started, or null when
+/// the server could not tell us (an older server, or an offline start).
+class SyncProgress {
+  const SyncProgress({
+    required this.pulled,
+    required this.pages,
+    required this.done,
+    required this.total,
+  });
+
+  /// Operations applied from the pull so far.
+  final int pulled;
+
+  /// Round trips made so far.
+  final int pages;
+
+  /// Operation-log positions covered by this exchange.
+  final int done;
+
+  /// Operation-log positions this exchange has to cover, when known.
+  final int? total;
+
+  /// 0..1, or null while the total is unknown.
+  double? get fraction {
+    final all = total;
+    if (all == null || all <= 0) return null;
+    return (done / all).clamp(0.0, 1.0);
+  }
+}
+
 /// What one exchange did, for the status line and for tests.
 class SyncResult {
   const SyncResult({
@@ -41,6 +72,10 @@ class SyncEngine {
   static const _features = ['clock_skew', 'latest_docs', 'backfill_ack'];
   static const _maxPages = 20;
 
+  /// A first copy walks the whole log in one exchange; this is a safety stop,
+  /// not a page budget. 5,000 pages is five million operations.
+  static const _maxFullSyncPages = 5000;
+
   int _cursor = 0;
   String? _generation;
   int _backfillSeq = 0;
@@ -48,6 +83,12 @@ class SyncEngine {
   DateTime? _lastSync;
   ApiException? _failure;
   int _pending = 0;
+
+  /// True once an exchange has pulled every page up to the server's head and
+  /// sent everything this device had queued. The first copy of an account is
+  /// not usable until then; later launches read it before touching the network.
+  bool _fullSyncDone = false;
+  bool get fullSyncDone => _fullSyncDone;
 
   final _status = StreamController<void>.broadcast();
 
@@ -71,6 +112,7 @@ class SyncEngine {
     _cursor = await db.metaInt('sync.cursor');
     _generation = await db.meta('sync.generation');
     _backfillSeq = await db.metaInt('sync.backfillSeq');
+    _fullSyncDone = await db.metaInt('sync.full') == 1;
     _deviceId = await _loadDeviceId();
   }
 
@@ -88,7 +130,12 @@ class SyncEngine {
   String _deviceId = '';
 
   /// One full run: drain the outbox, then pull until the server says done.
-  Future<SyncResult> exchange() async {
+  ///
+  /// [fullSync] walks the whole log in this one call (the first copy of an
+  /// account) instead of stopping after [_maxPages] pages. [onProgress] is
+  /// called after every page; a first copy of a 10,000-task account is about
+  /// 105,000 operations, so 106 pages, and the gate needs to say how far it is.
+  Future<SyncResult> exchange({bool fullSync = false, void Function(SyncProgress)? onProgress}) async {
     if (_deviceId.isEmpty) {
       _deviceId = await _loadDeviceId();
     }
@@ -105,9 +152,17 @@ class SyncEngine {
     var pages = 0;
     var more = true;
     final sent = <String>[];
+    var startCursor = _cursor;
+    // The head is a cheap push-only exchange (no pull). Its cursor is the last
+    // position of this account's log, so `head - start` is what this copy has to
+    // cover: enough for a progress bar. A server that does not know push_only
+    // answers with a page instead; then the total stays unknown.
+    final head = fullSync ? await _probeHead() : null;
+    final total = head != null && head > startCursor ? head - startCursor : null;
 
     try {
-      while (more && pages < _maxPages) {
+      final maxPages = fullSync ? _maxFullSyncPages : _maxPages;
+      while (pages < maxPages) {
         final queued = await db.pendingOps();
         _pending = queued.length;
         final ops = <Map<String, dynamic>>[];
@@ -197,6 +252,15 @@ class SyncEngine {
         _backfillSeq = (json['backfillSeq'] as num?)?.toInt() ?? 0;
         if (_backfillSeq > 0) await db.setMetaInt('sync.backfillSeq', _backfillSeq);
         more = json['hasMore'] == true;
+        // A page can leave the outbox non-empty (more queued than one batch);
+        // go round again to send it even when the pull is finished.
+        if (!more && await db.outboxCount() > 0) more = true;
+        onProgress?.call(SyncProgress(
+          pulled: pulled,
+          pages: pages,
+          done: _cursor - startCursor,
+          total: total,
+        ));
 
         final serverTime = (json['serverTime'] as num?)?.toInt();
         if (serverTime != null) await clock.adopt(serverTime);
@@ -214,13 +278,29 @@ class SyncEngine {
             // The server was restored from a backup: re-send everything we hold
             // with the clocks we already stored, then read the log again.
             await _reseed();
+            startCursor = 0;
           }
           _generation = generation;
           await db.setMeta('sync.generation', generation);
         }
+        if (!more) break;
       }
 
-      _pending = (await db.pendingOps(limit: 1)).length;
+      if (more) {
+        // The safety stop was reached before the head. A first copy must never
+        // claim completeness; a normal exchange simply keeps the cursor and the
+        // next tick continues from there.
+        if (!fullSync) {
+          _pending = await db.outboxCount();
+          _lastSync = DateTime.now();
+          return SyncResult(applied: applied, pulled: pulled, rejected: rejected, pending: _pending, pages: pages);
+        }
+        throw ApiException(0, 'sync_incomplete',
+            'the server has more history than one pass can carry; try again to continue');
+      }
+      _fullSyncDone = true;
+      await db.setMetaInt('sync.full', 1);
+      _pending = await db.outboxCount();
       _lastSync = DateTime.now();
       return SyncResult(applied: applied, pulled: pulled, rejected: rejected, pending: _pending, pages: pages);
     } on ApiException catch (e) {
@@ -229,6 +309,32 @@ class SyncEngine {
     } finally {
       _running = false;
       _status.add(null);
+    }
+  }
+
+  /// The newest position of this account's log, without pulling anything.
+  ///
+  /// The sync request accepts `push_only`: the server applies the (empty) batch
+  /// and answers its head cursor. That is the denominator of the first-copy
+  /// progress bar. A server without the feature answers with a page of ops
+  /// instead; those are ignored and the total stays unknown, which only costs
+  /// the bar, not correctness.
+  Future<int?> _probeHead() async {
+    try {
+      final response = await client.post('/api/v1/sync', body: {
+        'device': _deviceId,
+        'cursor': _cursor,
+        'ops': const <Object>[],
+        'features': [..._features, 'push_only'],
+      });
+      if (response is! Map) return null;
+      final ops = response['ops'];
+      if (response['hasMore'] == true || (ops is List && ops.isNotEmpty)) return null;
+      final cursor = (response['cursor'] as num?)?.toInt();
+      return cursor == null || cursor < _cursor ? null : cursor;
+    } on Object catch (e) {
+      otdaLog('sync: head probe failed: $e');
+      return null;
     }
   }
 
@@ -241,6 +347,10 @@ class SyncEngine {
     }
     _cursor = 0;
     await db.setMetaInt('sync.cursor', 0);
+    // The restored server's log is a new history, so the copy is not complete
+    // until it has been read again.
+    _fullSyncDone = false;
+    await db.setMetaInt('sync.full', 0);
   }
 
   static String _randomId() {

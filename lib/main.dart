@@ -10,6 +10,7 @@ import 'src/reminders/service.dart';
 import 'src/system_bridge.dart';
 import 'src/ui/connect_screen.dart';
 import 'src/ui/home_screen.dart';
+import 'src/ui/sync_gate_screen.dart';
 import 'src/ui/theme.dart';
 
 void main() {
@@ -78,9 +79,11 @@ class _OtdaAppState extends State<OtdaApp> {
         ),
         home: _state.isRestoring
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-            : _state.isSignedIn
-                ? HomeScreen(state: _state)
-                : ConnectScreen(state: _state),
+            : !_state.isSignedIn
+                ? ConnectScreen(state: _state)
+                : _state.isReady
+                    ? HomeScreen(state: _state)
+                    : SyncGateScreen(state: _state),
       ),
     );
   }

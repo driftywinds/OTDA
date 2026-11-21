@@ -22,6 +22,10 @@ import 'reminders/service.dart';
 import 'data/sync_engine.dart';
 import 'util/log.dart';
 
+/// What the first copy of the account is doing. The home screen is only shown
+/// once a full pull has reached the server's head and the outbox is empty.
+enum SyncGate { syncing, ready, failed, locked }
+
 /// The app's session: who is signed in, to which server, with which credential,
 /// plus the local replica and the sync loop behind it.
 class AppState extends ChangeNotifier {
@@ -41,6 +45,17 @@ class AppState extends ChangeNotifier {
   Timer? _timer;
   bool _restoring = true;
   String? _syncError;
+
+  /// The first-copy gate, and how far it has got.
+  SyncGate _gate = SyncGate.syncing;
+  SyncProgress? _gateProgress;
+  String? _gateError;
+  DateTime? _gateStarted;
+  bool _bootstrapRunning = false;
+
+  /// Resolves when this launch's encryption record check is done, so the first
+  /// pull never starts before the device knows it is allowed to store plaintext.
+  Future<void> _encryptionReady = Future<void>.value();
 
   /// Decides when a failure is worth showing; see [FailureMeter].
   final _failures = FailureMeter();
@@ -112,6 +127,11 @@ class AppState extends ChangeNotifier {
       await E2eeSession.instance.openLocalReplica(db);
     }
     notifyListeners();
+    if (_gate != SyncGate.ready) {
+      // The first copy was waiting for the key: run it now.
+      await _runBootstrap();
+      return;
+    }
     await syncNow();
     unawaited(afterDataChanged());
   }
@@ -119,12 +139,27 @@ class AppState extends ChangeNotifier {
   ServerInfo? get server => _server;
   Repo? get repo => _repo;
   SyncEngine? get engine => _engine;
-  bool get isSignedIn => _client != null && _account != null && _repo != null;
+  bool get isSignedIn => _client != null && _account != null;
   bool get isRestoring => _restoring;
   String? get syncError => _syncError;
   DateTime? get lastSync => _lastSync;
   bool get isSyncing => _engine?.isRunning ?? false;
   int get pending => _engine?.pending ?? 0;
+
+  /// The first-copy gate. `isReady` is the one thing the shell asks: until it
+  /// is true the replica is incomplete and no task screen is shown.
+  SyncGate get gate => _gate;
+  bool get isReady => _repo != null && _gate == SyncGate.ready;
+  SyncProgress? get gateProgress => _gateProgress;
+  String? get gateError => _gateError;
+  DateTime? get gateStarted => _gateStarted;
+
+  /// Called by the gate's Retry button. Keeps the cursor, so it resumes.
+  Future<void> retryGate() async {
+    if (_engine == null) return;
+    _failures.reset();
+    await _runBootstrap();
+  }
 
   /// The servers this device has signed in to, most recent first.
   Future<List<String>> recentServers() async {
@@ -238,13 +273,12 @@ class AppState extends ChangeNotifier {
         _account = stored;
       }
       _client = client;
+      // Before the replica opens: a pull that runs while this device still thinks
+      // the account is unencrypted stores ciphertext in the replica. The record is
+      // cached after the first read, so on later launches this is a local check.
+      _encryptionReady = loadEncryption();
+      await _encryptionReady;
       await _openReplica();
-      // Before anything syncs: a pull that runs while this device still thinks the
-    // account is unencrypted stores ciphertext in the replica.
-    // Deliberately not awaited: what this device knows about encryption must never
-    // delay or block opening the replica and syncing.
-    unawaited(loadEncryption());
-    unawaited(afterDataChanged());
       // The picture is not needed to be online, but fetching it here means a
       // restart shows the account's face instead of initials.
       unawaited(_loadAvatar());
@@ -300,7 +334,8 @@ class AppState extends ChangeNotifier {
     otdaLog('auth: server ${_server?.version}, reading the key record');
     // Before the replica opens and syncs: an account that is encrypted asks for the
     // passphrase now, and an ordinary account answers 404 and carries on unchanged.
-    await loadEncryption();
+    _encryptionReady = loadEncryption();
+    await _encryptionReady;
     otdaLog('auth: encrypted=${E2eeSession.instance.enabled} unlocked=${E2eeSession.instance.unlocked}');
     await _openReplica();
     otdaLog('auth: replica open, engine=${_engine != null}');
@@ -340,21 +375,106 @@ class AppState extends ChangeNotifier {
       }
       notifyListeners();
     });
-    // The widget and the reminders come from what is on the device, so they are
-    // written now and not only after a sync that may never succeed (offline).
-    unawaited(afterDataChanged());
+    // A replica that has never completed a first copy is not usable: the gate
+    // walks the whole log before the shell opens. Otherwise this is a normal
+    // launch and the sync loop starts immediately.
+    if (engine.fullSyncDone) {
+      _gate = SyncGate.ready;
+      _startSyncLoop();
+      notifyListeners();
+    } else {
+      _gate = SyncGate.syncing;
+      _gateStarted = DateTime.now();
+      _gateError = null;
+      _gateProgress = null;
+      otdaLog('replica: first copy (gated)');
+      notifyListeners();
+      unawaited(_runBootstrap());
+    }
+  }
+
+  /// Starts the steady-state timer, the live channel and the first background
+  /// exchange. Only called once the replica holds the whole account.
+  void _startSyncLoop() {
+    final engine = _engine;
+    if (engine == null) return;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _syncQuietly());
-    // Not awaited: the first exchange on a long history is tens of thousands of
-    // ops, and login used to sit on it (the app was swiped away as hung). The UI
-    // opens now and the catch-up runs behind it.
-    otdaLog('replica: first exchange (background)');
-    unawaited(_syncQuietly().then((_) {
-      otdaLog('replica: first exchange done, error=${_syncError ?? 'none'}');
-    }));
-    await engine.startLive();
-    otdaLog('replica: live stream started');
+    unawaited(engine.startLive());
+    unawaited(afterDataChanged());
+    otdaLog('replica: sync loop started');
   }
+
+  /// The first copy: pull the whole log, with progress, before anything is shown.
+  ///
+  /// The cursor is stored page by page, so a kill, a lost connection or the
+  /// phone sleeping resumes where it stopped instead of starting over. The gate
+  /// only opens when the engine says the pull reached the head and the outbox is
+  /// empty; a partial replica never reaches the task list.
+  Future<void> _runBootstrap() async {
+    final engine = _engine;
+    if (engine == null || _bootstrapRunning) return;
+    _bootstrapRunning = true;
+    _gate = SyncGate.syncing;
+    _gateError = null;
+    _gateProgress = null;
+    _gateStarted ??= DateTime.now();
+    notifyListeners();
+    try {
+      await _encryptionReady;
+      if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
+        e2eeLocked.value = true;
+        _gate = SyncGate.locked;
+        return;
+      }
+      otdaLog('replica: first copy starting at cursor ${engine.cursorForTest}');
+      final result = await engine.exchange(fullSync: true, onProgress: (progress) {
+        _gateProgress = progress;
+        notifyListeners();
+      });
+      if (!engine.fullSyncDone) {
+        throw const ApiException(0, 'sync_incomplete', 'the first sync did not reach the end');
+      }
+      _gate = SyncGate.ready;
+      _lastSync = DateTime.now();
+      _syncError = null;
+      _failures.reset();
+      otdaLog('replica: first copy done: ${result.pulled} op(s) in ${result.pages} page(s), '
+          '${DateTime.now().difference(_gateStarted ?? DateTime.now()).inMilliseconds} ms');
+      _startSyncLoop();
+    } on E2eeLockedException {
+      _gate = SyncGate.locked;
+      e2eeLocked.value = true;
+    } on ApiException catch (e) {
+      otdaLog('replica: first copy failed: $e');
+      if (e.isUnauthenticated) {
+        await signOut();
+        return;
+      }
+      _recordFailure(e);
+      _gateError = _gateMessage(e);
+      _gate = SyncGate.failed;
+    } on Object catch (e) {
+      otdaLog('replica: first copy failed: $e');
+      _gateError = 'The first sync stopped unexpectedly. Try again.';
+      _gate = SyncGate.failed;
+    } finally {
+      _bootstrapRunning = false;
+      notifyListeners();
+    }
+  }
+
+  /// A failure sentence for the gate, where there is no status line to explain
+  /// a raw socket error.
+  String _gateMessage(ApiException e) => switch (e.code) {
+        'network' || 'timeout' =>
+          'Could not reach the server. Check your connection, then try again.',
+        'mfa_enrolment_required' =>
+          'This server requires two-factor authentication. Set it up in Settings first.',
+        'reauth_required' => 'Confirm your password to continue.',
+        'invalid_credentials' => 'The server did not accept this session. Sign in again.',
+        _ => e.message.isEmpty ? 'The server could not finish the first sync.' : e.message,
+      };
 
   /// What a failed exchange is worth saying.
   ///
@@ -419,6 +539,8 @@ class AppState extends ChangeNotifier {
     otdaLog('OTDA/sync: asked (engine=${_engine != null} client=${_client != null})');
     final engine = _engine;
     if (engine == null) return null;
+    // The first copy belongs to the gate; a timer or a wake-up must not race it.
+    if (_gate != SyncGate.ready) return null;
     // Encryption does not gate syncing: if the account turns out to be encrypted,
     // the lock flag raises the passphrase sheet, and what was pulled as ciphertext
     // is decrypted in place once the device is unlocked.
@@ -484,6 +606,11 @@ class AppState extends ChangeNotifier {
     _engine = null;
     _repo = null;
     _syncError = null;
+    _gate = SyncGate.syncing;
+    _gateProgress = null;
+    _gateError = null;
+    _gateStarted = null;
+    _bootstrapRunning = false;
     notifyListeners();
   }
 

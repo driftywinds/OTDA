@@ -230,6 +230,12 @@ class OtdaDb {
   Future<List<Map<String, Object?>>> pendingOps({int limit = 1000}) =>
       _db.query('outbox', orderBy: 'ts ASC', limit: limit);
 
+  /// How many queued writes are still waiting for an exchange.
+  Future<int> outboxCount() async {
+    final rows = await _db.rawQuery('SELECT COUNT(*) AS n FROM outbox');
+    return (rows.first['n'] as int?) ?? 0;
+  }
+
   /// Every stored field, for the re-seed after a server restore.
   Future<List<Map<String, Object?>>> rawAllFields() => _db.query('fields');
 
