@@ -21,7 +21,9 @@ import '../data/clock.dart';
 import '../data/db.dart';
 import '../data/models.dart';
 import '../data/repo.dart';
+import '../auth/session_store.dart';
 import '../data/sync_engine.dart';
+import '../e2ee/session.dart';
 import '../widget/snapshot.dart';
 import 'debug_log.dart';
 import 'planner.dart';
@@ -578,6 +580,31 @@ Future<Repo> openHeadlessRepo() async {
   return Repo(db: db, clock: clock, engine: engine);
 }
 
+/// One real exchange with the server for the widget's Refresh button, with no UI. The headless repo
+/// has a dummy client, so without this a refresh only re-read what the app had already synced.
+/// Skipped (the local snapshot is still rebuilt) when signed out, offline, or end-to-end encrypted:
+/// a pull without the unlocked key would store ciphertext.
+Future<void> syncHeadless(Repo repo) async {
+  try {
+    final stored = await SessionStore().read();
+    if (stored == null) return;
+    await E2eeSession.instance.restore();
+    if (E2eeSession.instance.enabled) return;
+    final client = ApiClient(
+      baseUrl: Uri.parse(stored.serverUrl),
+      jar: CookieJar(stored.jar.cookies),
+      token: stored.token,
+    );
+    final engine = SyncEngine(db: repo.db, client: client, clock: repo.clock);
+    await engine.open();
+    if (!engine.fullSyncDone) return;
+    await engine.exchange().timeout(const Duration(seconds: 15));
+    await DebugLog.add('widget refresh: synced', source: 'bg');
+  } on Object catch (e) {
+    await DebugLog.add('widget refresh: sync failed: $e', source: 'bg');
+  }
+}
+
 String _todayString() {
   final now = DateTime.now();
   return '${now.year.toString().padLeft(4, '0')}-'
@@ -677,9 +704,11 @@ Future<void> onWidgetAction(Uri? uri) async {
     final taskId = uri.queryParameters['id'];
     if (taskId == null) return;
     final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
-    if (task != null) await repo.setCompleted(task, true);
+    final complete = uri.queryParameters['done'] != '0';
+    if (task != null) await repo.setCompleted(task, complete);
     await ReminderService.instance.rearmFrom(repo);
   }
+  if (uri.host == 'refresh') await syncHeadless(repo);
   // Complete, refresh and "no snapshot yet" all end the same way: rewrite every
   // snapshot from the real data, which also clears a stuck "refreshing" flag.
   await pushWidgetsFromRepo(repo);

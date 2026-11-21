@@ -3,6 +3,7 @@ package com.dw.otda
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.dw.otda.widget.markRefreshing
 import com.dw.otda.widget.markTaskDone
 import com.dw.otda.widget.requestWidgetUpdate
 import com.dw.otda.widget.updateWidgets
@@ -26,15 +27,19 @@ import io.flutter.plugin.common.MethodChannel
 class CompleteActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        super.onCreate(savedInstanceState)
-        // Paint the tick straight away: the Dart side confirms it a moment later, and a
-        // widget that only changes on the next push looks broken.
+        // Paint the change BEFORE super.onCreate: that call boots the Flutter engine on this
+        // thread and takes a second or more, and the widget must not wait for it. Dart
+        // confirms the change afterwards by rewriting the snapshots from the real data.
         val uri = intent?.data
         val id = uri?.getQueryParameter("id")
-        if (id != null) {
-            markTaskDone(this, id, uri.getQueryParameter("day"))
+        if (uri?.host == "refresh") {
+            markRefreshing(this)
+            requestWidgetUpdate(this)
+        } else if (id != null) {
+            markTaskDone(this, id, uri.getQueryParameter("day"), uri.getQueryParameter("done") != "0")
             requestWidgetUpdate(this)
         }
+        super.onCreate(savedInstanceState)
     }
 
     override fun getDartEntrypointFunctionName(): String = "completeMain"

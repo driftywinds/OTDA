@@ -17,7 +17,7 @@ class CompleteAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val uri = parameters[actionUriKey]?.let(Uri::parse) ?: return
         val taskId = uri.getQueryParameter("id")
-        if (taskId != null) markTaskDone(context, taskId, uri.getQueryParameter("day"))
+        if (taskId != null) markTaskDone(context, taskId, uri.getQueryParameter("day"), uri.getQueryParameter("done") != "0")
         TasksWidget().update(context, glanceId)
         sendToDart(context, uri)
     }
@@ -29,70 +29,115 @@ internal fun sendToDart(context: Context, uri: Uri) {
 }
 
 /**
- * Optimistically flips the row in every stored snapshot before the app confirms it. A snapshot that
- * cannot be parsed is left untouched: the next app write replaces it anyway.
+ * Optimistically flips the row in every stored snapshot before the app confirms it, in either
+ * direction: [done] true moves it under "Done today", false puts it back in its own section.
+ * A snapshot that cannot be parsed is left untouched: the next app write replaces it anyway.
  */
-internal fun markTaskDone(context: Context, taskId: String, day: String?) {
+internal fun markTaskDone(context: Context, taskId: String, day: String?, done: Boolean = true) {
     val prefs = widgetPrefs(context)
     val editor = prefs.edit()
     var changed = false
     for ((key, value) in prefs.all) {
         if (!key.startsWith("snapshot_") || value !is String) continue
-        val updated = runCatching { markInJson(value, taskId, day) }.getOrNull() ?: continue
+        val updated = runCatching { markInJson(value, taskId, day, done) }.getOrNull() ?: continue
         if (updated != value) {
             editor.putString(key, updated)
             changed = true
         }
     }
-    if (changed) editor.apply()
+    // commit(), not apply(): the redraw that follows reads these prefs at once.
+    if (changed) editor.commit()
 }
 
-private fun markInJson(raw: String, taskId: String, day: String?): String? {
+private fun markInJson(raw: String, taskId: String, day: String?, done: Boolean): String? {
     val text = raw.trim()
     if (text.startsWith("[")) {
-        val rows = JSONArray(text)
-        return if (markRows(rows, taskId, day) > 0) rows.toString() else null
+        val rows = toggleRows(JSONArray(text), taskId, day, done, "") ?: return null
+        return rows.toString()
     }
     val root = JSONObject(text)
+    val today = root.optString("today")
     var touched = 0
     for (name in SNAPSHOT_ROW_KEYS) {
         val rows = root.optJSONArray(name) ?: continue
-        touched += markRows(rows, taskId, day)
+        val updated = toggleRows(rows, taskId, day, done, today) ?: continue
+        root.put(name, updated)
+        touched++
     }
     return if (touched > 0) root.toString() else null
 }
 
-private fun markRows(rows: JSONArray, taskId: String, day: String?): Int {
-    var touched = 0
-    for (index in 0 until rows.length()) {
-        val row = rows.optJSONObject(index) ?: continue
-        if (row.optString("id") != taskId) continue
-        val rowDay = row.opt("day")?.toString()
-        if (day != null && rowDay != null && rowDay != day) continue
-        row.put("done", true)
-        // Move the row to "Done today" at once: the app pushes a rebuilt snapshot a
-        // moment later, but the widget must not look frozen (or leave the tick in
-        // Today) while that invisible activity runs.
-        val moved = JSONObject(row.toString())
-        rows.remove(index)
-        moveToDoneToday(rows, moved)
-        touched++
-        break
+private const val DONE_TODAY = "Done today"
+private val SECTION_ORDER = listOf(DONE_TODAY, "Overdue", "Today", "Tomorrow", "This week", "Later", "Anytime")
+
+/**
+ * Returns the rows with the task flipped and moved, or null when it is not in them. JSONArray
+ * cannot insert (put(index, x) overwrites), so the work is done on a list.
+ */
+private fun toggleRows(rows: JSONArray, taskId: String, day: String?, done: Boolean, today: String): JSONArray? {
+    val list = ArrayList<JSONObject>(rows.length() + 1)
+    for (index in 0 until rows.length()) rows.optJSONObject(index)?.let(list::add)
+    val at = list.indexOfFirst {
+        if (it.optString("t") == "section" || it.optString("id") != taskId) return@indexOfFirst false
+        val rowDay = it.opt("day")?.toString()
+        day == null || rowDay == null || rowDay == day
     }
-    return touched
+    if (at < 0) return null
+    val row = list.removeAt(at)
+    row.put("done", done)
+    if (done) {
+        val section = sectionIndex(list, DONE_TODAY)
+        if (section >= 0) list.add(section + 1, row) else {
+            list.add(0, row)
+            list.add(0, JSONObject().put("t", "section").put("label", DONE_TODAY))
+        }
+    } else {
+        insertOpen(list, row, today)
+    }
+    return JSONArray(list)
 }
 
-/** Puts a finished row under "Done today", creating the section at the top. */
-private fun moveToDoneToday(rows: JSONArray, row: JSONObject) {
-    for (index in 0 until rows.length()) {
-        val candidate = rows.optJSONObject(index) ?: continue
-        if (candidate.optString("t") == "section" && candidate.optString("label") == "Done today") {
-            rows.put(index + 1, row)
-            return
+private fun sectionIndex(list: List<JSONObject>, label: String): Int =
+    list.indexOfFirst { it.optString("t") == "section" && it.optString("label") == label }
+
+/** Puts an un-ticked row back in the section its day belongs to, in day order. */
+private fun insertOpen(list: MutableList<JSONObject>, row: JSONObject, todayText: String) {
+    val today = runCatching { java.time.LocalDate.parse(todayText) }.getOrElse { java.time.LocalDate.now() }
+    val rowDay = row.opt("day")?.toString().orEmpty().takeIf { it != "null" }.orEmpty()
+    val label = sectionFor(rowDay, today)
+    val key = rowDay + if (rowDay == today.toString()) row.optString("right") else ""
+    var section = sectionIndex(list, label)
+    if (section < 0) {
+        // Create the heading before the first section that sorts after it, else at the end.
+        val mine = SECTION_ORDER.indexOf(label)
+        val before = list.indexOfFirst {
+            it.optString("t") == "section" && SECTION_ORDER.indexOf(it.optString("label")) > mine
         }
+        section = if (before < 0) list.size else before
+        list.add(section, JSONObject().put("t", "section").put("label", label))
     }
-    rows.put(0, row)
-    rows.put(0, JSONObject().put("t", "section").put("label", "Done today"))
+    var position = section + 1
+    while (position < list.size && list[position].optString("t") != "section") {
+        val other = list[position]
+        val otherDay = other.opt("day")?.toString().orEmpty().takeIf { it != "null" }.orEmpty()
+        val otherKey = otherDay + if (otherDay == today.toString()) other.optString("right") else ""
+        if (otherKey > key) break
+        position++
+    }
+    list.add(position, row)
+}
+
+/** Mirrors `_sectionFor` in lib/src/widget/snapshot.dart. */
+private fun sectionFor(day: String, today: java.time.LocalDate): String {
+    if (day.isEmpty()) return "Anytime"
+    val date = runCatching { java.time.LocalDate.parse(day) }.getOrNull() ?: return "Later"
+    return when {
+        date.isBefore(today) -> "Overdue"
+        date == today -> "Today"
+        date == today.plusDays(1) -> "Tomorrow"
+        !date.isAfter(today.plusDays(7)) -> "This week"
+        else -> "Later"
+    }
 }
 
 internal val SNAPSHOT_ROW_KEYS = listOf("rows", "items", "tasks")

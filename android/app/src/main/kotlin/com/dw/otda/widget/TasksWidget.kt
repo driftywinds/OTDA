@@ -126,8 +126,9 @@ class TasksWidget : GlanceAppWidget() {
         // Dart side to write the snapshot from the on-device data, without opening the UI.
         if (snapshot == null) requestSnapshot(context, prefs)
         val style = WidgetStyle.read(prefs)
+        val refreshing = isRefreshing(context)
         provideContent {
-            WidgetContent(snapshot, projectId, appWidgetId, style)
+            WidgetContent(snapshot, projectId, appWidgetId, style, refreshing)
         }
     }
 }
@@ -317,7 +318,7 @@ internal class WidgetStyle(
 }
 
 @Composable
-private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
+private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: Int, style: WidgetStyle, refreshing: Boolean) {
     Box(
         modifier = GlanceModifier.fillMaxSize()
             .appWidgetBackground()
@@ -327,7 +328,7 @@ private fun WidgetContent(snapshot: Snapshot?, projectId: String?, appWidgetId: 
         if (snapshot == null) {
             SetupCard(style)
         } else {
-            Card(snapshot, projectId, appWidgetId, style)
+            Card(snapshot, projectId, appWidgetId, style, refreshing)
         }
     }
 }
@@ -357,13 +358,13 @@ private fun SetupCard(style: WidgetStyle) {
 }
 
 @Composable
-private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
+private fun Card(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle, refreshing: Boolean) {
     val compact = LocalSize.current.width < 250.dp
     val rows = visibleRows(snapshot.rows, style, showSections = style.showSections && !compact)
     Column(
         modifier = GlanceModifier.fillMaxSize().padding(top = 6.dp, bottom = 8.dp),
     ) {
-        Header(snapshot, projectId, appWidgetId, style)
+        Header(snapshot, projectId, appWidgetId, style, refreshing)
         if (rows.isEmpty()) {
             EmptyState(style)
             return@Column
@@ -407,7 +408,7 @@ private fun visibleRows(rows: List<WidgetRow>, style: WidgetStyle, showSections:
 }
 
 @Composable
-private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle) {
+private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, style: WidgetStyle, refreshing: Boolean) {
     val context = LocalContext.current
     Row(
         modifier = GlanceModifier.fillMaxWidth().height(style.grow(36)).padding(start = 16.dp, end = 4.dp),
@@ -419,7 +420,7 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, sty
             verticalAlignment = Alignment.Vertical.CenterVertically,
         ) {
             Text(
-                text = oneLine(snapshot.name.ifBlank { "OTDA" }, style.limit(40)),
+                text = if (refreshing) "Refreshing…" else oneLine(snapshot.name.ifBlank { "OTDA" }, style.limit(40)),
                 modifier = GlanceModifier.defaultWeight(),
                 style = TextStyle(
                     color = style.onSurface,
@@ -435,8 +436,15 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, sty
                 colorFilter = ColorFilter.tint(style.secondary),
             )
         }
-        TapTarget(R.drawable.ic_widget_refresh, "Refresh", target = 36, icon = 20, style = style) {
-            actionRunCallback<RefreshAction>()
+        TapTarget(
+            R.drawable.ic_widget_refresh,
+            if (refreshing) "Refreshing" else "Refresh",
+            target = 36,
+            icon = 20,
+            style = style,
+            tint = if (refreshing) Accent else null,
+        ) {
+            actionStartActivity(CompleteActivity.intent(context, Uri.parse("otda://refresh")))
         }
         TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20, style = style) {
             actionStartActivity(quickAddIntent(context, projectId))
@@ -473,9 +481,8 @@ private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
         Box(
-            modifier = GlanceModifier.size(style.grow(40)).let {
-                if (task.done) it else it.clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task))))
-            },
+            modifier = GlanceModifier.size(style.grow(40))
+                .clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task)))),
             contentAlignment = Alignment.Center,
         ) {
             if (task.done) {
@@ -485,7 +492,7 @@ private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
                 ) {
                     Image(
                         provider = ImageProvider(R.drawable.ic_widget_check),
-                        contentDescription = "Completed",
+                        contentDescription = "Completed, tap to undo",
                         modifier = GlanceModifier.size(14.dp),
                         colorFilter = ColorFilter.tint(ColorProvider(BrandNavy)),
                     )
@@ -542,7 +549,7 @@ private fun EmptyState(style: WidgetStyle) {
 }
 
 @Composable
-private fun TapTarget(res: Int, description: String, target: Int, icon: Int, style: WidgetStyle, action: () -> Action) {
+private fun TapTarget(res: Int, description: String, target: Int, icon: Int, style: WidgetStyle, tint: ColorProvider? = null, action: () -> Action) {
     Box(
         modifier = GlanceModifier.size(style.grow(target)).clickable(action()),
         contentAlignment = Alignment.Center,
@@ -551,7 +558,7 @@ private fun TapTarget(res: Int, description: String, target: Int, icon: Int, sty
             provider = ImageProvider(res),
             contentDescription = description,
             modifier = GlanceModifier.size(style.grow(icon)),
-            colorFilter = ColorFilter.tint(style.onSurface),
+            colorFilter = ColorFilter.tint(tint ?: style.onSurface),
         )
     }
 }
@@ -591,6 +598,8 @@ private fun taskUri(task: WidgetRow.Task): Uri {
 internal fun completeTaskUri(task: WidgetRow.Task): Uri {
     val base = Uri.parse("otda://complete").buildUpon().appendQueryParameter("id", task.id)
     if (!task.day.isNullOrBlank()) base.appendQueryParameter("day", task.day)
+    // A done row's check undoes it.
+    if (task.done) base.appendQueryParameter("done", "0")
     return base.build()
 }
 

@@ -1,3 +1,4 @@
+import 'package:home_widget/home_widget.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'reminders/service.dart';
@@ -35,6 +36,12 @@ class _HeadlessActionAppState extends State<HeadlessActionApp> {
       // An action that cannot run must still close: the activity is invisible, and a
       // stuck one would hold the process.
     } finally {
+      // Whatever happened, the refresh spinner must not outlive the action.
+      try {
+        await HomeWidget.saveWidgetData<bool>('refreshing', false);
+      } on Object {
+        // no platform side
+      }
       await SystemBridge.refreshCompleteWidget();
       await SystemBridge.closeComplete();
     }
