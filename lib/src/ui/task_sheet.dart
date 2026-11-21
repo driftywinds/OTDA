@@ -4,6 +4,7 @@ import '../data/models.dart';
 import '../data/repo.dart';
 import '../quickadd/rule.dart' as rules;
 import 'format.dart';
+import 'task_history_screen.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -829,6 +830,15 @@ class _TaskSheetState extends State<TaskSheet> {
                       },
                       icon: const Icon(Icons.delete_outline_rounded),
                       label: const Text('Delete'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TaskHistoryScreen(task: widget.task, repo: widget.repo),
+                        ),
+                      ),
+                      icon: const Icon(Icons.history_rounded),
+                      label: const Text('History'),
                     ),
                     const Spacer(),
                     FilledButton(

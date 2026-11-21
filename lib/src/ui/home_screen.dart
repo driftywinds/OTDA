@@ -8,6 +8,7 @@ import '../api/api_exception.dart';
 import '../data/models.dart';
 import '../data/views.dart';
 import '../e2ee/session.dart';
+import 'activity_screen.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'settings_screen.dart';
@@ -1531,6 +1532,16 @@ class _AppDrawer extends StatelessWidget {
               ),
             ),
             rule,
+            ListTile(
+              dense: true,
+              leading: mark(const Icon(Icons.timeline_rounded, size: 20)),
+              title: const Text('Activity', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push(MaterialPageRoute(builder: (_) => ActivityScreen(state: state)));
+              },
+            ),
             ListTile(
               dense: true,
               leading: mark(const Icon(Icons.insights_rounded, size: 20)),

@@ -259,6 +259,8 @@ tolerance. A label counts once per task that carries it.
 
 ### 4.3 Activity feed
 
+**Status: done.**
+
 **Why** there is an audit list in the admin tab, but nothing for the account's own
 history.
 
@@ -267,6 +269,15 @@ history.
   whom, when.
 - Per-task history where the server exposes it (`/tasks/{id}/history`).
 - Decrypt encrypted values on the device before showing them.
+
+**Notes** the server's feed is derived from **shared** scopes only (its tests pin
+that personal tasks and projects outside a membership never appear), so the app
+says so in the empty state instead of pretending the history is missing. Personal
+tasks are covered by two routes that do include them: `/tasks/{id}/activity` and
+`/tasks/{id}/history`. The task sheet's History button opens the latter, newest
+first, with each field's old and new value decrypted through the E2EE session and
+label ids resolved to names. `/me/activity` is the security audit log (sign-ins,
+tokens), not task history, so it is not used for this screen.
 
 ### 4.4 Local theming
 
