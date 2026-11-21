@@ -3,7 +3,6 @@ package com.dw.otda.widget
 import com.dw.otda.CompleteActivity
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -50,6 +49,9 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.dw.otda.MainActivity
 import com.dw.otda.QuickAddActivity
 import com.dw.otda.R
@@ -83,15 +85,15 @@ internal fun updateActiveProjects(prefs: SharedPreferences) {
 
 /** Asks every instance of this widget to redraw after the prefs changed outside the system flow. */
 internal fun requestWidgetUpdate(context: Context) {
-    val ids = AppWidgetManager.getInstance(context)
-        .getAppWidgetIds(ComponentName(context, TasksWidgetReceiver::class.java))
-    if (ids.isEmpty()) return
-    context.sendBroadcast(
-        Intent(context, TasksWidgetReceiver::class.java).apply {
-            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-        },
-    )
+    // Update the Glance instances directly. The ACTION_APPWIDGET_UPDATE broadcast
+    // used to be the only signal here, and a widget whose row was just ticked could
+    // keep the old snapshot until the next broadcast or the app's own push.
+    val manager = GlanceAppWidgetManager(context)
+    CoroutineScope(Dispatchers.Default).launch {
+        for (id in manager.getGlanceIds(TasksWidget::class.java)) {
+            TasksWidget().update(context, id)
+        }
+    }
 }
 
 /**
@@ -429,6 +431,9 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, sty
                 modifier = GlanceModifier.size(style.grow(16)),
                 colorFilter = ColorFilter.tint(style.secondary),
             )
+        }
+        TapTarget(R.drawable.ic_widget_refresh, "Refresh", target = 36, icon = 20, style = style) {
+            actionRunCallback<RefreshAction>()
         }
         TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20, style = style) {
             actionStartActivity(quickAddIntent(context, projectId))
