@@ -1412,6 +1412,11 @@ class _TaskRow extends StatelessWidget {
   }
 }
 
+/// The sidebar's rows share one compact height, so projects and the fixed
+/// destinations line up and a long project list still leaves room for the footer.
+const _sidebarRowDensity = VisualDensity(horizontal: 0, vertical: -4);
+const _sidebarRowPadding = EdgeInsets.symmetric(horizontal: 16);
+
 /// The sidebar: the workspace at the top (tap to switch), then the destinations
 /// the bottom bar has no room for, then this workspace's projects.
 class _AppDrawer extends StatelessWidget {
@@ -1483,6 +1488,9 @@ class _AppDrawer extends StatelessWidget {
       final selected = view == target;
       return inset(ListTile(
         dense: true,
+        visualDensity: _sidebarRowDensity,
+        contentPadding: _sidebarRowPadding,
+        minVerticalPadding: 2,
         leading: mark(Icon(icon, size: 20)),
         title: Text(
           label,
@@ -1494,7 +1502,7 @@ class _AppDrawer extends StatelessWidget {
       ));
     }
 
-    const rule = Divider(height: 16, indent: 20, endIndent: 20);
+    const rule = Divider(height: 8, indent: 20, endIndent: 20);
 
     return Drawer(
       child: SafeArea(
@@ -1504,7 +1512,7 @@ class _AppDrawer extends StatelessWidget {
             InkWell(
               onTap: onWorkspace,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 16, 14),
+                padding: const EdgeInsets.fromLTRB(20, 12, 16, 10),
                 child: Row(
                   children: [
                     Builder(builder: (context) {
@@ -1569,8 +1577,11 @@ class _AppDrawer extends StatelessWidget {
               ),
             ),
             rule,
-            ListTile(
+            inset(ListTile(
               dense: true,
+              visualDensity: _sidebarRowDensity,
+              contentPadding: _sidebarRowPadding,
+              minVerticalPadding: 2,
               leading: mark(const Icon(Icons.timeline_rounded, size: 20)),
               title: const Text('Activity', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1578,9 +1589,12 @@ class _AppDrawer extends StatelessWidget {
                 navigator.pop();
                 navigator.push(MaterialPageRoute(builder: (_) => ActivityScreen(state: state)));
               },
-            ),
-            ListTile(
+            )),
+            inset(ListTile(
               dense: true,
+              visualDensity: _sidebarRowDensity,
+              contentPadding: _sidebarRowPadding,
+              minVerticalPadding: 2,
               leading: mark(const Icon(Icons.mail_outline_rounded, size: 20)),
               title: const Text('Invitations', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1588,9 +1602,12 @@ class _AppDrawer extends StatelessWidget {
                 navigator.pop();
                 navigator.push(MaterialPageRoute(builder: (_) => InvitationsScreen(state: state)));
               },
-            ),
-            ListTile(
+            )),
+            inset(ListTile(
               dense: true,
+              visualDensity: _sidebarRowDensity,
+              contentPadding: _sidebarRowPadding,
+              minVerticalPadding: 2,
               leading: mark(const Icon(Icons.insights_rounded, size: 20)),
               title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1598,9 +1615,12 @@ class _AppDrawer extends StatelessWidget {
                 navigator.pop();
                 navigator.push(MaterialPageRoute(builder: (_) => StatsScreen(state: state)));
               },
-            ),
-            ListTile(
+            )),
+            inset(ListTile(
               dense: true,
+              visualDensity: _sidebarRowDensity,
+              contentPadding: _sidebarRowPadding,
+              minVerticalPadding: 2,
               leading: mark(const Icon(Icons.delete_outline_rounded, size: 20)),
               title: const Text('Trash', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1608,9 +1628,12 @@ class _AppDrawer extends StatelessWidget {
                 navigator.pop();
                 navigator.push(MaterialPageRoute(builder: (_) => TrashScreen(state: state)));
               },
-            ),
-            ListTile(
+            )),
+            inset(ListTile(
               dense: true,
+              visualDensity: _sidebarRowDensity,
+              contentPadding: _sidebarRowPadding,
+              minVerticalPadding: 2,
               leading: AccountAvatar(state: state, size: 30),
               title: Text(
                 state.account?.displayName ?? 'Signed in',
@@ -1619,13 +1642,14 @@ class _AppDrawer extends StatelessWidget {
               subtitle: Text('OpenTodo ${_versionLabel(state.server?.version)}'),
               trailing: IconButton(
                 tooltip: 'Sign out',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.logout_rounded, size: 20),
                 onPressed: () async {
                   Navigator.of(context).pop();
                   await state.signOut();
                 },
               ),
-            ),
+            )),
           ],
         ),
       ),
@@ -1891,7 +1915,7 @@ class _ProjectSectionState extends State<_ProjectSection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 12, 2),
+          padding: const EdgeInsets.fromLTRB(24, 4, 12, 0),
           child: Row(
             children: [
               Expanded(
@@ -1941,6 +1965,9 @@ class _ProjectSectionState extends State<_ProjectSection> {
         for (final entry in widget.projects.entries)
           widget.inset(ListTile(
             dense: true,
+            visualDensity: _sidebarRowDensity,
+            contentPadding: _sidebarRowPadding,
+            minVerticalPadding: 2,
             selected: !_selecting && widget.currentId == entry.key,
             leading: _selecting
                 ? SizedBox(

@@ -425,73 +425,108 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListTile(
+          InkWell(
             onTap: () => Navigator.of(context).pop(workspace.id),
-            leading: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(workspaceIcon(workspace.icon), size: 19, color: accent),
-            ),
-            title: Row(
-              children: [
-                Expanded(child: Text(workspace.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                if (workspace.isDefault)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: Text('Default', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(workspaceIcon(workspace.icon), size: 19, color: accent),
                   ),
-              ],
-            ),
-            subtitle: Text(
-              '${workspace.role.isEmpty ? 'member' : workspace.role} · ${workspace.memberCount} member'
-              '${workspace.memberCount == 1 ? '' : 's'} · ${projects.length} project'
-              '${projects.length == 1 ? '' : 's'}',
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (active) Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary, size: 20),
-                PopupMenuButton<String>(
-                  tooltip: 'Workspace actions',
-                  enabled: !_busy,
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'rename':
-                        _rename(workspace);
-                      case 'members':
-                        _members(workspace);
-                      case 'invite':
-                        _invite(workspace);
-                      case 'pending':
-                        _pending(workspace);
-                      case 'groups':
-                        _groups(workspace);
-                      case 'leave':
-                        _leave(workspace);
-                      case 'transfer':
-                        _transfer(workspace);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
-                      const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                    const PopupMenuItem(value: 'members', child: Text('Members')),
-                    if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
-                      const PopupMenuItem(value: 'invite', child: Text('Invite a person…')),
-                    if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
-                      const PopupMenuItem(value: 'pending', child: Text('Waiting invitations…')),
-                    const PopupMenuItem(value: 'groups', child: Text('Groups')),
-                    if (workspace.isOwner && !workspace.isDefault)
-                      const PopupMenuItem(value: 'transfer', child: Text('Transfer ownership…')),
-                    if (!workspace.isDefault)
-                      const PopupMenuItem(value: 'leave', child: Text('Leave workspace')),
-                  ],
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                workspace.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium,
+                              ),
+                            ),
+                            if (workspace.isDefault)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Text(
+                                  'Default',
+                                  style: theme.textTheme.labelSmall
+                                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${workspace.role.isEmpty ? 'member' : workspace.role} · ${workspace.memberCount} member'
+                          '${workspace.memberCount == 1 ? '' : 's'} · ${projects.length} project'
+                          '${projects.length == 1 ? '' : 's'}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (active)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 9),
+                      child: Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary, size: 20),
+                    ),
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: PopupMenuButton<String>(
+                      tooltip: 'Workspace actions',
+                      enabled: !_busy,
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'rename':
+                            _rename(workspace);
+                          case 'members':
+                            _members(workspace);
+                          case 'invite':
+                            _invite(workspace);
+                          case 'pending':
+                            _pending(workspace);
+                          case 'groups':
+                            _groups(workspace);
+                          case 'leave':
+                            _leave(workspace);
+                          case 'transfer':
+                            _transfer(workspace);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
+                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        const PopupMenuItem(value: 'members', child: Text('Members')),
+                        if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
+                          const PopupMenuItem(value: 'invite', child: Text('Invite a person…')),
+                        if (!workspace.isDefault && (workspace.role == 'owner' || workspace.role == 'admin'))
+                          const PopupMenuItem(value: 'pending', child: Text('Waiting invitations…')),
+                        const PopupMenuItem(value: 'groups', child: Text('Groups')),
+                        if (workspace.isOwner && !workspace.isDefault)
+                          const PopupMenuItem(value: 'transfer', child: Text('Transfer ownership…')),
+                        if (!workspace.isDefault)
+                          const PopupMenuItem(value: 'leave', child: Text('Leave workspace')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           if (projects.isNotEmpty) ...[
@@ -504,13 +539,19 @@ class _WorkspacesScreenState extends State<WorkspacesScreen> {
                 title: Text(project.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 trailing: _workspaces.length < 2
                     ? null
-                    : PopupMenuButton<String>(
-                        tooltip: 'Move project',
-                        enabled: !_busy,
-                        onSelected: (_) => _moveProject(workspace, project),
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(value: 'move', child: Text('Move to another workspace…')),
-                        ],
+                    : SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: PopupMenuButton<String>(
+                          tooltip: 'Move project',
+                          enabled: !_busy,
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          onSelected: (_) => _moveProject(workspace, project),
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(value: 'move', child: Text('Move to another workspace…')),
+                          ],
+                        ),
                       ),
               ),
           ],
