@@ -6,12 +6,12 @@ import android.net.Uri
 import com.dw.otda.R
 import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import org.json.JSONArray
-import org.json.JSONObject
 
 /*
  * Everything the widget knows lives in one SharedPreferences file that the Dart side writes through
- * home_widget. The widget only ever reads that file and flips rows in it: it never waits for the
- * app, the database or the network. The app applies the queued changes and syncs afterwards.
+ * home_widget. The widget reads the stored snapshot and lays the person's not-yet-applied taps over it
+ * (see WidgetSnapshot.kt); it never edits a snapshot and never waits for the app, the database or the
+ * network. The app applies the queued taps and syncs afterwards.
  */
 
 /**
@@ -53,95 +53,6 @@ internal fun requestSnapshot(context: Context, prefs: SharedPreferences) {
     if (now - prefs.getLong("snapshotRequestedAt", 0L) < 60_000L) return
     prefs.edit().putLong("snapshotRequestedAt", now).apply()
     sendToDart(context, Uri.parse("otda://refresh"))
-}
-
-internal val SNAPSHOT_ROW_KEYS = listOf("rows", "items", "tasks")
-
-// ---- the snapshot ----------------------------------------------------------------------------
-
-internal class Snapshot(val name: String, val rows: List<WidgetRow>, val more: Int) {
-    companion object {
-        /** Returns null when nothing usable is stored: the widget then shows the calm setup card. */
-        fun parse(raw: String?): Snapshot? {
-            val text = raw?.trim().orEmpty()
-            if (text.isEmpty()) return null
-            return try {
-                val root = if (text.startsWith("[")) {
-                    JSONObject().put("rows", JSONArray(text))
-                } else {
-                    JSONObject(text)
-                }
-                val project = root.optJSONObject("project")
-                val name = project?.optString("name") ?: root.optString("name")
-                val rows = parseRows(root)
-                // An empty list is a valid snapshot ("Nothing coming up"), not a missing one. Only
-                // JSON that carries no row list at all is treated as not written yet.
-                val hasRows = SNAPSHOT_ROW_KEYS.any { root.has(it) }
-                if (name.isBlank() && rows.isEmpty() && !hasRows) return null
-                Snapshot(name, rows, root.optInt("more", 0).coerceAtLeast(0))
-            } catch (t: Throwable) {
-                null
-            }
-        }
-
-        private fun parseRows(root: JSONObject): List<WidgetRow> {
-            val array = root.optJSONArray("rows")
-                ?: root.optJSONArray("items")
-                ?: root.optJSONArray("tasks")
-                ?: return emptyList()
-            val rows = ArrayList<WidgetRow>(array.length())
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index) ?: continue
-                val type = item.optString("t")
-                val isTask = type == "task" || (type.isEmpty() && item.has("id") && !item.has("label"))
-                if (!isTask) {
-                    val label = item.optString("label")
-                    if (label.isNotBlank()) rows.add(WidgetRow.Section(label))
-                    continue
-                }
-                rows.add(
-                    WidgetRow.Task(
-                        id = item.optString("id").ifBlank { "row${rows.size}" },
-                        title = item.optString("title").ifBlank { item.optString("name") }.ifBlank { "Untitled" },
-                        right = item.optString("right").ifBlank { item.optString("meta") }.takeIf { it.isNotBlank() },
-                        day = item.opt("day")?.toString()?.takeIf { it.isNotBlank() && it != "null" },
-                        done = item.optBoolean("done", false),
-                        overdue = item.optBoolean("overdue", false),
-                    ),
-                )
-            }
-            return rows
-        }
-    }
-}
-
-internal sealed interface WidgetRow {
-    class Section(val label: String) : WidgetRow
-    class Task(
-        val id: String,
-        val title: String,
-        val right: String?,
-        val day: String?,
-        val done: Boolean,
-        val overdue: Boolean,
-    ) : WidgetRow
-}
-
-/**
- * The rows the settings leave in: completed tasks only when asked for, headings only when shown,
- * and never a heading with nothing under it.
- */
-internal fun visibleRows(rows: List<WidgetRow>, style: WidgetStyle, showSections: Boolean): List<WidgetRow> {
-    val kept = rows.filter { it !is WidgetRow.Task || style.showCompleted || !it.done }
-    val out = ArrayList<WidgetRow>(kept.size)
-    for ((index, row) in kept.withIndex()) {
-        if (row is WidgetRow.Section) {
-            val next = kept.getOrNull(index + 1)
-            if (!showSections || next == null || next is WidgetRow.Section) continue
-        }
-        out.add(row)
-    }
-    return out
 }
 
 // ---- the look --------------------------------------------------------------------------------
@@ -240,155 +151,71 @@ internal fun isRefreshing(context: Context): Boolean {
 
 private val pendingLock = Any()
 
+private fun readLong(prefs: SharedPreferences, key: String): Long =
+    runCatching { prefs.getString(key, null)?.toLongOrNull() }.getOrNull()
+        ?: runCatching { prefs.getLong(key, 0L) }.getOrDefault(0L)
+
+/** How far the app says it has applied the widget's queue (`pending_ack`, written by Dart). */
+internal fun pendingAck(prefs: SharedPreferences): Long = readLong(prefs, "pending_ack")
+
+/** The taps the app may not have applied yet, oldest first. */
+internal fun readPendingOps(prefs: SharedPreferences): List<PendingOp> =
+    PendingOp.parseAll(runCatching { prefs.getString("pending_ops", null) }.getOrNull())
+
+/**
+ * The snapshot to draw: what the app last stored, with every tap it has not applied yet laid on top.
+ * This is the ONLY way the widget reads rows, so the header, the list and the "+N more" line can never
+ * disagree about whether a tap has happened.
+ */
+internal fun loadSnapshot(prefs: SharedPreferences, projectId: String?): Snapshot? =
+    Snapshot.parse(prefs.getString(snapshotKey(projectId), null), readPendingOps(prefs), pendingAck(prefs))
+
+/** Ops this old are dropped once acknowledged; a newer acknowledged op is kept so a slow snapshot still sees it. */
+private const val ACKED_OP_KEEP_MS = 10 * 60 * 1000L
+
 /**
  * Durable queue of changes made on the widget that the app has not applied yet (`pending_ops`).
- * The Dart side applies them in order and records how far it got in `pending_ack`; entries at or
- * below the ack are pruned here. Applying an op twice is harmless, so a lost ack only repeats work.
+ * The Dart side applies them in order and records how far it got in `pending_ack`.
+ *
+ * An op says what the person did to a row (tick or un-tick it), not what state the task should end up
+ * in, and carries the series and occurrence date for a repeating task. The Dart side re-reads the
+ * database for each op, so applying one twice (two isolates, a lost ack) does nothing the second time.
  */
-internal fun enqueuePendingOp(context: Context, taskId: String, day: String?, done: Boolean) {
+internal fun enqueuePendingOp(
+    context: Context,
+    taskId: String,
+    day: String?,
+    sid: String?,
+    occ: String?,
+    done: Boolean,
+) {
     synchronized(pendingLock) {
         val prefs = widgetPrefs(context)
-        val ack = prefs.getString("pending_ack", null)?.toLongOrNull() ?: 0L
-        val kept = ArrayList<JSONObject>()
-        runCatching {
-            val old = JSONArray(prefs.getString("pending_ops", null) ?: "[]")
-            for (i in 0 until old.length()) {
-                val op = old.optJSONObject(i) ?: continue
-                if (op.optLong("at") > ack) kept.add(op)
-            }
+        val ack = pendingAck(prefs)
+        val now = System.currentTimeMillis()
+        val kept = ArrayList<PendingOp>()
+        for (op in readPendingOps(prefs)) {
+            if (op.at > ack || op.at > now - ACKED_OP_KEEP_MS) kept.add(op)
         }
-        val last = kept.maxOfOrNull { it.optLong("at") } ?: 0L
-        val at = maxOf(System.currentTimeMillis(), last + 1)
-        kept.add(JSONObject().put("id", taskId).put("day", day ?: "").put("done", done).put("at", at))
-        prefs.edit().putString("pending_ops", JSONArray(kept).toString()).commit()
+        val last = kept.maxOfOrNull { it.at } ?: 0L
+        kept.add(PendingOp(taskId, day, sid, occ, done, maxOf(now, last + 1)))
+        val json = JSONArray()
+        kept.forEach { json.put(it.toJson()) }
+        prefs.edit().putString("pending_ops", json.toString()).commit()
     }
 }
 
 /**
- * The whole tap, start to finish and entirely local: flip the row in every stored snapshot, redraw
- * the lists, queue the change for the app, and wake the app so it can save and sync it.
+ * The whole tap, start to finish and entirely local: queue the change (the widget draws it at once,
+ * because drawing overlays the queue), redraw the lists, and wake the app so it can save and sync it.
+ * Nothing here edits a stored snapshot, so nothing the app writes can race with it.
  */
-internal fun toggleTask(context: Context, taskId: String, day: String?, done: Boolean) {
-    markTaskDone(context, taskId, day, done)
+internal fun toggleTask(context: Context, taskId: String, day: String?, sid: String?, occ: String?, done: Boolean) {
+    enqueuePendingOp(context, taskId, day, sid, occ, done)
     refreshWidgetLists(context)
-    enqueuePendingOp(context, taskId, day, done)
     val uri = Uri.parse("otda://complete").buildUpon().appendQueryParameter("id", taskId).apply {
         if (!day.isNullOrBlank()) appendQueryParameter("day", day)
         if (!done) appendQueryParameter("done", "0")
     }.build()
     sendToDart(context, uri)
-}
-
-/**
- * Optimistically flips the row in every stored snapshot before the app confirms it, in either
- * direction: [done] true moves it under "Done today", false puts it back in its own section.
- * A snapshot that cannot be parsed is left untouched: the next app write replaces it anyway.
- */
-internal fun markTaskDone(context: Context, taskId: String, day: String?, done: Boolean = true) {
-    val prefs = widgetPrefs(context)
-    val editor = prefs.edit()
-    var changed = false
-    for ((key, value) in prefs.all) {
-        if (!key.startsWith("snapshot_") || value !is String) continue
-        val updated = runCatching { markInJson(value, taskId, day, done) }.getOrNull() ?: continue
-        if (updated != value) {
-            editor.putString(key, updated)
-            changed = true
-        }
-    }
-    // commit(), not apply(): the redraw that follows reads these prefs at once.
-    if (changed) editor.commit()
-}
-
-private fun markInJson(raw: String, taskId: String, day: String?, done: Boolean): String? {
-    val text = raw.trim()
-    if (text.startsWith("[")) {
-        val rows = toggleRows(JSONArray(text), taskId, day, done, "") ?: return null
-        return rows.toString()
-    }
-    val root = JSONObject(text)
-    val today = root.optString("today")
-    var touched = 0
-    for (name in SNAPSHOT_ROW_KEYS) {
-        val rows = root.optJSONArray(name) ?: continue
-        val updated = toggleRows(rows, taskId, day, done, today) ?: continue
-        root.put(name, updated)
-        touched++
-    }
-    return if (touched > 0) root.toString() else null
-}
-
-private const val DONE_TODAY = "Done today"
-private val SECTION_ORDER = listOf(DONE_TODAY, "Overdue", "Today", "Tomorrow", "This week", "Later", "Anytime")
-
-/**
- * Returns the rows with the task flipped and moved, or null when it is not in them. JSONArray
- * cannot insert (put(index, x) overwrites), so the work is done on a list.
- */
-private fun toggleRows(rows: JSONArray, taskId: String, day: String?, done: Boolean, today: String): JSONArray? {
-    val list = ArrayList<JSONObject>(rows.length() + 1)
-    for (index in 0 until rows.length()) rows.optJSONObject(index)?.let { list.add(it) }
-    val at = list.indexOfFirst {
-        if (it.optString("t") == "section" || it.optString("id") != taskId) return@indexOfFirst false
-        val rowDay = it.opt("day")?.toString()
-        day == null || rowDay == null || rowDay == day
-    }
-    if (at < 0) return null
-    val row = list.removeAt(at)
-    row.put("done", done)
-    if (done) {
-        val section = sectionIndex(list, DONE_TODAY)
-        if (section >= 0) {
-            list.add(section + 1, row)
-        } else {
-            list.add(0, row)
-            list.add(0, JSONObject().put("t", "section").put("label", DONE_TODAY))
-        }
-    } else {
-        insertOpen(list, row, today)
-    }
-    return JSONArray(list)
-}
-
-private fun sectionIndex(list: List<JSONObject>, label: String): Int =
-    list.indexOfFirst { it.optString("t") == "section" && it.optString("label") == label }
-
-/** Puts an un-ticked row back in the section its day belongs to, in day order. */
-private fun insertOpen(list: MutableList<JSONObject>, row: JSONObject, todayText: String) {
-    val today = runCatching { java.time.LocalDate.parse(todayText) }.getOrElse { java.time.LocalDate.now() }
-    val rowDay = row.opt("day")?.toString().orEmpty().takeIf { it != "null" }.orEmpty()
-    val label = sectionFor(rowDay, today)
-    val key = rowDay + if (rowDay == today.toString()) row.optString("right") else ""
-    var section = sectionIndex(list, label)
-    if (section < 0) {
-        // Create the heading before the first section that sorts after it, else at the end.
-        val mine = SECTION_ORDER.indexOf(label)
-        val before = list.indexOfFirst {
-            it.optString("t") == "section" && SECTION_ORDER.indexOf(it.optString("label")) > mine
-        }
-        section = if (before < 0) list.size else before
-        list.add(section, JSONObject().put("t", "section").put("label", label))
-    }
-    var position = section + 1
-    while (position < list.size && list[position].optString("t") != "section") {
-        val other = list[position]
-        val otherDay = other.opt("day")?.toString().orEmpty().takeIf { it != "null" }.orEmpty()
-        val otherKey = otherDay + if (otherDay == today.toString()) other.optString("right") else ""
-        if (otherKey > key) break
-        position++
-    }
-    list.add(position, row)
-}
-
-/** Mirrors `_sectionFor` in lib/src/widget/snapshot.dart. */
-private fun sectionFor(day: String, today: java.time.LocalDate): String {
-    if (day.isEmpty()) return "Anytime"
-    val date = runCatching { java.time.LocalDate.parse(day) }.getOrNull() ?: return "Later"
-    return when {
-        date.isBefore(today) -> "Overdue"
-        date == today -> "Today"
-        date == today.plusDays(1) -> "Tomorrow"
-        !date.isAfter(today.plusDays(7)) -> "This week"
-        else -> "Later"
-    }
 }

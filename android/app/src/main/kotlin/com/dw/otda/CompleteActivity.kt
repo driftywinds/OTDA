@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import com.dw.otda.widget.enqueuePendingOp
 import com.dw.otda.widget.markRefreshing
-import com.dw.otda.widget.markTaskDone
 import com.dw.otda.widget.requestWidgetUpdate
 import com.dw.otda.widget.updateWidgets
 import io.flutter.embedding.android.FlutterActivity
@@ -35,8 +34,8 @@ class CompleteActivity : FlutterActivity() {
             requestWidgetUpdate(this)
         } else if (id != null) {
             val done = uri.getQueryParameter("done") != "0"
-            markTaskDone(this, id, uri.getQueryParameter("day"), done)
-            enqueuePendingOp(this, id, uri.getQueryParameter("day"), done)
+            // Queue the tap; the widget draws it by laying the queue over the stored snapshot.
+            enqueuePendingOp(this, id, uri.getQueryParameter("day"), null, null, done)
             requestWidgetUpdate(this)
         }
         super.onCreate(savedInstanceState)

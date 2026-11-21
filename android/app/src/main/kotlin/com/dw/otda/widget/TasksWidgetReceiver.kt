@@ -24,6 +24,8 @@ internal object WidgetIntents {
     const val EXTRA_OP = "op"
     const val EXTRA_ID = "id"
     const val EXTRA_DAY = "day"
+    const val EXTRA_SID = "sid"
+    const val EXTRA_OCC = "occ"
     const val EXTRA_DONE = "done"
     const val OP_TOGGLE = "toggle"
     const val OP_OPEN = "open"
@@ -119,7 +121,7 @@ internal object WidgetRenderer {
         val prefs = widgetPrefs(context)
         val style = WidgetStyle.read(prefs)
         val projectId = prefs.getString(widgetProjectKey(appWidgetId), null)
-        val snapshot = Snapshot.parse(prefs.getString(snapshotKey(projectId), null))
+        val snapshot = loadSnapshot(prefs, projectId)
         // Nothing stored yet (just placed, or the app was never opened since): ask the app's Dart
         // side to write the snapshot from the on-device data, without opening the UI.
         if (snapshot == null) requestSnapshot(context, prefs)

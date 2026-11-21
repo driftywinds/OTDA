@@ -39,7 +39,8 @@ private class TasksFactory(private val context: Context, private val appWidgetId
         val prefs = widgetPrefs(context)
         val current = WidgetStyle.read(prefs)
         val projectId = prefs.getString(widgetProjectKey(appWidgetId), null)
-        val snapshot = Snapshot.parse(prefs.getString(snapshotKey(projectId), null))
+        // The stored rows with the taps the app has not applied yet laid over them.
+        val snapshot = loadSnapshot(prefs, projectId)
         // Narrow widgets drop the headings; the width is in dp.
         val width = runCatching {
             AppWidgetManager.getInstance(context)
@@ -50,7 +51,7 @@ private class TasksFactory(private val context: Context, private val appWidgetId
         rows = if (snapshot == null) {
             emptyList()
         } else {
-            visibleRows(snapshot.rows, current, showSections = current.showSections && width >= 250)
+            visibleRows(snapshot.rows, showCompleted = current.showCompleted, showSections = current.showSections && width >= 250)
         }
     }
 
@@ -114,6 +115,8 @@ private class TasksFactory(private val context: Context, private val appWidgetId
                 .putExtra(WidgetIntents.EXTRA_OP, WidgetIntents.OP_TOGGLE)
                 .putExtra(WidgetIntents.EXTRA_ID, task.id)
                 .putExtra(WidgetIntents.EXTRA_DAY, day)
+                .putExtra(WidgetIntents.EXTRA_SID, task.sid.orEmpty())
+                .putExtra(WidgetIntents.EXTRA_OCC, task.occ.orEmpty())
                 .putExtra(WidgetIntents.EXTRA_DONE, !task.done),
         )
         views.setOnClickFillInIntent(

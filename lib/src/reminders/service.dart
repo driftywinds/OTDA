@@ -20,7 +20,9 @@ import '../api/cookie_jar.dart';
 import '../data/clock.dart';
 import '../data/db.dart';
 import '../data/models.dart';
+import '../data/recurrence.dart' show isRecurring;
 import '../data/repo.dart';
+import '../data/series.dart' show currentOccurrence, occurrenceDateOf;
 import '../auth/session_store.dart';
 import '../data/sync_engine.dart';
 import '../e2ee/session.dart';
@@ -558,8 +560,9 @@ Future<void> onReminderAction(NotificationResponse response) async {
       return;
   }
   await DebugLog.add('action ${response.actionId}: done, re-arming', source: 'bg');
-  await ReminderService.instance.rearmFrom(repo);
+  // The widget goes first: it must never wait for the reminders to be re-armed.
   await pushWidgetsFromRepo(repo);
+  await ReminderService.instance.rearmFrom(repo);
 }
 
 /// Opens the replica without any UI and without a network client.
@@ -605,31 +608,109 @@ Future<void> syncHeadless(Repo repo) async {
   }
 }
 
+/// The newest widget tap the app has applied (`pending_ack`, advanced only here).
+Future<int> _widgetAck() async =>
+    int.tryParse(await HomeWidget.getWidgetData<String>('pending_ack') ?? '') ?? 0;
+
+String? _nonEmpty(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty || text == 'null' ? null : text;
+}
+
 /// Applies ticks and un-ticks made on the widget (`pending_ops`, written natively) to the replica, in
 /// order, and records progress in `pending_ack`. The widget already shows them; this makes them real.
-Future<void> applyPendingWidgetOps(Repo repo) async {
+/// Returns how many changed the replica.
+///
+/// Each op is applied by what it *means* against what the replica holds now, never by replaying a write,
+/// so applying one a second time (two isolates, a lost ack) changes nothing. That matters for a repeating
+/// task: ticking it moves the series on, so a replayed tick would tick tomorrow's occurrence as well.
+Future<int> applyPendingWidgetOps(Repo repo) async {
+  var applied = 0;
   try {
     final raw = await HomeWidget.getWidgetData<String>('pending_ops');
-    if (raw == null || raw.isEmpty) return;
-    var ack = int.tryParse(await HomeWidget.getWidgetData<String>('pending_ack') ?? '') ?? 0;
+    if (raw == null || raw.isEmpty) return 0;
+    var ack = await _widgetAck();
     final ops = (jsonDecode(raw) as List)
         .whereType<Map>()
         .where((op) => ((op['at'] as num?)?.toInt() ?? 0) > ack)
         .toList()
       ..sort((a, b) => ((a['at'] as num?) ?? 0).compareTo((b['at'] as num?) ?? 0));
-    if (ops.isEmpty) return;
+    if (ops.isEmpty) return 0;
     for (final op in ops) {
-      final id = op['id']?.toString();
-      final done = op['done'] != false;
-      final task = id == null ? null : (await repo.tasks()).where((t) => t.id == id).firstOrNull;
-      if (task != null && task.isCompleted != done) await repo.setCompleted(task, done);
-      ack = (op['at'] as num).toInt();
-      await HomeWidget.saveWidgetData<String>('pending_ack', '$ack');
+      if (await applyWidgetOp(repo, op)) applied++;
+      final at = (op['at'] as num).toInt();
+      // Never move the ack backwards: another isolate may have got further while this one worked.
+      if (at > ack) {
+        ack = at;
+        if (at > await _widgetAck()) await HomeWidget.saveWidgetData<String>('pending_ack', '$at');
+      }
     }
-    await ReminderService.instance.rearmFrom(repo);
   } on Object catch (e) {
     await DebugLog.add('widget: applying pending ops failed: $e', source: ReminderService._source);
   }
+  return applied;
+}
+
+/// One widget tap against the replica as it is now. True when it changed something.
+/// Public only so the tests can drive it without the home_widget platform channel.
+Future<bool> applyWidgetOp(Repo repo, Map op) async {
+  final id = _nonEmpty(op['id']);
+  if (id == null) return false;
+  final done = op['done'] != false;
+  final day = _nonEmpty(op['day']);
+  final sid = _nonEmpty(op['sid']);
+  final occ = _nonEmpty(op['occ']);
+  final seriesId = sid ?? id;
+  final tasks = await repo.tasks();
+  Task? find(String taskId) {
+    for (final task in tasks) {
+      if (task.id == taskId) return task;
+    }
+    return null;
+  }
+
+  final tapped = find(id);
+  final series = find(seriesId);
+  final today = _todayString();
+
+  if (done) {
+    // The row tapped may be gone already (a tick that was un-ticked: its record is deleted), in which
+    // case the series is what the person ticked again.
+    final task = tapped ?? series;
+    if (task == null || task.isCompleted) return false;
+    final isSeries = isRecurring(task) && (task.raw['series_id']?.toString() ?? '').isEmpty;
+    if (isSeries) {
+      // Only the occurrence the row stood for. If the series has moved on, this tap was already applied.
+      final current = currentOccurrence(task, tasks, today) ?? occurrenceDateOf(task, today);
+      final wanted = occ ?? day;
+      if (wanted != null && wanted != current) {
+        await DebugLog.add('widget: tick of ${task.id} for $wanted ignored, series is on $current',
+            source: ReminderService._source);
+        return false;
+      }
+    }
+    await repo.setCompleted(task, true);
+    return true;
+  }
+
+  // Un-tick. A repeating task's tick left a record for that date: reopening the series row means
+  // undoing that record, whichever of the two ids the tap carried.
+  final wantedOcc = occ ?? day;
+  if (series != null && wantedOcc != null && isRecurring(series)) {
+    for (final task in tasks) {
+      if (task.raw['series_id']?.toString() == series.id &&
+          task.raw['occurrence_date']?.toString() == wantedOcc &&
+          task.isCompleted) {
+        await repo.setCompleted(task, false);
+        return true;
+      }
+    }
+  }
+  if (tapped != null && tapped.isCompleted) {
+    await repo.setCompleted(tapped, false);
+    return true;
+  }
+  return false;
 }
 
 String _todayString() {
@@ -642,26 +723,74 @@ String _todayString() {
 /// Why the last widget push failed, or null. Shown nowhere yet but kept for logs.
 String? lastWidgetError;
 
-/// Re-arms reminders and redraws the widget after a task changes in the UI. Every
+/// Redraws the widget and re-arms reminders after a task changes in the UI. Every
 /// completion path goes through here: without it, ticking a task in the app left
 /// the widget showing the old row until some unrelated sync or reminder re-armed.
+/// The widget goes first: it must never wait for the reminders.
 Future<void> refreshTaskSurfaces(Repo repo) async {
-  await ReminderService.instance.rearmFrom(repo);
   await pushWidgetsFromRepo(repo);
+  await ReminderService.instance.rearmFrom(repo);
 }
 
+Future<void>? _pushLoop;
+bool _pushAgain = false;
+Repo? _pushRepo;
+
 /// Reads the replica and pushes every widget snapshot from it. Works with no UI.
-Future<void> pushWidgetsFromRepo(Repo repo) async {
+///
+/// Pushes in one isolate run one at a time and coalesce: a call made while a push is running makes the
+/// running one go round once more, so the last word is always built from the newest data, and two pushes
+/// never interleave their reads and writes (which is how a stale snapshot used to land on top of a
+/// fresher one).
+Future<void> pushWidgetsFromRepo(Repo repo) {
+  _pushRepo = repo;
+  final running = _pushLoop;
+  if (running != null) {
+    _pushAgain = true;
+    return running;
+  }
+  return _pushLoop = _runPushLoop();
+}
+
+Future<void> _runPushLoop() async {
+  try {
+    do {
+      _pushAgain = false;
+      try {
+        await _pushWidgetsOnce(_pushRepo!);
+      } on Object catch (e) {
+        lastWidgetError = '$e';
+        await DebugLog.add('widget: push FAILED: $e', source: ReminderService._source);
+      }
+    } while (_pushAgain);
+  } finally {
+    _pushLoop = null;
+  }
+}
+
+Future<void> _pushWidgetsOnce(Repo repo) async {
   // Changes made on the widget come first, so a snapshot never undoes a tick the person just made.
-  await applyPendingWidgetOps(repo);
+  final applied = await applyPendingWidgetOps(repo);
+  // Read the ack BEFORE the data: the snapshot then claims no more than it holds, and a tap that lands
+  // after this point is laid over it natively instead of being lost.
+  final ack = await _widgetAck();
   final tasks = await repo.tasks();
   final projects = await repo.projects();
-  await pushWidgets(tasks, projects, today: _todayString());
+  await pushWidgets(tasks, projects, today: _todayString(), ack: ack);
+  // Reminders follow the ticks that were just applied, but only after the widget is redrawn.
+  if (applied > 0) {
+    try {
+      await ReminderService.instance.rearmFrom(repo);
+    } on Object catch (e) {
+      await DebugLog.add('widget: re-arm after ticks failed: $e', source: ReminderService._source);
+    }
+  }
 }
 
 /// Writes the widget snapshots for the projects that have a widget and asks the
 /// launcher to redraw. The native side never computes anything.
-Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required String today}) async {
+Future<void> pushWidgets(List<Task> tasks, List<Project> projects,
+    {required String today, int? ack}) async {
   try {
     final active = await HomeWidget.getWidgetData<String>('active_projects') ?? '';
     final ids = active.split(',').where((id) => id.trim().isNotEmpty).toSet();
@@ -669,14 +798,15 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
     // would read a snapshot nobody wrote, so every project gets one. There are a
     // handful, and each is capped at a few rows.
     final every = {for (final project in projects) project.id};
-    for (final id in {...ids, ...every, 'all'}) {
-      final snapshot = buildWidgetSnapshot(
-        tasks,
-        projects,
-        projectId: id == 'all' ? null : id,
-        today: today,
-      );
-      await HomeWidget.saveWidgetData<String>('snapshot_$id', jsonEncode(snapshot));
+    final snapshots = buildWidgetSnapshots(
+      tasks,
+      projects,
+      projectIds: {...ids, ...every, 'all'},
+      today: today,
+      ack: ack,
+    );
+    for (final entry in snapshots.entries) {
+      await HomeWidget.saveWidgetData<String>('snapshot_${entry.key}', jsonEncode(entry.value));
     }
     await HomeWidget.saveWidgetData<String>('projects_index', jsonEncode(projectsIndex(projects)));
     await HomeWidget.saveWidgetData<bool>('refreshing', false);
@@ -685,7 +815,7 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects, {required Str
       qualifiedAndroidName: 'com.dw.otda.widget.TasksWidgetReceiver',
     );
     lastWidgetError = null;
-    await DebugLog.add('widget: pushed ${ids.length} project snapshot(s) + all, ${tasks.length} tasks',
+    await DebugLog.add('widget: pushed ${ids.length} project snapshot(s) + all, ${tasks.length} tasks, ack=$ack',
         source: ReminderService._source);
   } on Object catch (e) {
     // No widget placed, or no launcher support: nothing to do.
