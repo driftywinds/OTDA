@@ -1,5 +1,8 @@
 allprojects {
     repositories {
+        // See settings.gradle.kts: the mirror keeps a shared CI runner away from
+        // Maven Central's HTTP 429, and Central remains the fallback.
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
         google()
         mavenCentral()
     }

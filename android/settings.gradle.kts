@@ -11,9 +11,13 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        google()
-        mavenCentral()
+        // Maven Central rate-limits shared CI runner IPs with HTTP 429. The Gradle
+        // Plugin Portal and Google's Maven Central mirror serve the same artifacts
+        // without that shared-IP limit; Central stays as the last fallback.
         gradlePluginPortal()
+        google()
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
+        mavenCentral()
     }
 }
 
