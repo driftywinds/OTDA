@@ -32,9 +32,10 @@ The comparison below is by *feature*, then by the route area it belongs to.
 | `GET/POST /projects/{id}/members`, `PATCH/DELETE …/members/{userId}` | list, add, re-role and remove project members |
 | `GET /me/member-invitations`, `/accept`, `/decline`; cancel project/workspace invitations | invitations addressed to me, and revoking a pending one |
 | `GET /workspaces/{id}`, `POST …/members` | workspace pending list and inviting a person |
+| `GET/POST /projects/{id}/public-links`, `DELETE …/{linkId}`; `GET/POST/DELETE /tasks/{id}/page` | project public links and task pages |
 | 13 admin paths (`/users`, `/invitations`, `/audit`, `/backups`, `/settings/storage`, …) | Settings → Server |
 
-That is **53 route paths of 344**. Everything else the app stores goes through the op log.
+That is **59 route paths of 344**. Everything else the app stores goes through the op log.
 
 ### Entities the app can handle
 
@@ -68,6 +69,7 @@ is the only file that names most of them, and only to encrypt them.
 | Workspaces | list/switch/create/rename, members and groups read, move a project between workspaces, leave and transfer ownership |
 | Project sharing | members with roles, add by email, change role, remove; shared projects marked, and an encrypted account explains the 409 refusal |
 | Invitations | invite to project or workspace, accept/decline, pending list with revoke |
+| Public links | project links (view/tick, list/board, expiry) and task pages (view/reply/tick), copied once and revocable |
 | Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
 | Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
 | Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
@@ -120,7 +122,7 @@ Grouped by the server area they belong to (route count in brackets).
 |---|---|---|
 | Project group grants | `projects` [20], `workspaces` [21] | grants are listed read-only; no grant UI |
 | Invite links | `project-invites` [2], `workspace-invites` [2], `/invitations/{token}` | nothing; these create an account through a public page |
-| Public links | `public` [2] | nothing |
+| Note pages | `notes` [10], `notepages` [4] | no notes feature yet, so note public pages are unreachable |
 
 ### Automation and integration
 
@@ -159,28 +161,29 @@ templates, project-flow views, list/row layout options.
 Ranked by what a user would notice within a day of real use:
 
 1. **Attachments** — no way to add or open a file or a photo from a task.
-2. **Public links** — a task, project or note page cannot be shared with someone
-   without an account, and the token-based invite pages remain web-only.
-3. **Comments and notes** — collaboration and long-form text are not reachable.
-4. **Calendar beyond a month grid** — no week/day view, no external calendars.
-5. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
-6. **Time tracking** — absent.
-7. **Push notifications** — reminders only fire from the device that scheduled them.
-8. **Saved views / custom fields** — the app shows only what the server's built-in
+2. **Notes and comments** — long-form notes, comments and note public pages are not
+   reachable; note pages are the one public-link shape left out.
+3. **Calendar beyond a month grid** — no week/day view, no external calendars.
+4. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
+5. **Time tracking** — absent.
+6. **Push notifications** — reminders only fire from the device that scheduled them.
+7. **Saved views / custom fields** — the app shows only what the server's built-in
    views show.
-9. **Import and backup restore** — export works, bringing data back does not.
-10. **Project group grants** — groups are shown on a project, but granting a group is
-    still a web-app action.
+8. **Import and backup restore** — export works, bringing data back does not.
+9. **Project group grants** — groups are shown on a project, but granting a group is
+   still a web-app action.
+10. **Token invite pages** — project/workspace invite links and the public signup
+    preview create an account, which stays a web flow.
 
 ## 6. Honest summary
 
 - **Data plane**: strong. The op log, recurring-task model, batched apply and offline
   behaviour are the parts most likely to be correct, and they are the parts that took
   the most work. A 10,000-task first copy measured 6–9 s on a local server.
-- **REST plane**: 53 of 344 route paths are used. Most of the remainder are features
+- **REST plane**: 59 of 344 route paths are used. Most of the remainder are features
   whose *data* the app already syncs but never displays — so the cost of adding them is
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
-  complete, plus workspace management, project sharing, invitations, statistics,
-  activity, history, export and theming. Public links, content (files, notes, comments)
-  and the E2EE lifecycle remain.
+  complete, plus workspace management, project sharing, invitations, public links,
+  statistics, activity, history, export and theming. Notes/comments, attachments and
+  the E2EE lifecycle remain.

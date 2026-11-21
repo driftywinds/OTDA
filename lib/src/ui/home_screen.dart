@@ -13,6 +13,7 @@ import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'invitations_screen.dart';
 import 'project_sharing_screen.dart';
+import 'public_links_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'task_sheet.dart';
@@ -670,8 +671,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _go(TaskView.project, projectId: created.id);
   }
 
-  Future<void> _shareProject(String id) async {
+  Future<void> _publicLinks(String id) async {
     await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PublicLinksScreen(
+          state: widget.state,
+          projectId: id,
+          projectName: _projectNames[id] ?? 'Project',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareProject(String id) async {    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProjectSharingScreen(
           state: widget.state,
@@ -877,6 +889,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onCreateProject: _createProject,
         onUpdateProject: _updateProject,
         onShareProject: _shareProject,
+        onPublicLinks: _publicLinks,
         sharedProjects: _sharedProjects,
         onDeleteProjects: _deleteProjects,
         onWorkspace: _chooseWorkspace,
@@ -1422,6 +1435,7 @@ class _AppDrawer extends StatelessWidget {
     required this.onCreateProject,
     required this.onUpdateProject,
     required this.onShareProject,
+    required this.onPublicLinks,
     required this.sharedProjects,
     required this.onDeleteProjects,
     required this.onWorkspace,
@@ -1443,6 +1457,7 @@ class _AppDrawer extends StatelessWidget {
   final void Function(Map<String, Object?> fields) onCreateProject;
   final void Function(String projectId, Map<String, Object?> fields) onUpdateProject;
   final void Function(String projectId) onShareProject;
+  final void Function(String projectId) onPublicLinks;
   final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDeleteProjects;
   final VoidCallback onWorkspace;
@@ -1547,6 +1562,7 @@ class _AppDrawer extends StatelessWidget {
                     onCreate: onCreateProject,
                     onUpdate: onUpdateProject,
                     onShare: onShareProject,
+                    onPublicLinks: onPublicLinks,
                     sharedProjects: sharedProjects,
                     onDelete: onDeleteProjects,
                     inset: inset,
@@ -1715,6 +1731,7 @@ class _ProjectSection extends StatefulWidget {
     required this.onCreate,
     required this.onUpdate,
     required this.onShare,
+    required this.onPublicLinks,
     required this.sharedProjects,
     required this.onDelete,
     required this.inset,
@@ -1729,6 +1746,7 @@ class _ProjectSection extends StatefulWidget {
   final void Function(Map<String, Object?> fields) onCreate;
   final void Function(String projectId, Map<String, Object?> fields) onUpdate;
   final void Function(String projectId) onShare;
+  final void Function(String projectId) onPublicLinks;
   final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDelete;
   final Widget Function(Widget child) inset;
@@ -1800,6 +1818,12 @@ class _ProjectSectionState extends State<_ProjectSection> {
               onTap: () => Navigator.of(context).pop('share'),
             ),
             ListTile(
+              leading: const Icon(Icons.public_rounded),
+              title: const Text('Public link…'),
+              subtitle: const Text('A read-only page for people without an account'),
+              onTap: () => Navigator.of(context).pop('public'),
+            ),
+            ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('Edit project'),
               onTap: () => Navigator.of(context).pop('edit'),
@@ -1819,6 +1843,8 @@ class _ProjectSectionState extends State<_ProjectSection> {
       await _edit(id: id);
     } else if (action == 'share') {
       widget.onShare(id);
+    } else if (action == 'public') {
+      widget.onPublicLinks(id);
     } else {
       await _confirmDelete([id]);
     }

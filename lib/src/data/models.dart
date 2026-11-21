@@ -205,6 +205,95 @@ class ProjectMembership {
       ];
 }
 
+/// A project's public link: anyone with the URL reads the list, and with the
+/// `tick` right may also complete items.
+class PublicLink {
+  const PublicLink({
+    required this.id,
+    required this.projectId,
+    required this.rights,
+    required this.layout,
+    required this.name,
+    required this.createdByName,
+    required this.expiresAt,
+    required this.link,
+  });
+
+  final String id;
+  final String projectId;
+
+  /// view or tick.
+  final String rights;
+
+  /// list or board.
+  final String layout;
+  final String name;
+  final String createdByName;
+  final int? expiresAt;
+
+  /// Present only in the create response; the list route never repeats the
+  /// secret.
+  final String? link;
+
+  static PublicLink fromJson(Map<String, dynamic> json) => PublicLink(
+        id: json['id']?.toString() ?? '',
+        projectId: json['projectId']?.toString() ?? '',
+        rights: json['rights']?.toString() ?? '',
+        layout: json['layout']?.toString() ?? 'list',
+        name: json['name']?.toString() ?? '',
+        createdByName: json['createdByName']?.toString() ?? '',
+        expiresAt: (json['expiresAt'] as num?)?.toInt(),
+        link: json['link']?.toString(),
+      );
+}
+
+/// A task published as a page at `/t/<secret>`.
+class TaskPage {
+  const TaskPage({
+    required this.id,
+    required this.taskId,
+    required this.rights,
+    required this.label,
+    required this.encrypted,
+    required this.expiresAt,
+    required this.publishedAt,
+    required this.replies,
+    required this.ticks,
+    required this.pendingReplies,
+    required this.link,
+  });
+
+  final String id;
+  final String taskId;
+
+  /// view, reply or tick.
+  final String rights;
+  final String label;
+  final bool encrypted;
+  final int? expiresAt;
+  final int? publishedAt;
+  final int replies;
+  final int ticks;
+  final int pendingReplies;
+
+  /// Present only in the publish response.
+  final String? link;
+
+  static TaskPage fromJson(Map<String, dynamic> json) => TaskPage(
+        id: json['id']?.toString() ?? '',
+        taskId: json['taskId']?.toString() ?? '',
+        rights: json['rights']?.toString() ?? '',
+        label: json['label']?.toString() ?? '',
+        encrypted: json['encrypted'] == true,
+        expiresAt: (json['expiresAt'] as num?)?.toInt(),
+        publishedAt: (json['publishedAt'] as num?)?.toInt(),
+        replies: (json['replies'] as num?)?.toInt() ?? 0,
+        ticks: (json['ticks'] as num?)?.toInt() ?? 0,
+        pendingReplies: (json['pendingReplies'] as num?)?.toInt() ?? 0,
+        link: json['link']?.toString(),
+      );
+}
+
 /// An invitation addressed to me: to a project or a workspace.
 class MemberInvitation {
   const MemberInvitation({

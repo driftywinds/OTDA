@@ -9,10 +9,10 @@ plan.
 
 Status values: **todo** · **doing** · **done**.
 
-**Current state:** Milestone 1 (Trash, task metadata, subtasks) and Milestone 4
-(export, statistics, activity, theming) are done. Milestone 2 is in progress:
-workspaces, project sharing and invitations are done; public links remain.
-Milestone 3 (the E2EE lifecycle) remains.
+**Current state:** Milestone 1 (Trash, task metadata, subtasks), Milestone 2
+(workspaces, project sharing, invitations, public links) and Milestone 4 (export,
+statistics, activity, theming) are done, except that note pages await the notes
+feature. Milestone 3 (the E2EE lifecycle) remains.
 
 ---
 
@@ -198,6 +198,9 @@ still web-only: they create an account, which is outside a signed-in app.
 
 ### 2.4 Public links
 
+**Status: done for project links and task pages; note pages still need the notes
+feature.**
+
 **Why** sharing a list with someone without an account is a server feature the app
 cannot reach.
 
@@ -206,6 +209,18 @@ cannot reach.
 - Show whether a link is active and what it exposes.
 - Server routes: `public` and `public/{token}` (read the shape from the server code
   before designing the screen).
+
+**Notes** the v1.5.0 server has three different things behind "public link":
+`projects/{id}/public-links` (a project list at `/public/<slug>-otl_…`),
+`tasks/{id}/page` (a task page at `/t/<secret>`, with view/reply/tick), and
+`notes/{id}/page` (a note page at `/n/<secret>`). The app implements the first two:
+the project menu has Public link… (name, view/tick, list/board, expiry; the URL is
+shown and copied once, because the list route never repeats the secret; revoke from
+the same screen) and the task sheet has Share page (rights, label, expiry, one-time
+URL, unpublish). An encrypted personal task needs an unlocked snapshot to publish;
+the app does not create one yet, so the server's refusal is explained. Note pages
+are not reachable because the app has no notes feature — that is the notes milestone,
+not a missing public-link route.
 
 ---
 

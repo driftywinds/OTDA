@@ -5,6 +5,7 @@ import '../data/repo.dart';
 import '../quickadd/rule.dart' as rules;
 import 'format.dart';
 import 'task_history_screen.dart';
+import 'task_page_screen.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -830,6 +831,15 @@ class _TaskSheetState extends State<TaskSheet> {
                       },
                       icon: const Icon(Icons.delete_outline_rounded),
                       label: const Text('Delete'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TaskPageScreen(repo: widget.repo, task: widget.task),
+                        ),
+                      ),
+                      icon: const Icon(Icons.public_rounded),
+                      label: const Text('Share page'),
                     ),
                     TextButton.icon(
                       onPressed: () => Navigator.of(context).push(
