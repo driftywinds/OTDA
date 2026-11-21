@@ -701,7 +701,7 @@ class Repo {
         'project', projectId, 'deleted_at', DateTime.now().millisecondsSinceEpoch, ts, engine.device);
   }
 
-  Future<Project> createProject(String name, {String? color, String? icon}) async {
+  Future<Project> createProject(String name, {String? color, String? icon, String? workspaceId}) async {
     final id = newId();
     final ts = await clock.next();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -711,6 +711,7 @@ class Repo {
       'position': now.toDouble(),
       if (color != null && color.isNotEmpty) 'color': color,
       if (icon != null && icon.isNotEmpty) 'icon': icon,
+      if (workspaceId != null && workspaceId.isNotEmpty) 'workspace_id': workspaceId,
     };
     for (final entry in fields.entries) {
       await db.putField('project', id, entry.key, entry.value, ts, engine.device);

@@ -28,9 +28,10 @@ The comparison below is by *feature*, then by the route area it belongs to.
 | `GET /activity`, `/tasks/{id}/activity`, `/tasks/{id}/history` | activity feed and per-task history |
 | `DELETE /tasks/{id}/purge`, `/projects/{id}/purge`, `POST /trash/purge` | Trash purge and empty |
 | `GET /themes/instance` | instance theme as the default palette |
+| `POST/PATCH /workspaces`, `POST /workspaces/{id}/leave`, `/transfer` | create, rename, leave and transfer a workspace |
 | 13 admin paths (`/users`, `/invitations`, `/audit`, `/backups`, `/settings/storage`, …) | Settings → Server |
 
-That is **38 route paths of 344**. Everything else the app stores goes through the op log.
+That is **42 route paths of 344**. Everything else the app stores goes through the op log.
 
 ### Entities the app can handle
 
@@ -40,7 +41,7 @@ That is **38 route paths of 344**. Everything else the app stores goes through t
 | `project` | yes | name, colour, icon, delete and restore |
 | `label` | yes | create-by-name, and assign/remove on a task |
 | `section` | yes, per project | read only (the task's `section_id` is writable) |
-| `workspace` | yes: role, owner, members, groups (for filtering) | no |
+| `workspace` | yes: role, owner, members, groups (for filtering) | create, rename, leave, transfer; projects move by `workspace_id` |
 | `preferences` | yes | priority names and some device-facing prefs |
 
 Everything else the server stores — comments, attachments, notes, time entries,
@@ -61,6 +62,7 @@ is the only file that names most of them, and only to encrypt them.
 | Task metadata | deadline, start (date or Someday), estimate, energy, section, labels (create/assign), in the same LWW write path |
 | Subtasks | create from the row/sheet, indent under the parent, position order, progress over direct children, fold per device, reparent/promote, subtree completion and deletion, project moves carry descendants |
 | Trash | tasks and projects, newest first, subtree restore, project restore, task restored to Inbox when its project is still trashed, purge one, empty |
+| Workspaces | list/switch/create/rename, members and groups read, move a project between workspaces, leave and transfer ownership |
 | Built-in views | Inbox, Today (with Done today), Upcoming (with a trailing Anytime section), Anytime, Someday, History, Search, project lists |
 | Statistics | completions per day/week, by project and label, this-week card, streaks for repeating tasks, all from the replica |
 | Activity | shared-project feed with paging; per-task activity and change history, decrypted before display |
@@ -79,7 +81,6 @@ is the only file that names most of them, and only to encrypt them.
 | Feature | Server | App |
 |---|---|---|
 | **End-to-end encryption** | full lifecycle (enable, migration, purge, disable, file encryption, fingerprint unlock, device relay) | read side only: unlock, decrypt, encrypt new writes. **Cannot turn it on or off**, cannot re-encrypt old plaintext, cannot encrypt attachments, no biometric unlock, no relay |
-| **Workspaces** | 21 routes: create, rename, members, groups, invites, leave, transfer | read-only: filter lists by a workspace, switch the active one; no create/rename/members/transfer UI yet |
 | **Auth** | OIDC, passkeys, app passwords, sign-out everywhere, trusted-device policy | password + TOTP, 2FA management; no passkeys, OIDC or app passwords |
 | **Project fields** | notes, sharing, templates, timeline, flow, archived | name, colour, icon, trash |
 | **Calendar** | month/week/day/year, feeds, Google/Microsoft sync, CalDAV | month grid from local recurrence only |
@@ -114,7 +115,6 @@ Grouped by the server area they belong to (route count in brackets).
 |---|---|---|
 | Project sharing, members, groups, grants | `projects` [20], `members` [1] | nothing |
 | Invitations (project, workspace, member) | `invitations` [4], `project-invites` [2], `workspace-invites` [2] | admin invitations only |
-| Workspace management | `workspaces` [21] | read-only filter |
 | Public links | `public` [2] | nothing |
 
 ### Automation and integration
@@ -154,8 +154,8 @@ templates, project-flow views, list/row layout options.
 Ranked by what a user would notice within a day of real use:
 
 1. **Attachments** — no way to add or open a file or a photo from a task.
-2. **Sharing and workspaces** — a project cannot be shared or managed, so the app is
-   single-user in practice even though the workspace list is read.
+2. **Project sharing** — a workspace can be managed, but a project still cannot be
+   shared, so the app is single-user in practice.
 3. **Comments and notes** — collaboration and long-form text are not reachable.
 4. **Calendar beyond a month grid** — no week/day view, no external calendars.
 5. **E2EE lifecycle** — unlock works; enabling, disabling and files do not.
@@ -164,17 +164,17 @@ Ranked by what a user would notice within a day of real use:
 8. **Saved views / custom fields** — the app shows only what the server's built-in
    views show.
 9. **Import and backup restore** — export works, bringing data back does not.
-10. **Workspace management** — creating, renaming, members, groups and transfer are
-    not in the app.
+10. **Public links** — a list cannot be shared with someone without an account.
 
 ## 6. Honest summary
 
 - **Data plane**: strong. The op log, recurring-task model, batched apply and offline
   behaviour are the parts most likely to be correct, and they are the parts that took
   the most work. A 10,000-task first copy measured 6–9 s on a local server.
-- **REST plane**: 38 of 344 route paths are used. Most of the remainder are features
+- **REST plane**: 42 of 344 route paths are used. Most of the remainder are features
   whose *data* the app already syncs but never displays — so the cost of adding them is
   UI and validation, not protocol.
 - **Feature plane**: the personal task/project/label/reminder/widget surface is now
-  complete, plus read-only statistics, activity, history, export and theming. The
-  collaboration, content (files, notes, comments) and E2EE-lifecycle areas remain.
+  complete, plus workspace management, statistics, activity, history, export and
+  theming. Project sharing, content (files, notes, comments) and the E2EE lifecycle
+  remain.

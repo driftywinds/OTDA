@@ -11,13 +11,15 @@ Offline-first, with the same data model as the server so every device converges.
 
 - Tasks with deadline, start/Someday, estimate, energy, section, labels, subtasks,
   a Trash with restore and purge, and repeating occurrences.
+- Workspaces: switch, create, rename, move projects between them, see members and
+  groups, leave and transfer ownership.
 - Inbox, Today, Upcoming (ending with Anytime), Anytime, Someday, History, Search,
   project lists, a month calendar, reminders and the home-screen widget.
 - Two-factor authentication management (enrol, recovery codes, trusted browsers),
   statistics, a shared-project activity feed, per-task history, JSON/ZIP export and
   device-local theming.
-- Not yet: project sharing and workspace management, attachments/notes/comments, and
-  the end-to-end-encryption lifecycle (unlock works; enable/disable/files do not).
+- Not yet: project sharing and invitations, attachments/notes/comments, and the
+  end-to-end-encryption lifecycle (unlock works; enable/disable/files do not).
 
 - Package / bundle id: `com.dw.otda`
 - Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
@@ -52,7 +54,7 @@ Offline-first, with the same data model as the server so every device converges.
 | `lib/src/quickadd/` | The quick-add parser, ported from the web app with its shared vectors. |
 | `lib/src/reminders/` | The reminder planner (pure) and the service that arms it with the OS. |
 | `lib/src/widget/` | The widget snapshot builder (pure) and the widget's look settings. |
-| `lib/src/ui/` | Screens and sheets: home, composer, task sheet, Trash, statistics, activity, export, settings, admin. |
+| `lib/src/ui/` | Screens and sheets: home, composer, task sheet, Trash, statistics, activity, export, workspaces, settings, admin. |
 | `android/.../widget/` | The Glance home-screen widget and its project picker (Kotlin). |
 | `test/` | Unit tests, parity fixtures (`inbox`, `views`, `quickadd` vectors), and integration tests against a real server. |
 | `tool/parse_check.dart` | Prints what the parser makes of a line: `dart run tool/parse_check.dart "call Sam tomorrow 3pm p1"`. |
@@ -534,6 +536,7 @@ $env:GRADLE_USER_HOME="$PWD\.tmp\gradle"; $env:ANDROID_USER_HOME="$PWD\.tmp\andr
 | Composer | `composer_state_test`, `compose_task_test`, `new_task_sheet_test` |
 | Data and sync | `sync_exchange_test`, `live_update_test`, `sync_gate_test`, `apply_ops_test`, `series_completion_test`, `occurrences_test`, `recurrence_test`, the `inbox` / `views` vector tests |
 | Tasks and Trash | `task_metadata_test`, `repo_metadata_test`, `subtasks_test`, `trash_test`, `trash_flow_test` |
+| Workspaces | `workspace_test`, `workspace_flow_test` |
 | Read and account | `stats_test`, `activity_flow_test`, `export_test`, `export_flow_test`, `mfa_flow_test`, `theme_palette_test` |
 | Reminders and widget | `reminder_planner_test`, `widget_snapshot_test`, `widget_settings_test` |
 | UI | `settings_rows_test`, `theme_smoke_test`, `views_test`, `calendar_month_test` |

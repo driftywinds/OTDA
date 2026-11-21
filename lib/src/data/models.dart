@@ -88,6 +88,38 @@ class Section {
   double get position => (raw['position'] as num?)?.toDouble() ?? 0;
 }
 
+/// One person in a workspace, from the sync directory.
+class WorkspaceMember {
+  const WorkspaceMember(this.userId, this.name, this.role);
+
+  final String userId;
+  final String name;
+
+  /// owner, admin or member.
+  final String role;
+
+  static WorkspaceMember fromJson(Map<String, dynamic> json) => WorkspaceMember(
+        json['userId']?.toString() ?? '',
+        json['name']?.toString() ?? '',
+        json['role']?.toString() ?? 'member',
+      );
+}
+
+/// A named group of workspace members, for project grants.
+class WorkspaceGroup {
+  const WorkspaceGroup(this.id, this.name, this.members);
+
+  final String id;
+  final String name;
+  final List<String> members;
+
+  static WorkspaceGroup fromJson(Map<String, dynamic> json) => WorkspaceGroup(
+        json['id']?.toString() ?? '',
+        json['name']?.toString() ?? '',
+        [for (final member in (json['members'] as List?) ?? const []) member.toString()],
+      );
+}
+
 /// A directory entry from the sync exchange: projects, labels and views live in
 /// one, and a person can be in several.
 class Workspace {
@@ -99,10 +131,23 @@ class Workspace {
   String get name => raw['name']?.toString() ?? '';
   bool get isDefault => raw['default'] == true;
 
+  /// The caller's role: owner, admin or member.
+  String get role => raw['role']?.toString() ?? '';
+  String get ownerId => raw['ownerId']?.toString() ?? '';
+  bool get isOwner => role == 'owner';
+
   /// A name from OpenTodo's icon catalogue, e.g. `briefcase`; empty when unset.
   String get icon => raw['icon']?.toString() ?? '';
 
   /// The workspace's accent colour, as the server stores it (`#rrggbb`).
   String get color => raw['color']?.toString() ?? '';
-  int get memberCount => (raw['members'] as List?)?.length ?? 0;
+  List<WorkspaceMember> get members => [
+        for (final raw in (this.raw['members'] as List?) ?? const [])
+          if (raw is Map) WorkspaceMember.fromJson(raw.cast<String, dynamic>()),
+      ];
+  List<WorkspaceGroup> get groups => [
+        for (final raw in (this.raw['groups'] as List?) ?? const [])
+          if (raw is Map) WorkspaceGroup.fromJson(raw.cast<String, dynamic>()),
+      ];
+  int get memberCount => members.length;
 }

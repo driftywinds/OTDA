@@ -10,8 +10,9 @@ plan.
 Status values: **todo** · **doing** · **done**.
 
 **Current state:** Milestone 1 (Trash, task metadata, subtasks) and Milestone 4
-(export, statistics, activity, theming) are done. Milestone 2 (workspaces and
-sharing) is next; Milestone 3 (the E2EE lifecycle) remains.
+(export, statistics, activity, theming) are done. Milestone 2 is in progress: its
+workspace screen is done, sharing/members, invitations and public links remain.
+Milestone 3 (the E2EE lifecycle) remains.
 
 ---
 
@@ -131,8 +132,7 @@ Turns the app from single-user to something you can hand to a partner or a team.
 
 ### 2.1 Workspaces
 
-**Status: todo** (the sync directory already exposes roles, members and groups; the
-app still filters by workspace and has no management screen).
+**Status: done.**
 
 **Why** `Workspace` is read-only today: the app filters lists by the default workspace
 and nothing else.
@@ -143,6 +143,14 @@ and nothing else.
 - Members and groups: see who is in a workspace (read).
 - Leave a workspace, and transfer ownership when leaving as the owner.
 - Server routes: `workspaces` (21), including `leave` and `transfer`.
+
+**Notes** a task has no `workspace_id` of its own: it follows its project, so moving a
+task is moving its project. The workspace screen groups live projects under each
+workspace, creates projects in the active one, moves a project with one `workspace_id`
+op, and offers rename/members/groups/leave/transfer; the default workspace refuses
+rename, leave and transfer exactly as the server does. The directory itself still
+arrives through the sync exchange, so the screen works offline and refreshes after
+each change.
 
 ### 2.2 Sharing and members
 

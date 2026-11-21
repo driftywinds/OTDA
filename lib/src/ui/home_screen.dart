@@ -15,6 +15,7 @@ import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'task_sheet.dart';
 import 'trash_screen.dart';
+import 'workspaces_screen.dart';
 import 'calendar_month.dart';
 import '../data/occurrences.dart';
 import '../reminders/service.dart';
@@ -247,7 +248,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         today: _today,
       );
       _workspaces = workspaces;
-      _workspaceId ??= defaultWorkspace;
+      // The active workspace can disappear when it is left or deleted on another
+      // device; fall back to the default instead of filtering everything out.
+      if (!workspaces.any((workspace) => workspace.id == _workspaceId)) {
+        _workspaceId = defaultWorkspace;
+      }
       // A project without a workspace belongs to the account's default one.
       bool here(Project p) =>
           (p.workspaceId ?? defaultWorkspace) == _workspaceId || _workspaceId == null;
@@ -645,10 +650,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _createProject(Map<String, Object?> fields) async {
     final repo = widget.state.repo;
     if (repo == null) return;
+    final active = _workspaces.where((workspace) => workspace.id == _workspaceId).firstOrNull;
     final created = await repo.createProject(
       fields['name'] as String? ?? '',
       color: fields['color'] as String?,
       icon: fields['icon'] as String?,
+      workspaceId: active == null || active.isDefault ? null : active.id,
     );
     await _load();
     if (!mounted) return;
@@ -692,33 +699,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _chooseWorkspace() async {
-    if (_workspaces.length < 2) return;
-    final chosen = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final workspace in _workspaces)
-              ListTile(
-                leading: Icon(
-                  workspace.id == _workspaceId ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                  size: 20,
-                ),
-                title: Text(workspace.name),
-                subtitle: Text('${workspace.memberCount} member(s)'),
-                onTap: () => Navigator.of(context).pop(workspace.id),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
+    // The sheet is a full screen now: switching is one tap, but creating,
+    // renaming, members, groups, leaving and transferring live there too.
+    final chosen = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => WorkspacesScreen(state: widget.state, activeId: _workspaceId),
       ),
     );
-    if (chosen != null && mounted) {
-      setState(() => _workspaceId = chosen);
-      await _load();
-    }
+    if (!mounted) return;
+    if (chosen != null) setState(() => _workspaceId = chosen);
+    await _load();
   }
 
   static const _titles = {
@@ -1443,7 +1433,6 @@ class _AppDrawer extends StatelessWidget {
     final scheme = theme.colorScheme;
     final current = workspaces.where((w) => w.id == workspaceId).firstOrNull;
     final workspaceName = current?.name ?? 'Workspace';
-    final canSwitch = workspaces.length > 1;
 
     // Rows are inset from the drawer edge and highlighted as rounded pills.
     Widget inset(Widget child) =>
@@ -1477,7 +1466,7 @@ class _AppDrawer extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             InkWell(
-              onTap: canSwitch ? onWorkspace : null,
+              onTap: onWorkspace,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 16, 14),
                 child: Row(
@@ -1504,12 +1493,11 @@ class _AppDrawer extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (canSwitch)
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(color: scheme.field, shape: BoxShape.circle),
-                        child: Icon(Icons.expand_more_rounded, size: 20, color: scheme.onSurfaceVariant),
-                      ),
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(color: scheme.field, shape: BoxShape.circle),
+                      child: Icon(Icons.expand_more_rounded, size: 20, color: scheme.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
