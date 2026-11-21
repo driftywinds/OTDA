@@ -5,7 +5,10 @@ import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_exception.dart';
+import '../e2ee/crypto.dart';
+import '../e2ee/fields.dart';
 import '../e2ee/session.dart';
+import '../e2ee/scope.dart';
 import 'clock.dart';
 import 'db.dart';
 import '../util/log.dart';
@@ -153,6 +156,7 @@ class SyncEngine {
     var more = true;
     final sent = <String>[];
     var startCursor = _cursor;
+    final scope = E2eeSession.instance.enabled ? await E2eeScope.load(db) : null;
     // The head is a cheap push-only exchange (no pull). Its cursor is the last
     // position of this account's log, so `head - start` is what this copy has to
     // cover: enough for a progress bar. A server that does not know push_only
@@ -169,16 +173,20 @@ class SyncEngine {
         final batchIds = <String>[];
         for (final row in queued) {
           if (sent.contains(row['id'])) continue; // already pushed, not yet acknowledged
+          final requestEntity = row['entity'] as String;
+          final requestId = row['entity_id'] as String;
+          final personal = scope == null || await scope.personal(requestEntity, requestId);
           ops.add({
             'id': row['id'],
-            'entity': row['entity'],
-            'entityId': row['entity_id'],
+            'entity': requestEntity,
+            'entityId': requestId,
             'field': row['field'],
             'value': E2eeSession.instance.seal(
-              row['entity'] as String,
-              row['entity_id'] as String,
+              requestEntity,
+              requestId,
               row['field'] as String,
               jsonDecode(row['value'] as String),
+              personal: personal,
             ),
             'ts': row['ts'],
             'device': row['device'],
@@ -234,6 +242,26 @@ class SyncEngine {
           else
             ...page,
         ]);
+        // Plaintext that arrives for a personal field (a REST write, an import or
+        // an old client) is encrypted on sight: queue the sealed value, keep the
+        // local one readable. Shared projects are never encrypted.
+        if (E2eeSession.instance.sealing && page.isNotEmpty) {
+          final incomingScope = await E2eeScope.load(db);
+          for (final op in page) {
+            final entity = op['entity']?.toString() ?? '';
+            final id = op['entityId']?.toString() ?? '';
+            final field = op['field']?.toString() ?? '';
+            final value = op['value'];
+            if (!isContentField(entity, field) || value is! String || value.isEmpty || isEnvelope(value)) {
+              continue;
+            }
+            if (!await incomingScope.personal(entity, id)) continue;
+            final sealed = E2eeSession.instance.seal(entity, id, field, value, personal: true);
+            if (sealed is String && sealed != value) {
+              await db.enqueueField(entity, id, field, sealed, await clock.next(), _deviceId);
+            }
+          }
+        }
         for (final op in page) {
           clock.observe(((op['ts'] as num?) ?? 0).toInt());
         }

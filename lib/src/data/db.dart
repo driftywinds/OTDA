@@ -66,6 +66,8 @@ class OtdaDb {
 
   Future<void> setMetaInt(String key, int value) => setMeta(key, '$value');
 
+  Future<void> deleteMeta(String key) => _db.delete('meta', where: 'k = ?', whereArgs: [key]);
+
   // ---- the winner rule --------------------------------------------------
 
   /// Applies one field value if it wins: `(ts, device)` greater than the stored
@@ -240,6 +242,20 @@ class OtdaDb {
       });
     });
     onWrite?.call();
+  }
+
+  /// Queues a field operation without changing the local value. The migration
+  /// uses it to put ciphertext on the wire while the replica keeps plaintext.
+  Future<void> enqueueField(String entity, String entityId, String field, Object? value, int ts, String device) async {
+    await _db.insert('outbox', {
+      'id': _uuid(),
+      'entity': entity,
+      'entity_id': entityId,
+      'field': field,
+      'value': jsonEncode(value),
+      'ts': ts,
+      'device': device,
+    });
   }
 
   /// Every stored field, for the one-time decrypt after an unlock.

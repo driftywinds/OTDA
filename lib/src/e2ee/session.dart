@@ -35,14 +35,23 @@ class E2eeSession {
   static const _keySlot = 'e2ee.accountKey';
   static const _recordSlot = 'e2ee.record';
 
+  /// Tests use an in-memory replica and cannot reach the platform keystore.
+  static bool persistToKeystore = true;
+
   k.KeyRecord? record;
   Uint8List? _accountKey;
+
+  /// While false, outgoing values stay plaintext even though the key is held:
+  /// turning encryption off keeps the key long enough to decrypt what is still
+  /// ciphertext, then forgets it.
+  bool _sealing = true;
 
   /// 0..1 while the stored ciphertext is decrypted after an unlock, null otherwise.
   final progress = ValueNotifier<double?>(null);
 
   bool get enabled => record != null;
   bool get unlocked => _accountKey != null;
+  bool get sealing => _sealing && record != null;
 
   /// Reads the wrapped record. A 404 (or no record) means the account is not
   /// encrypted, which is the usual case.
@@ -110,6 +119,8 @@ class E2eeSession {
   Future<void> _adopt(k.KeyRecord fromServer, Uint8List key) async {
     record = fromServer;
     _accountKey = key;
+    _sealing = true;
+    if (!persistToKeystore) return;
     await _storage.write(key: _keySlot, value: b64url(key));
     await _storage.write(key: _recordSlot, value: jsonEncode(fromServer.toJson()));
   }
@@ -117,9 +128,17 @@ class E2eeSession {
   /// Test seam: adopt a key without the keystore, for the replica tests.
   void adoptKeyForTest(Uint8List key) => _accountKey = key;
 
+  /// Test seam: clear all in-memory key state without touching the keystore.
+  void resetForTest() {
+    _accountKey = null;
+    record = null;
+    _sealing = true;
+  }
+
   /// Forgets the key but keeps the record, so the next unlock works offline.
   Future<void> lock() async {
     _accountKey = null;
+    if (!persistToKeystore) return;
     await _storage.delete(key: _keySlot);
   }
 
@@ -127,6 +146,8 @@ class E2eeSession {
   Future<void> forget() async {
     _accountKey = null;
     record = null;
+    _sealing = true;
+    if (!persistToKeystore) return;
     await _storage.delete(key: _keySlot);
     await _storage.delete(key: _recordSlot);
   }
@@ -138,14 +159,25 @@ class E2eeSession {
     record = map is Map ? k.KeyRecord.fromJson(map.cast<String, Object?>()) : toStore;
   }
 
+  /// Keeps a key generated on this device. Enabling stores the record first, so
+  /// a failure leaves the server consistent and the UI can retry.
+  Future<void> adoptRecord(k.KeyRecord stored, Uint8List accountKey) async {
+    _sealing = true;
+    await _adopt(stored, accountKey);
+  }
+
+  /// Disabling: stop sealing outgoing values while the key is still held for
+  /// the decrypt pass.
+  void setSealing(bool value) => _sealing = value;
+
   // ---- the value path -----------------------------------------------------
 
   /// Encrypts one outgoing value, or returns it unchanged when the field is
   /// plaintext by design. Empty and null values are never encrypted.
-  Object? seal(String entity, String entityId, String field, Object? value) {
+  Object? seal(String entity, String entityId, String field, Object? value, {bool personal = true}) {
     final key = _accountKey;
-    if (key == null || !isContentField(entity, field)) return value;
-    if (value is! String || value.isEmpty) return value;
+    if (key == null || record == null || !_sealing || !personal || !isContentField(entity, field)) return value;
+    if (value is! String || value.isEmpty || isEnvelope(value)) return value;
     return encryptValue(key: key, entity: entity, entityId: entityId, field: field, plaintext: value);
   }
 

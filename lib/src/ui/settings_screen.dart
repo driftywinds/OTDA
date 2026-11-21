@@ -14,12 +14,11 @@ import '../api/api_exception.dart';
 import '../auth/mfa_service.dart';
 import '../data/repo.dart';
 import 'admin_view.dart';
+import 'encryption_settings.dart';
 import 'export_screen.dart';
 import 'reauth.dart';
 import 'settings_rows.dart';
 import 'trash_screen.dart';
-import '../e2ee/session.dart';
-import 'e2ee_unlock_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -213,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                _Section(title: 'End-to-end encryption', children: [_EncryptionCard(state: widget.state)]),
+                _Section(title: 'End-to-end encryption', children: [EncryptionSettingsCard(state: widget.state)]),
                 _Section(title: 'Notifications', children: [_NotificationsCard(state: widget.state)]),
                 const _Section(title: 'Home screen widget', children: [_WidgetCard()]),
                 _Section(
@@ -895,123 +894,6 @@ class _WidgetCardState extends State<_WidgetCard> {
 /// the key, and the two things worth doing here: unlock it, or lock it away again.
 /// Turning encryption on or off stays on the server, because both re-write every
 /// field and the safe place for that is the web sign-in with a fresh confirmation.
-class _EncryptionCard extends StatefulWidget {
-  const _EncryptionCard({required this.state});
-
-  final AppState state;
-
-  @override
-  State<_EncryptionCard> createState() => _EncryptionCardState();
-}
-
-class _EncryptionCardState extends State<_EncryptionCard> {
-  bool _busy = false;
-
-  Future<void> _unlock() async {
-    setState(() => _busy = true);
-    try {
-      final unlocked = await showE2eeUnlockSheet(context);
-      if (unlocked) await widget.state.afterUnlock();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _lock() async {
-    setState(() => _busy = true);
-    try {
-      await E2eeSession.instance.lock();
-      widget.state.e2eeLocked.value = true;
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
-    final session = E2eeSession.instance;
-    final encrypted = session.enabled;
-
-    if (!encrypted) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text('End-to-end encryption', style: style)),
-                Text(
-                  'Off',
-                  style: style?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'This account keeps its content on the server in plaintext. Turn encryption on '
-              'in the web app, then sign in here again to unlock it.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final unlocked = session.unlocked;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                unlocked ? Icons.lock_open_rounded : Icons.lock_outline,
-                size: 18,
-                color: unlocked ? theme.colorScheme.primary : theme.colorScheme.error,
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text('End-to-end encryption', style: style)),
-              Text(
-                unlocked ? 'Unlocked' : 'Locked',
-                style: style?.copyWith(
-                  color: unlocked ? theme.colorScheme.primary : theme.colorScheme.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            unlocked
-                ? 'This device holds the key, so your tasks are readable and sync works.'
-                : 'This device has no key: nothing syncs until you unlock with the passphrase.',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              if (!unlocked)
-                FilledButton.tonal(
-                  onPressed: _busy ? null : _unlock,
-                  child: Text(_busy ? 'Unlocking…' : 'Unlock'),
-                )
-              else
-                OutlinedButton(
-                  onPressed: _busy ? null : _lock,
-                  child: const Text('Lock this device'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// The accent swatches: the instance default (no choice) plus a short palette.
 /// The choice is device-local, so it applies without a sync.
 class _AccentRow extends StatelessWidget {

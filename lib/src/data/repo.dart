@@ -197,6 +197,22 @@ class Repo {
     await db.putField(entity, entityId, field, value, ts, engine.device);
   }
 
+  /// Queues a wire value while the replica shows [localValue]. The encryption
+  /// migration uses it so lists keep plaintext even though the server receives
+  /// ciphertext.
+  Future<void> queueField(
+    String entity,
+    String entityId,
+    String field,
+    Object? wireValue, {
+    Object? localValue,
+    bool updateLocal = false,
+  }) async {
+    final ts = await clock.next();
+    await db.enqueueField(entity, entityId, field, wireValue, ts, engine.device);
+    if (updateLocal) await db.setLocalValue(entity, entityId, field, localValue);
+  }
+
   /// The live direct children of a task, in manual order.
   Future<List<Task>> childrenOf(String parentId) async {
     final rows = await db.entities('task');

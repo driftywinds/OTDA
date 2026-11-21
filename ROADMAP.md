@@ -12,7 +12,8 @@ Status values: **todo** · **doing** · **done**.
 **Current state:** Milestone 1 (Trash, task metadata, subtasks), Milestone 2
 (workspaces, project sharing, invitations, public links) and Milestone 4 (export,
 statistics, activity, theming) are done, except that note pages await the notes
-feature. Milestone 3 (the E2EE lifecycle) remains.
+feature. Milestone 3 is in progress: enable/disable and the resumable rewrite are
+done; file encryption and biometric unlock remain.
 
 ---
 
@@ -238,6 +239,8 @@ This milestone closes that.
 
 ### 3.1 Enable and disable
 
+**Status: done (text fields; file bytes are 3.3).**
+
 **Scope**
 - Enable: passphrase (12+ characters), recovery key shown once, key record stored,
   then the migration below. Confirmation copy that says the server will hold
@@ -246,7 +249,16 @@ This milestone closes that.
   delete the key record, then re-write content as plaintext.
 - Both need a fresh sign-in confirmation (`/auth/reauth`), as the server requires.
 
+**Notes** settings now owns the lifecycle: choose a passphrase with an explicit
+unrecoverable warning, save the one-time recovery key, store the record and rewrite;
+turn off with a fresh password/code confirmation (the server's `DELETE` is
+`sensitive`). The server only requires re-authentication for *replacing* a record,
+not for the first create; the app still confirms before disabling. Files are not
+touched because the app has no attachments yet, and that is stated in 3.3.
+
 ### 3.2 Plaintext migration
+
+**Status: done (the app's entities).**
 
 **Why** turning encryption on must re-write every content field, and any plaintext
 written later (REST, email, import) must be rewritten as ciphertext when it arrives.
@@ -259,6 +271,16 @@ written later (REST, email, import) must be rewritten as ciphertext when it arri
 - `POST /api/v1/encryption/purge-history` as a follow-up action.
 - The pre-0.21 gap: notes, time entries, routines, frames, slots, locations and the
   review line were never re-written by older clients; the job must cover them.
+
+**Notes** the job scans the replica's `fields` table, so it already covers every entity
+`fields.dart` names, including the pre-0.21 kinds; there is no per-kind cursor to go
+stale. Only personal scope is sealed: a task follows its project, sections/fields/rules/
+notes their project, comments/attachments/time entries their task, and a project with
+more than one member stays plaintext (stray ciphertext there is rewritten back). The
+replica keeps plaintext; only the outbox carries ciphertext, so lists stay readable
+during and after the rewrite. Plaintext that arrives from sync is sealed on sight.
+Progress counts and a resumable mode are stored under `e2ee.migration`; the purge
+button is on the same card.
 
 ### 3.3 File encryption
 
