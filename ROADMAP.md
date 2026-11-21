@@ -11,7 +11,7 @@ Status values: **todo** · **doing** · **done**.
 
 **Current state:** Milestone 1 (Trash, task metadata, subtasks) and Milestone 4
 (export, statistics, activity, theming) are done. Milestone 2 is in progress: its
-workspace screen is done, sharing/members, invitations and public links remain.
+workspaces and project-sharing screens are done; invitations and public links remain.
 Milestone 3 (the E2EE lifecycle) remains.
 
 ---
@@ -154,6 +154,8 @@ each change.
 
 ### 2.2 Sharing and members
 
+**Status: done.**
+
 **Why** a project cannot be shared from the app at all.
 
 **Scope**
@@ -162,6 +164,16 @@ each change.
   (`409 encryption_enabled`) with a sentence that explains why, not a raw error.
 - Shared projects are never encrypted: the UI must show that state on the project.
 - Server routes: `projects/{id}/members`, `projects/{id}/grants`.
+
+**Notes** the project menu opens a member screen with the owner and members (role,
+email, group the role comes from), add-by-email with viewer/editor/admin, change role
+and remove. The server may add at once or send an invitation; the screen re-reads the
+member list and says which happened, and shows pending invitations read-only (they
+are revoked from the invitations screen next). A shared project shows a people icon
+in the project list and a "Shared projects are never end-to-end encrypted" banner
+here. An encrypted account sees why a personal project cannot be shared before the
+button is pressed, and a `409 encryption_enabled` is still mapped to the same
+sentence. Group grants are listed read-only; group management is the web app's job.
 
 ### 2.3 Invitations
 

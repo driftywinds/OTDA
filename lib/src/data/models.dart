@@ -120,6 +120,91 @@ class WorkspaceGroup {
       );
 }
 
+/// One person on a shared project.
+class ProjectMember {
+  const ProjectMember({
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.role,
+    this.avatarVersion = 0,
+    this.via = const [],
+  });
+
+  final String userId;
+  final String name;
+  final String email;
+
+  /// owner, admin, editor or viewer.
+  final String role;
+  final int avatarVersion;
+
+  /// Groups the role comes from; empty for a direct grant.
+  final List<WorkspaceGroup> via;
+
+  static ProjectMember fromJson(Map<String, dynamic> json) => ProjectMember(
+        userId: json['userId']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        email: json['email']?.toString() ?? '',
+        role: json['role']?.toString() ?? '',
+        avatarVersion: (json['avatarVersion'] as num?)?.toInt() ?? 0,
+        via: [
+          for (final raw in (json['via'] as List?) ?? const [])
+            if (raw is Map)
+              WorkspaceGroup(
+                raw['id']?.toString() ?? '',
+                raw['name']?.toString() ?? '',
+                const [],
+              ),
+        ],
+      );
+}
+
+/// One group grant on a project.
+class ProjectGrant {
+  const ProjectGrant(this.groupId, this.name, this.role);
+  final String groupId;
+  final String name;
+  final String role;
+
+  static ProjectGrant fromJson(Map<String, dynamic> json) => ProjectGrant(
+        json['groupId']?.toString() ?? '',
+        json['name']?.toString() ?? '',
+        json['role']?.toString() ?? '',
+      );
+}
+
+/// The caller's view of one shared project: role, owner and members.
+class ProjectMembership {
+  ProjectMembership(this.raw);
+  final Map<String, dynamic> raw;
+
+  String get projectId => raw['projectId']?.toString() ?? '';
+  String get role => raw['role']?.toString() ?? '';
+  String get ownerId => raw['ownerId']?.toString() ?? '';
+  bool get isOwner => role == 'owner';
+  bool get canManage => role == 'owner' || role == 'admin';
+
+  /// A project is shared once somebody besides its owner is on it; the server
+  /// never encrypts a shared project, even after encryption is enabled.
+  bool get isShared => members.length > 1;
+
+  List<ProjectMember> get members => [
+        for (final raw in (this.raw['members'] as List?) ?? const [])
+          if (raw is Map) ProjectMember.fromJson(raw.cast<String, dynamic>()),
+      ];
+  List<ProjectGrant> get grants => [
+        for (final raw in (this.raw['grants'] as List?) ?? const [])
+          if (raw is Map) ProjectGrant.fromJson(raw.cast<String, dynamic>()),
+      ];
+
+  /// Open e-mail invitations, when the caller manages the project.
+  List<Map<String, dynamic>> get pending => [
+        for (final raw in (this.raw['pending'] as List?) ?? const [])
+          if (raw is Map) raw.cast<String, dynamic>(),
+      ];
+}
+
 /// A directory entry from the sync exchange: projects, labels and views live in
 /// one, and a person can be in several.
 class Workspace {

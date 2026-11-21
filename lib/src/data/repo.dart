@@ -99,6 +99,30 @@ class Repo {
     }
   }
 
+  /// The shared projects the sync exchange last reported, with roles and
+  /// members. A personal project has no entry.
+  Future<List<ProjectMembership>> memberships() async {
+    final raw = await db.meta('sync.memberships');
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final entry in decoded)
+          if (entry is Map) ProjectMembership(entry.cast<String, dynamic>()),
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  Future<ProjectMembership?> membershipFor(String projectId) async {
+    for (final membership in await memberships()) {
+      if (membership.projectId == projectId) return membership;
+    }
+    return null;
+  }
+
   /// The account's own preferences: one synced row per account under `me`
   /// (`date_format`, `week_start`, `language`, `row_layout`, …). Absent fields
   /// mean "follow the device", as the server's defaults do.

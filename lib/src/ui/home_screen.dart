@@ -11,6 +11,7 @@ import '../e2ee/session.dart';
 import 'activity_screen.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
+import 'project_sharing_screen.dart';
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'task_sheet.dart';
@@ -54,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _searchField = TextEditingController();
   String _query = '';
   List<Workspace> _workspaces = const [];
+  Set<String> _sharedProjects = const {};
   String? _workspaceId;
   String _calendarDay = '';
 
@@ -216,6 +218,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final tasks = await repo.tasks();
     final projects = await repo.projects();
     final workspaces = await repo.workspaces();
+    final memberships = await repo.memberships();
     final collapsedRaw = await repo.db.meta('ui.collapsed');
     if (!mounted) return;
     final defaultWorkspace = workspaces.where((w) => w.isDefault).map((w) => w.id).firstOrNull ??
@@ -248,6 +251,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         today: _today,
       );
       _workspaces = workspaces;
+      _sharedProjects = {
+        for (final membership in memberships)
+          if (membership.isShared) membership.projectId,
+      };
       // The active workspace can disappear when it is left or deleted on another
       // device; fall back to the default instead of filtering everything out.
       if (!workspaces.any((workspace) => workspace.id == _workspaceId)) {
@@ -662,8 +669,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _go(TaskView.project, projectId: created.id);
   }
 
-  Future<void> _updateProject(String id, Map<String, Object?> fields) async {
-    final repo = widget.state.repo;
+  Future<void> _shareProject(String id) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectSharingScreen(
+          state: widget.state,
+          projectId: id,
+          projectName: _projectNames[id] ?? 'Project',
+        ),
+      ),
+    );
+    await _load();
+  }
+
+  Future<void> _updateProject(String id, Map<String, Object?> fields) async {    final repo = widget.state.repo;
     if (repo == null) return;
     await repo.updateProject(id, fields);
     await _load();
@@ -856,6 +875,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onProject: (id) => _go(TaskView.project, projectId: id),
         onCreateProject: _createProject,
         onUpdateProject: _updateProject,
+        onShareProject: _shareProject,
+        sharedProjects: _sharedProjects,
         onDeleteProjects: _deleteProjects,
         onWorkspace: _chooseWorkspace,
       ),
@@ -1399,6 +1420,8 @@ class _AppDrawer extends StatelessWidget {
     required this.onProject,
     required this.onCreateProject,
     required this.onUpdateProject,
+    required this.onShareProject,
+    required this.sharedProjects,
     required this.onDeleteProjects,
     required this.onWorkspace,
   });
@@ -1418,6 +1441,8 @@ class _AppDrawer extends StatelessWidget {
   final void Function(String projectId) onProject;
   final void Function(Map<String, Object?> fields) onCreateProject;
   final void Function(String projectId, Map<String, Object?> fields) onUpdateProject;
+  final void Function(String projectId) onShareProject;
+  final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDeleteProjects;
   final VoidCallback onWorkspace;
 
@@ -1520,6 +1545,8 @@ class _AppDrawer extends StatelessWidget {
                     onOpen: onProject,
                     onCreate: onCreateProject,
                     onUpdate: onUpdateProject,
+                    onShare: onShareProject,
+                    sharedProjects: sharedProjects,
                     onDelete: onDeleteProjects,
                     inset: inset,
                   ),
@@ -1676,6 +1703,8 @@ class _ProjectSection extends StatefulWidget {
     required this.onOpen,
     required this.onCreate,
     required this.onUpdate,
+    required this.onShare,
+    required this.sharedProjects,
     required this.onDelete,
     required this.inset,
   });
@@ -1688,6 +1717,8 @@ class _ProjectSection extends StatefulWidget {
   final void Function(String projectId) onOpen;
   final void Function(Map<String, Object?> fields) onCreate;
   final void Function(String projectId, Map<String, Object?> fields) onUpdate;
+  final void Function(String projectId) onShare;
+  final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDelete;
   final Widget Function(Widget child) inset;
 
@@ -1748,10 +1779,15 @@ class _ProjectSectionState extends State<_ProjectSection> {
                 widget.projects[id] ?? 'Project',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-              subtitle: const Text('Hold to edit or delete'),
+              subtitle: const Text('Hold to edit, share or delete'),
               dense: true,
             ),
             const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.group_add_outlined),
+              title: const Text('Share project…'),
+              onTap: () => Navigator.of(context).pop('share'),
+            ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('Edit project'),
@@ -1770,6 +1806,8 @@ class _ProjectSectionState extends State<_ProjectSection> {
     if (!mounted || action == null) return;
     if (action == 'edit') {
       await _edit(id: id);
+    } else if (action == 'share') {
+      widget.onShare(id);
     } else {
       await _confirmDelete([id]);
     }
@@ -1905,11 +1943,22 @@ class _ProjectSectionState extends State<_ProjectSection> {
                 fontWeight: widget.currentId == entry.key ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-            trailing: widget.counts[entry.key] == 0
+            trailing: widget.counts[entry.key] == 0 && !widget.sharedProjects.contains(entry.key)
                 ? null
-                : Text(
-                    '${widget.counts[entry.key]}',
-                    style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.sharedProjects.contains(entry.key))
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Icon(Icons.group_outlined, size: 15, color: scheme.onSurfaceVariant),
+                        ),
+                      if (widget.counts[entry.key] != 0)
+                        Text(
+                          '${widget.counts[entry.key]}',
+                          style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                    ],
                   ),
             onTap: () => _selecting ? _toggle(entry.key) : widget.onOpen(entry.key),
             onLongPress: () => _menu(entry.key),
