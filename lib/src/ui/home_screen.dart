@@ -11,12 +11,14 @@ import '../e2ee/session.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
 import 'settings_screen.dart';
+import 'stats_screen.dart';
 import 'task_sheet.dart';
 import 'trash_screen.dart';
 import 'calendar_month.dart';
 import '../data/occurrences.dart';
 import '../reminders/service.dart';
 import '../data/recurrence.dart';
+import '../data/stats.dart';
 import 'format.dart';
 import '../util/log.dart';
 import 'theme.dart';
@@ -68,6 +70,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Direct-children progress per parent, "2/3". Derived from the replica.
   Map<String, String> _subtaskProgress = const {};
+
+  /// The compact "this week" figure on Today, computed with the rest of the lists.
+  Stats? _weekStats;
 
   /// Tasks whose children are folded away, per device and not synced.
   Set<String> _collapsed = {};
@@ -233,6 +238,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         for (final entry in byParent.entries)
           entry.key: '${entry.value.where((t) => t.isCompleted).length}/${entry.value.length}',
       };
+      _weekStats = computeStats(
+        tasks: tasks,
+        projects: projects,
+        labels: const [],
+        period: periodFor(StatsPeriodKind.thisWeek, _today),
+        today: _today,
+      );
       _workspaces = workspaces;
       _workspaceId ??= defaultWorkspace;
       // A project without a workspace belongs to the account's default one.
@@ -622,6 +634,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _openStats() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => StatsScreen(state: widget.state)),
+    );
+    await _load();
+  }
+
   Future<void> _createProject(Map<String, Object?> fields) async {
     final repo = widget.state.repo;
     if (repo == null) return;
@@ -918,6 +937,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 showSync: _syncFlash,
               ),
             ),
+            if (_view == TaskView.today && _weekStats != null)
+              SliverToBoxAdapter(
+                child: _WeekCard(stats: _weekStats!, onTap: _openStats),
+              ),
             if (_view == TaskView.calendar)
               SliverToBoxAdapter(
                 child: MonthCalendar(
@@ -995,6 +1018,77 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: _BottomBar(view: _view, onSelect: _go),
     ));
+  }
+}
+
+/// A compact "this week" card on Today: the completion count and a week of
+/// bars. It opens the full Statistics screen.
+class _WeekCard extends StatelessWidget {
+  const _WeekCard({required this.stats, required this.onTap});
+
+  final Stats stats;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final busiest = stats.busiest;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+            child: Row(
+              children: [
+                Icon(Icons.insights_rounded, size: 20, color: scheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        stats.completed == 1 ? '1 task done this week' : '${stats.completed} tasks done this week',
+                        style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 18,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (final day in stats.perDay)
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 2),
+                                  child: Container(
+                                    height: day.count == 0
+                                        ? 2
+                                        : 4 + (14 * day.count / (busiest == 0 ? 1 : busiest)),
+                                    decoration: BoxDecoration(
+                                      color: day.count == 0 ? scheme.surfaceContainerHighest : scheme.primary,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 18, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1437,6 +1531,16 @@ class _AppDrawer extends StatelessWidget {
               ),
             ),
             rule,
+            ListTile(
+              dense: true,
+              leading: mark(const Icon(Icons.insights_rounded, size: 20)),
+              title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w500)),
+              onTap: () {
+                final navigator = Navigator.of(context);
+                navigator.pop();
+                navigator.push(MaterialPageRoute(builder: (_) => StatsScreen(state: state)));
+              },
+            ),
             ListTile(
               dense: true,
               leading: mark(const Icon(Icons.delete_outline_rounded, size: 20)),

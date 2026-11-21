@@ -243,11 +243,19 @@ minimum is an in-app viewer for images and PDFs plus a share sheet for the rest.
 
 ### 4.2 Statistics
 
+**Status: done.**
+
 **Scope**
 - Completed per day/week, by project and by label, from the local replica so it works
   offline.
 - Streaks for recurring tasks.
 - A compact "this week" card on Today, and a full screen from the sidebar.
+
+**Notes** the screen offers this week, last week, this month, this quarter and this
+year; bars are daily up to a month, then weekly, then monthly. Streaks are read from
+the occurrence records: consecutive completed occurrences with no missed scheduled
+gap (a skip breaks it, an overdue series has none), using the rule's interval as the
+tolerance. A label counts once per task that carries it.
 
 ### 4.3 Activity feed
 
