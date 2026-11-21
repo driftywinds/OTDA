@@ -12,14 +12,52 @@ import org.json.JSONObject
 /** Payload key carrying the `otda://...` URI of the tapped element into the callbacks. */
 internal val actionUriKey = ActionParameters.Key<String>("otda.widget.uri")
 
+/**
+ * The widget's check mark. Runs entirely inside the widget's own process: it flips the row in the
+ * stored snapshots, queues the change for the app and redraws, with no activity, no Flutter and no
+ * network. The app applies the queued change and syncs in the background.
+ */
 class CompleteAction : ActionCallback {
 
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val uri = parameters[actionUriKey]?.let(Uri::parse) ?: return
         val taskId = uri.getQueryParameter("id")
-        if (taskId != null) markTaskDone(context, taskId, uri.getQueryParameter("day"), uri.getQueryParameter("done") != "0")
-        TasksWidget().update(context, glanceId)
+        if (taskId != null) {
+            val day = uri.getQueryParameter("day")
+            val done = uri.getQueryParameter("done") != "0"
+            markTaskDone(context, taskId, day, done)
+            enqueuePendingOp(context, taskId, day, done)
+        }
+        updateWidgets(context)
         sendToDart(context, uri)
+    }
+}
+
+private val pendingLock = Any()
+
+/**
+ * Durable queue of changes made on the widget that the app has not applied yet (`pending_ops`).
+ * The Dart side applies them in order and records how far it got in `pending_ack`; entries at or
+ * below the ack are pruned here. Applying an op twice is harmless, so a lost ack only repeats work.
+ */
+internal fun enqueuePendingOp(context: Context, taskId: String, day: String?, done: Boolean) {
+    synchronized(pendingLock) {
+        val prefs = widgetPrefs(context)
+        val ack = prefs.getString("pending_ack", null)?.toLongOrNull() ?: 0L
+        val kept = ArrayList<JSONObject>()
+        runCatching {
+            val old = JSONArray(prefs.getString("pending_ops", null) ?: "[]")
+            for (i in 0 until old.length()) {
+                val op = old.optJSONObject(i) ?: continue
+                if (op.optLong("at") > ack) kept.add(op)
+            }
+        }
+        val last = kept.maxOfOrNull { it.optLong("at") } ?: 0L
+        val at = maxOf(System.currentTimeMillis(), last + 1)
+        kept.add(
+            JSONObject().put("id", taskId).put("day", day ?: "").put("done", done).put("at", at),
+        )
+        prefs.edit().putString("pending_ops", JSONArray(kept).toString()).commit()
     }
 }
 

@@ -3,6 +3,7 @@ package com.dw.otda
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.dw.otda.widget.enqueuePendingOp
 import com.dw.otda.widget.markRefreshing
 import com.dw.otda.widget.markTaskDone
 import com.dw.otda.widget.requestWidgetUpdate
@@ -36,7 +37,9 @@ class CompleteActivity : FlutterActivity() {
             markRefreshing(this)
             requestWidgetUpdate(this)
         } else if (id != null) {
-            markTaskDone(this, id, uri.getQueryParameter("day"), uri.getQueryParameter("done") != "0")
+            val done = uri.getQueryParameter("done") != "0"
+            markTaskDone(this, id, uri.getQueryParameter("day"), done)
+            enqueuePendingOp(this, id, uri.getQueryParameter("day"), done)
             requestWidgetUpdate(this)
         }
         super.onCreate(savedInstanceState)

@@ -444,7 +444,7 @@ private fun Header(snapshot: Snapshot, projectId: String?, appWidgetId: Int, sty
             style = style,
             tint = if (refreshing) Accent else null,
         ) {
-            actionStartActivity(CompleteActivity.intent(context, Uri.parse("otda://refresh")))
+            actionRunCallback<RefreshAction>()
         }
         TapTarget(R.drawable.ic_widget_add, "New task", target = 36, icon = 20, style = style) {
             actionStartActivity(quickAddIntent(context, projectId))
@@ -482,7 +482,7 @@ private fun TaskRow(task: WidgetRow.Task, style: WidgetStyle) {
     ) {
         Box(
             modifier = GlanceModifier.size(style.grow(40))
-                .clickable(actionStartActivity(CompleteActivity.intent(context, completeTaskUri(task)))),
+                .clickable(actionRunCallback<CompleteAction>(completeParameters(task))),
             contentAlignment = Alignment.Center,
         ) {
             if (task.done) {

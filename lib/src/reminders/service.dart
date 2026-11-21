@@ -605,6 +605,33 @@ Future<void> syncHeadless(Repo repo) async {
   }
 }
 
+/// Applies ticks and un-ticks made on the widget (`pending_ops`, written natively) to the replica, in
+/// order, and records progress in `pending_ack`. The widget already shows them; this makes them real.
+Future<void> applyPendingWidgetOps(Repo repo) async {
+  try {
+    final raw = await HomeWidget.getWidgetData<String>('pending_ops');
+    if (raw == null || raw.isEmpty) return;
+    var ack = int.tryParse(await HomeWidget.getWidgetData<String>('pending_ack') ?? '') ?? 0;
+    final ops = (jsonDecode(raw) as List)
+        .whereType<Map>()
+        .where((op) => ((op['at'] as num?)?.toInt() ?? 0) > ack)
+        .toList()
+      ..sort((a, b) => ((a['at'] as num?) ?? 0).compareTo((b['at'] as num?) ?? 0));
+    if (ops.isEmpty) return;
+    for (final op in ops) {
+      final id = op['id']?.toString();
+      final done = op['done'] != false;
+      final task = id == null ? null : (await repo.tasks()).where((t) => t.id == id).firstOrNull;
+      if (task != null && task.isCompleted != done) await repo.setCompleted(task, done);
+      ack = (op['at'] as num).toInt();
+      await HomeWidget.saveWidgetData<String>('pending_ack', '$ack');
+    }
+    await ReminderService.instance.rearmFrom(repo);
+  } on Object catch (e) {
+    await DebugLog.add('widget: applying pending ops failed: $e', source: ReminderService._source);
+  }
+}
+
 String _todayString() {
   final now = DateTime.now();
   return '${now.year.toString().padLeft(4, '0')}-'
@@ -625,6 +652,8 @@ Future<void> refreshTaskSurfaces(Repo repo) async {
 
 /// Reads the replica and pushes every widget snapshot from it. Works with no UI.
 Future<void> pushWidgetsFromRepo(Repo repo) async {
+  // Changes made on the widget come first, so a snapshot never undoes a tick the person just made.
+  await applyPendingWidgetOps(repo);
   final tasks = await repo.tasks();
   final projects = await repo.projects();
   await pushWidgets(tasks, projects, today: _todayString());
@@ -699,14 +728,6 @@ Future<void> onWidgetAction(Uri? uri) async {
   } on Object catch (e) {
     await DebugLog.add('widget action: could not open the database: $e', source: 'bg');
     return;
-  }
-  if (uri.host == 'complete') {
-    final taskId = uri.queryParameters['id'];
-    if (taskId == null) return;
-    final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
-    final complete = uri.queryParameters['done'] != '0';
-    if (task != null) await repo.setCompleted(task, complete);
-    await ReminderService.instance.rearmFrom(repo);
   }
   if (uri.host == 'refresh') await syncHeadless(repo);
   // Complete, refresh and "no snapshot yet" all end the same way: rewrite every

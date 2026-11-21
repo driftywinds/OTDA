@@ -6,7 +6,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import kotlinx.coroutines.delay
 
-private const val REFRESH_TIMEOUT_MS = 25_000L
+private const val REFRESH_TIMEOUT_MS = 8_000L
 
 /** Raises the "refreshing" flag so the next redraw shows the spinner state. */
 internal fun markRefreshing(context: Context) {
@@ -25,8 +25,7 @@ internal fun isRefreshing(context: Context): Boolean {
 }
 
 /**
- * Fallback only: the header's refresh button now starts CompleteActivity with otda://refresh, the same
- * reliable path as the tick. Kept so an old pinned widget layout that still points here keeps working.
+ * The header's refresh button. Paints the "refreshing" state at once, then asks the app to sync.
  */
 class RefreshAction : ActionCallback {
 
@@ -35,7 +34,7 @@ class RefreshAction : ActionCallback {
         updateWidgets(context)
         sendToDart(context, android.net.Uri.parse("otda://refresh"))
         // Do not leave the spinner up for ever if the app never answers.
-        delay(REFRESH_TIMEOUT_MS)
+        delay(REFRESH_TIMEOUT_MS + 500L)
         updateWidgets(context)
     }
 }
