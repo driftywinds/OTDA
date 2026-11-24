@@ -25,6 +25,14 @@ void main() {
     expect(daysBetween(today, 'nope'), isNull);
   });
 
+  test('serverVersionLabel has exactly one leading v', () {
+    expect(serverVersionLabel('v1.7.0'), 'v1.7.0');
+    expect(serverVersionLabel('1.7.0'), 'v1.7.0');
+    expect(serverVersionLabel('  v1.7.0  '), 'v1.7.0');
+    expect(serverVersionLabel(''), '?');
+    expect(serverVersionLabel(null), '?');
+  });
+
   test('durationLabel', () {
     expect(durationLabel(45), '45m');
     expect(durationLabel(120), '2h');

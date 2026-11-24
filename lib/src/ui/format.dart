@@ -23,6 +23,15 @@ String friendlyDate(String date, String today) {
   return (sameYear ? DateFormat.MMMd() : DateFormat.yMMMd()).format(parsed);
 }
 
+/// A server version with exactly one leading `v`: `1.7.0` and `v1.7.0` both
+/// read as `v1.7.0`, so a version field that already carries the prefix never
+/// becomes `vv1.7.0`.
+String serverVersionLabel(String? version) {
+  final value = version?.trim() ?? '';
+  if (value.isEmpty) return '?';
+  return value.startsWith('v') ? value : 'v$value';
+}
+
 /// Minutes as "45m", "2h" or "1h 30m".
 String durationLabel(int minutes) {
   if (minutes < 60) return '${minutes}m';

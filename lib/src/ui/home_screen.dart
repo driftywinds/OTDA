@@ -1463,10 +1463,7 @@ class _AppDrawer extends StatelessWidget {
   final VoidCallback onWorkspace;
 
   /// `v1.5.0` reads as `v1.5.0`, not `vv1.5.0`.
-  static String _versionLabel(String? version) {
-    if (version == null || version.isEmpty) return '?';
-    return version.startsWith('v') ? version : 'v$version';
-  }
+  static String _versionLabel(String? version) => serverVersionLabel(version);
 
   @override
   Widget build(BuildContext context) {

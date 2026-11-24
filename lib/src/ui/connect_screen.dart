@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../auth/auth_service.dart';
+import 'format.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -146,7 +147,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      connected ? 'Connected to ${_origin!.host} · v${_info!.version}' : 'Your tasks, your server.',
+                      connected
+                          ? 'Connected to ${_origin!.host} · ${serverVersionLabel(_info!.version)}'
+                          : 'Your tasks, your server.',
                       style: connected
                           ? theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
