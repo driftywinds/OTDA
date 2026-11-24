@@ -57,7 +57,6 @@ class ReminderService {
 
   static const _enabledPref = 'notif.enabled';
   static const _timePref = 'notif.default_time';
-  static const _offsetsPref = 'notif.task_offsets';
   static const _askedPref = 'notif.asked.v2';
   static const _alarmClockPref = 'notif.alarm_clock';
 
@@ -186,39 +185,6 @@ class ReminderService {
     await prefs.setString(_timePref, value);
   }
 
-  /// Per-task reminder offsets in minutes before the due time. Device-local:
-  /// OpenTodo's reminder rows sync, but this app has no reminder editor for
-  /// them, so the choice lives beside the other notification settings.
-  Future<Map<String, int>> reminderOffsets() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final raw = prefs.getString(_offsetsPref);
-    if (raw == null || raw.isEmpty) return const {};
-    try {
-      final json = jsonDecode(raw);
-      if (json is! Map) return const {};
-      return {
-        for (final entry in json.entries)
-          if (entry.value is num) '${entry.key}': (entry.value as num).round(),
-      };
-    } on Object {
-      return const {};
-    }
-  }
-
-  Future<int?> reminderOffset(String taskId) async => (await reminderOffsets())[taskId];
-
-  Future<void> setReminderOffset(String taskId, int? minutes) async {
-    final offsets = {...await reminderOffsets()};
-    if (minutes == null) {
-      offsets.remove(taskId);
-    } else {
-      offsets[taskId] = minutes;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_offsetsPref, jsonEncode(offsets));
-  }
-
   /// Alarm-clock mode: Android treats the reminder like a real alarm, so phone makers'
   /// battery managers (Xiaomi, Oppo, ...) do not defer it. The cost is a small alarm icon in
   /// the status bar while a reminder is pending. On by default until the phone proves it is
@@ -275,10 +241,12 @@ class ReminderService {
     final tasks = await repo.tasks();
     final projects = await repo.projects();
     final snoozes = await repo.snoozes();
+    final offsets = await repo.reminderOffsets();
     await rearm(
       tasks,
       projectNames: {for (final project in projects) project.id: project.name},
       snoozes: snoozes,
+      offsets: offsets,
     );
   }
 
@@ -288,8 +256,9 @@ class ReminderService {
     List<Task> tasks, {
     Map<String, String> projectNames = const {},
     Map<String, DateTime> snoozes = const {},
+    Map<String, int> offsets = const {},
   }) {
-    final run = _queue.then((_) => _rearmNow(tasks, projectNames, snoozes));
+    final run = _queue.then((_) => _rearmNow(tasks, projectNames, snoozes, offsets));
     _queue = run.catchError((Object _) {});
     return run;
   }
@@ -298,6 +267,7 @@ class ReminderService {
     List<Task> tasks,
     Map<String, String> projectNames,
     Map<String, DateTime> snoozes,
+    Map<String, int> offsets,
   ) async {
     try {
       await init();
@@ -328,7 +298,7 @@ class ReminderService {
         snoozedUntil: {
           for (final entry in snoozes.entries) entry.key: tz.TZDateTime.from(entry.value, tz.local),
         },
-        offsets: await reminderOffsets(),
+        offsets: offsets,
       );
       final wanted = {for (final reminder in plan) reminder.id};
       for (final request in pending) {

@@ -761,6 +761,51 @@ class Repo {
     return out;
   }
 
+  /// Relative reminders in minutes before the due time, keyed by task. OpenTodo
+  /// stores these as separate `reminder` entities; the repeat sheet manages one
+  /// per task, so the first live relative reminder wins.
+  Future<Map<String, int>> reminderOffsets() async {
+    final out = <String, int>{};
+    for (final row in await db.entities('reminder')) {
+      if (row['deleted_at'] != null || row['kind'] != 'relative') continue;
+      final taskId = row['task_id']?.toString();
+      final offset = row['offset_minutes'];
+      if (taskId == null || taskId.isEmpty || offset is! num) continue;
+      out.putIfAbsent(taskId, () => (-offset).round());
+    }
+    return out;
+  }
+
+  Future<int?> taskReminderOffset(String taskId) async => (await reminderOffsets())[taskId];
+
+  /// Creates, updates or clears the reminder the repeat sheet owns for [task].
+  /// [minutes] is minutes before the due time; the wire value is negative.
+  Future<void> setTaskReminderOffset(Task task, int? minutes) async {
+    final rows = (await db.entities('reminder'))
+        .where((row) =>
+            row['deleted_at'] == null &&
+            row['task_id'] == task.id &&
+            row['kind'] == 'relative')
+        .toList();
+    final ts = await clock.next();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (minutes == null) {
+      if (rows.isEmpty) return;
+      await db.putField('reminder', rows.first['id'] as String, 'deleted_at', now, ts, engine.device);
+      return;
+    }
+    if (rows.isNotEmpty) {
+      await db.putField('reminder', rows.first['id'] as String, 'offset_minutes', -minutes, ts, engine.device);
+      return;
+    }
+    await createEntity('reminder', newId(), {
+      'task_id': task.id,
+      'kind': 'relative',
+      'offset_minutes': -minutes,
+      'created_at': now,
+    });
+  }
+
   /// Renames a project or changes its colour or icon, one field at a time.
   Future<void> updateProject(String projectId, Map<String, Object?> fields) async {
     final ts = await clock.next();

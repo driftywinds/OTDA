@@ -174,7 +174,7 @@ class _TaskSheetState extends State<TaskSheet> {
   /// the time, the reminder, the rule and how the series ends.
   Future<void> _pickRepeat() async {
     final today = _todayIso();
-    final reminder = await ReminderService.instance.reminderOffset(widget.task.id);
+    final reminder = await widget.repo.taskReminderOffset(widget.task.id);
     if (!mounted) return;
     final result = await showRepeatSheet(
       context,
@@ -195,7 +195,7 @@ class _TaskSheetState extends State<TaskSheet> {
         setState(() => _due = result.due);
       }
       if (result.reminderMinutes != reminder) {
-        await ReminderService.instance.setReminderOffset(widget.task.id, result.reminderMinutes);
+        await widget.repo.setTaskReminderOffset(widget.task, result.reminderMinutes);
       }
       await refreshTaskSurfaces(widget.repo);
     } on Object catch (e) {

@@ -310,7 +310,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              'The reminder is stored on this device. The repeat rule and due time sync with your account.',
+              'The reminder and repeat rule sync with your account.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
