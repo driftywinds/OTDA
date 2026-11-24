@@ -8,6 +8,7 @@ import 'package:otda/src/e2ee/keys.dart';
 class _MemoryBackend implements BiometricBackend {
   String? identity;
   String? key;
+  bool failRead = false;
 
   @override
   Future<void> writeIdentity(String value) async => identity = value;
@@ -18,7 +19,11 @@ class _MemoryBackend implements BiometricBackend {
   @override
   Future<void> writeKey(String value) async => key = value;
   @override
-  Future<String?> readKey() async => key;
+  Future<String?> readKey() async {
+    if (failRead) throw StateError('biometric prompt cancelled');
+    return key;
+  }
+
   @override
   Future<void> deleteKey() async => key = null;
 }
@@ -71,6 +76,32 @@ void main() {
     expect(await unlock.enrolled(first), isFalse);
     expect(backend.identity, isNull);
     expect(backend.key, isNull);
+  });
+
+  test('a record without a creation time still supports biometrics', () async {
+    final backend = _MemoryBackend();
+    final unlock = BiometricUnlock(backend: backend, supportedOverride: true);
+    final key = Uint8List.fromList(List<int>.generate(32, (i) => i));
+    final noTime = record(0);
+
+    await unlock.enable(key, noTime);
+    expect(await unlock.enrolled(noTime), isTrue);
+    expect(await unlock.read(noTime), key);
+  });
+
+  test('enrollment fails and cleans up when the OS prompt is cancelled', () async {
+    final backend = _MemoryBackend();
+    final unlock = BiometricUnlock(backend: backend, supportedOverride: true);
+    final first = record(100);
+    backend.failRead = true;
+
+    await expectLater(
+      unlock.enable(Uint8List.fromList(List<int>.generate(32, (i) => i)), first),
+      throwsStateError,
+    );
+    expect(backend.identity, isNull);
+    expect(backend.key, isNull);
+    expect(await unlock.enrolled(first), isFalse);
   });
 
   test('a corrupt or invalidated keystore read is dropped, not thrown', () async {

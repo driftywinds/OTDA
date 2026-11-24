@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart' as digest;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -75,9 +76,9 @@ class BiometricUnlock {
   /// Whether this account key has a wrapped copy here. Reads only the non-secret
   /// identity slot, so it never prompts.
   Future<bool> enrolled(KeyRecord record) async {
-    if (!supported || record.createdAt == 0) return false;
+    if (!supported) return false;
     try {
-      return await _backend.readIdentity() == '${record.createdAt}';
+      return await _backend.readIdentity() == _identity(record);
     } on Object {
       return false;
     }
@@ -85,15 +86,37 @@ class BiometricUnlock {
 
   Future<void> enable(Uint8List accountKey, KeyRecord record) async {
     if (!supported) return;
-    await _backend.writeKey(jsonEncode({'key': b64url(accountKey), 'createdAt': record.createdAt}));
-    await _backend.writeIdentity('${record.createdAt}');
+    final id = _identity(record);
+    await _backend.writeKey(jsonEncode({'key': b64url(accountKey), 'id': id}));
+    await _backend.writeIdentity(id);
+    try {
+      // Writing the protected item alone does not prove the OS will accept a
+      // biometric prompt later. Reading it back forces that prompt now, so
+      // "enabled" only appears after the fingerprint/face actually resolves.
+      final raw = await _backend.readKey();
+      final map = raw == null ? null : (jsonDecode(raw) as Map).cast<String, dynamic>();
+      if (map == null || map['id'] != id || map['key'] != b64url(accountKey)) {
+        throw StateError('biometric copy did not survive the round trip');
+      }
+    } on Object {
+      await disable();
+      rethrow;
+    }
   }
+
+  /// A stable identity for the key record. `createdAt` was not reliable (older
+  /// records report 0), and including the wrapped material invalidates the copy
+  /// when the passphrase is changed.
+  String _identity(KeyRecord record) => digest.sha256
+      .convert(utf8.encode('${record.salt}|${record.wrappedByPassphrase}|${record.createdAt}'))
+      .toString();
 
   /// Unwraps the key. A copy belonging to another key record is deleted rather
   /// than used, and a keystore that invalidated the key (biometrics changed) is
   /// cleaned up too.
   Future<Uint8List?> read(KeyRecord record) async {
-    if (!supported || record.createdAt == 0) return null;
+    if (!supported) return null;
+    final id = _identity(record);
     final String? stored;
     try {
       stored = await _backend.readIdentity();
@@ -101,7 +124,7 @@ class BiometricUnlock {
       return null;
     }
     if (stored == null) return null;
-    if (stored != '${record.createdAt}') {
+    if (stored != id) {
       await disable();
       return null;
     }
@@ -112,7 +135,7 @@ class BiometricUnlock {
         return null;
       }
       final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
-      if ((map['createdAt'] as num?)?.toInt() != record.createdAt) {
+      if (map['id'] != id) {
         await disable();
         return null;
       }
