@@ -84,9 +84,19 @@ class E2eeSession {
   }
 
   /// Called at start-up, before any sync: what this device knows without a network.
+  ///
+  /// The account key is deliberately never restored from storage. Keeping it
+  /// there made the vault stay unlocked across restarts, so neither the
+  /// passphrase nor the biometric prompt was ever asked for again. The wrapped
+  /// record remains, and a biometric copy (when enrolled) is the only persistent
+  /// way back in without typing the passphrase.
   Future<void> restore() async {
-    final raw = await _storage.read(key: _keySlot);
-    if (raw != null) _accountKey = unb64url(raw);
+    // Clear a key left by an older build that did persist it.
+    try {
+      await _storage.delete(key: _keySlot);
+    } on Object {
+      // no platform keystore: nothing to clear
+    }
     final saved = await _storage.read(key: _recordSlot);
     if (saved != null) {
       try {
@@ -137,7 +147,13 @@ class E2eeSession {
     _accountKey = key;
     _sealing = true;
     if (!persistToKeystore) return;
-    await _storage.write(key: _keySlot, value: b64url(key));
+    // The raw key stays in memory only. Persisting it here is what made the
+    // passphrase/biometric unlock unnecessary after the first setup.
+    try {
+      await _storage.delete(key: _keySlot);
+    } on Object {
+      // no platform keystore: nothing to clean up
+    }
     await _storage.write(key: _recordSlot, value: jsonEncode(fromServer.toJson()));
   }
 
