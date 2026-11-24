@@ -9,6 +9,17 @@
 
 Offline-first, with the same data model as the server so every device converges.
 
+<p align="center">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/driftywinds/OTDA">
+    <img src="https://raw.githubusercontent.com/driftywinds/driftywinds/refs/heads/main/Images/custom_badge_obtainium.png"
+      alt="Get it on Obtainium" height="75">
+  </a>
+  <a href="https://play.google.com/store/apps/details?id=com.dw.otda">
+    <img src="https://raw.githubusercontent.com/driftywinds/scrobr/main/assets/google-play-badge.png"
+      alt="Get it on Google Play" height="75">
+  </a>
+</p>
+
 - Tasks with deadline, start/Someday, estimate, energy, section, labels, subtasks,
   a Trash with restore and purge, and repeating occurrences.
 - Workspaces: switch, create, rename, move projects between them, see members and
