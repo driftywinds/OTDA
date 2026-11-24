@@ -15,6 +15,17 @@ route it calls is still present in 1.7.0.
 The differences are additive. They give us new things to show or offer; they do
 not change the sync, auth or task shapes OTDA already uses.
 
+## Support status
+
+**OTDA supports OpenTodo v1.5.0 through v1.7.x. v1.7.0 is the current target and
+the version the login screen shows.**
+
+The app still uses the v1.5.0 route table because that is the stable `/api/v1`
+surface the client was built against; the 1.7.0 server serves the same routes
+plus new ones. No server migration, re-login, or data conversion is needed when
+moving an existing OTDA install from v1.5.0 to v1.7.0.
+
+
 ## What is new upstream
 
 ### 1.6.0
