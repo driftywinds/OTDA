@@ -51,6 +51,7 @@ List<PlannedReminder> planReminders(
   String defaultTime = defaultReminderTime,
   Map<String, String> projectNames = const {},
   Map<String, tz.TZDateTime> snoozedUntil = const {},
+  Map<String, int> offsets = const {},
 }) {
   final from = _iso(now);
   final to = _iso(now.add(window));
@@ -69,7 +70,9 @@ List<PlannedReminder> planReminders(
     final date = DateTime.parse(day);
 
     final snoozeKey = '${task.id}|$day';
-    final at = snoozedUntil[snoozeKey] ?? tz.TZDateTime(zone, date.year, date.month, date.day, hour, minute);
+    final base = tz.TZDateTime(zone, date.year, date.month, date.day, hour, minute);
+    final at = snoozedUntil[snoozeKey] ??
+        base.subtract(Duration(minutes: offsets[task.id] ?? 0));
     if (!at.isAfter(now)) continue;
 
     out.add(PlannedReminder(

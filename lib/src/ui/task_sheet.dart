@@ -13,6 +13,7 @@ import '../quickadd/rule.dart' as rules;
 import '../reminders/service.dart';
 import 'format.dart';
 import 'new_task_sheet.dart';
+import 'repeat_sheet.dart';
 import 'task_history_screen.dart';
 import 'task_page_screen.dart';
 import 'theme.dart';
@@ -169,69 +170,57 @@ class _TaskSheetState extends State<TaskSheet> {
     return parsed.ok ? (parsed.canonical ?? rule) : rule;
   }
 
-  /// Presets plus a field for any rule the grammar accepts, the same shapes the
-  /// composer offers: `every month`, `every 3 days after completion`, …
+  /// The repeat sheet is the one place for the four fields people change together:
+  /// the time, the reminder, the rule and how the series ends.
   Future<void> _pickRepeat() async {
-    const presets = ['every day', 'every weekday', 'every week', 'every month', 'every year'];
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final rule in presets)
-              ListTile(
-                title: Text(rule),
-                trailing: rule == _recurrence ? const Icon(Icons.check_rounded) : null,
-                onTap: () => Navigator.of(context).pop(rule),
-              ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(_recurrence.isEmpty ? 'Custom rule…' : 'Edit “$_recurrence”…'),
-              onTap: () => Navigator.of(context).pop('__custom'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+    final today = _todayIso();
+    final reminder = await ReminderService.instance.reminderOffset(widget.task.id);
+    if (!mounted) return;
+    final result = await showRepeatSheet(
+      context,
+      task: widget.task,
+      today: today,
+      due: _due,
+      recurrence: _recurrence,
+      reminderMinutes: reminder,
     );
-    if (choice == null || !mounted) return;
-    if (choice == '__custom') {
-      final controller = TextEditingController(text: _recurrence.isEmpty ? 'every week' : _recurrence);
-      final typed = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Repeat'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: 'every 2nd tuesday'),
-            onSubmitted: (text) => Navigator.of(context).pop(text),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Set')),
-          ],
-        ),
-      );
-      controller.dispose();
-      if (typed == null || !mounted) return;
-      final rule = typed.trim();
-      if (rule.isEmpty) return;
-      if (!rules.parseRule(rule).ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That is not a rule this app understands.')),
-        );
-        return;
+    if (result == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (result.rule != _recurrence) {
+        await _setRecurrence(result.rule);
       }
-      await _setRecurrence(rule);
-      return;
+      if (!_sameDue(result.due, _due)) {
+        await widget.repo.setField('task', widget.task.id, 'due', result.due);
+        setState(() => _due = result.due);
+      }
+      if (result.reminderMinutes != reminder) {
+        await ReminderService.instance.setReminderOffset(widget.task.id, result.reminderMinutes);
+      }
+      await refreshTaskSurfaces(widget.repo);
+    } on Object catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
     }
-    await _setRecurrence(choice);
+  }
+
+  bool _sameDue(Map<String, Object?>? a, Map<String, Object?>? b) {
+    if (a == null || b == null) return a == b;
+    return a['date'] == b['date'] && a['time'] == b['time'];
+  }
+
+  String _todayIso() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _setRecurrence(String rule) async {
+    if (rule.isEmpty) {
+      await widget.repo.setField('task', widget.task.id, 'recurrence', null);
+      if (mounted) setState(() => _recurrence = '');
+      return;
+    }
     final canonical = rules.parseRule(rule).canonical ?? rule;
     await widget.repo.setField('task', widget.task.id, 'recurrence', canonical);
     if (mounted) setState(() => _recurrence = canonical);
