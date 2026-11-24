@@ -1653,6 +1653,7 @@ class _AppDrawer extends StatelessWidget {
                 },
               ),
             )),
+            const SizedBox(height: 12),
           ],
         ),
       ),
