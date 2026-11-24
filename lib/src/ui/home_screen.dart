@@ -138,12 +138,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (task != null) await _open(task);
   }
 
+  /// When the vault was left in the background, so a brief app switch does not
+  /// immediately demand the passphrase again.
+  DateTime? _vaultLeftAt;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _load();
-      widget.state.afterDataChanged();
+    if (state == AppLifecycleState.paused &&
+        E2eeSession.instance.enabled &&
+        E2eeSession.instance.unlocked) {
+      _vaultLeftAt ??= DateTime.now();
+      return;
     }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_resume());
+    }
+  }
+
+  Future<void> _resume() async {
+    final left = _vaultLeftAt;
+    _vaultLeftAt = null;
+    if (left != null && DateTime.now().difference(left) > const Duration(seconds: 30)) {
+      await E2eeSession.instance.lock();
+      if (mounted) widget.state.e2eeLocked.value = true;
+      // The locked listener opens the passphrase/biometric sheet.
+    }
+    if (!mounted) return;
+    _load();
+    widget.state.afterDataChanged();
   }
 
   @override
