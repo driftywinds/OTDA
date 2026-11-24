@@ -78,6 +78,23 @@ void main() {
     }
   });
 
+  testWidgets('the Repeat control opens the granular repeat sheet', (tester) async {
+    final repo = await buildRepo(tester);
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: NewTaskSheet(repo: repo, projects: const [])),
+    ));
+
+    await tester.tap(find.text('Repeat').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Repeat ends'), findsOneWidget);
+    expect(find.text('Reminder'), findsOneWidget);
+    expect(find.text('Time'), findsWidgets);
+  });
+
   testWidgets('a started-from-parent composer fills the parent chip and project', (tester) async {
     final repo = await buildRepo(tester);
     late Task parent;
