@@ -11,6 +11,7 @@ import '../e2ee/session.dart';
 import 'activity_screen.dart';
 import 'e2ee_unlock_sheet.dart';
 import 'new_task_sheet.dart';
+import 'notification_onboarding.dart';
 import 'invitations_screen.dart';
 import 'project_sharing_screen.dart';
 import 'public_links_screen.dart';
@@ -111,7 +112,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _load().then((_) {
       _openPendingFromWidget();
       _openPendingNewTask();
+      unawaited(_maybeOnboardNotifications());
     });
+  }
+
+  Future<void> _maybeOnboardNotifications() async {
+    if (!mounted || widget.state.e2eeLocked.value) return;
+    await showNotificationOnboardingOnce(context);
   }
 
   /// The widget's "+" was tapped: open the new-task sheet on that project.
@@ -163,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       if (unlocked) {
         await _decryptWithProgress();
+        await _maybeOnboardNotifications();
       } else {
         // Dismissed on purpose is not the end of it: a banner keeps the way back
         // until the vault is unlocked or the app is signed out.
