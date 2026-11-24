@@ -341,7 +341,7 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
                           children: [
                             Icon(Icons.fingerprint_rounded, size: 18, color: scheme.primary),
                             const SizedBox(width: 6),
-                            const Expanded(child: Text('Fingerprint/face unlock is on')),
+                            const Expanded(child: Text('Fingerprint/face unlocks your vault')),
                             TextButton(
                               onPressed: _busy
                                   ? null
@@ -361,7 +361,7 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
                                   await _loadBiometric();
                                 },
                           icon: const Icon(Icons.fingerprint_rounded, size: 18),
-                          label: const Text('Add fingerprint/face unlock'),
+                          label: const Text('Add fingerprint/face vault unlock'),
                         ),
                 ),
               Wrap(
