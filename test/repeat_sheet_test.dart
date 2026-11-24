@@ -47,6 +47,8 @@ void main() {
       expect(repeatEndLabel('every day', '2026-11-24'), 'Never');
       expect(repeatEndLabel('every day until 2026-12-27', '2026-11-24'), 'Ends Dec 27');
       expect(repeatEndLabel('every day for 10 times', '2026-11-24'), 'After 10 times');
+      expect(repeatPatternLabel('every day until 2026-12-27'), 'every day');
+      expect(repeatPatternLabel('every weekday for 10 times'), 'every weekday');
     });
   });
 

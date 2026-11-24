@@ -133,6 +133,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
     final choice = await showModalBottomSheet<String>(
       context: context,
       useSafeArea: true,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _RepeatChoices(
         current: _rule,
@@ -293,7 +294,7 @@ class _RepeatSheetState extends State<_RepeatSheet> {
             _SheetRow(
               icon: Icons.repeat_rounded,
               label: 'Repeat',
-              value: _rule.isEmpty ? 'Never' : repeatSummary(_rule),
+              value: _rule.isEmpty ? 'Never' : repeatPatternLabel(_rule),
               onTap: _pickRepeat,
               onClear: _rule.isEmpty ? null : () => setState(() => _rule = ''),
             ),
@@ -334,6 +335,8 @@ class _SheetRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final scale = MediaQuery.textScalerOf(context).scale(1).clamp(0.8, 1.3);
+    final labelWidth = 104.0 * scale;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Material(
@@ -343,29 +346,41 @@ class _SheetRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
             child: Row(
               children: [
                 Icon(icon, size: 20, color: scheme.primary),
                 const SizedBox(width: 12),
-                Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500))),
-                Flexible(
+                SizedBox(
+                  width: labelWidth,
                   child: Text(
-                    value,
+                    label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: scheme.onSurfaceVariant),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
-                if (onClear != null)
-                  IconButton(
-                    tooltip: 'Clear',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close_rounded, size: 17),
-                    onPressed: onClear,
-                  )
-                else
-                  const SizedBox(width: 8),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 2,
+                    textAlign: TextAlign.start,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: scheme.onSurfaceVariant, height: 1.25),
+                  ),
+                ),
+                SizedBox(
+                  width: 38,
+                  child: onClear == null
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.close_rounded, size: 17),
+                          onPressed: onClear,
+                        ),
+                ),
               ],
             ),
           ),
@@ -397,24 +412,27 @@ class _RepeatChoices extends StatelessWidget {
       'every weekday': 'Every weekday',
     };
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final entry in choices.entries)
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.72),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 12),
+          children: [
+            for (final entry in choices.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: current == entry.key ? const Icon(Icons.check_rounded) : null,
+                onTap: () => Navigator.of(context).pop(entry.key),
+              ),
+            const Divider(height: 1),
             ListTile(
-              title: Text(entry.value),
-              trailing: current == entry.key ? const Icon(Icons.check_rounded) : null,
-              onTap: () => Navigator.of(context).pop(entry.key),
+              leading: const Icon(Icons.tune_rounded),
+              title: const Text('Custom'),
+              subtitle: current.isNotEmpty && !choices.containsKey(current) ? Text(repeatSummary(current)) : null,
+              onTap: () => Navigator.of(context).pop('__custom'),
             ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.tune_rounded),
-            title: const Text('Custom'),
-            subtitle: current.isNotEmpty && !choices.containsKey(current) ? Text(repeatSummary(current)) : null,
-            onTap: () => Navigator.of(context).pop('__custom'),
-          ),
-          const SizedBox(height: 8),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -651,6 +669,17 @@ class _SectionCard extends StatelessWidget {
 String repeatSummary(String rule) {
   final parsed = rules.parseRule(rule);
   return parsed.ok ? (parsed.canonical ?? rule) : rule;
+}
+
+/// The repeating pattern alone, without the end condition: the Repeat row and
+/// the Repeat ends row each own one half of the rule, so neither is truncated.
+String repeatPatternLabel(String rule) {
+  final parsed = rules.parseRule(rule);
+  if (!parsed.ok) return rule;
+  final r = parsed.rule!
+    ..until = null
+    ..count = 0;
+  return rules.canonicalOf(r);
 }
 
 /// `Never`, `Ends 27 Nov` or `After 10 times`.
