@@ -69,6 +69,15 @@ class _TaskSheetState extends State<TaskSheet> {
   /// empty for a one-off task.
   late String _recurrence = widget.task.raw['recurrence']?.toString() ?? '';
 
+  /// A finished occurrence has no rule of its own; these carry the series it came
+  /// from, so the sheet can show and edit the real rule.
+  late final String? _seriesId = switch (widget.task.raw['series_id']?.toString()) {
+    null || '' => null,
+    final value => value,
+  };
+  Map<String, Object?>? _seriesDue;
+  bool _seriesLoaded = false;
+
   bool _attachmentsBusy = false;
   List<Attachment> _attachments = const [];
 
@@ -79,6 +88,25 @@ class _TaskSheetState extends State<TaskSheet> {
     _loadSections();
     _loadProgress();
     _loadAttachments();
+    if (_seriesId == null) {
+      _seriesLoaded = true;
+    } else {
+      _loadSeries();
+    }
+  }
+
+  Future<void> _loadSeries() async {
+    final id = _seriesId;
+    if (id == null) return;
+    final row = await widget.repo.db.entity('task', id);
+    if (!mounted) return;
+    setState(() {
+      _seriesDue = row?['due'] is Map ? Map<String, Object?>.from(row!['due'] as Map) : null;
+      if (_recurrence.isEmpty) {
+        _recurrence = row?['recurrence']?.toString() ?? '';
+      }
+      _seriesLoaded = true;
+    });
   }
 
   AttachmentService? get _attachmentService {
@@ -190,8 +218,7 @@ class _TaskSheetState extends State<TaskSheet> {
         await _setRecurrence(result.rule);
       }
       if (!_sameDue(result.due, _due)) {
-        await widget.repo.setField('task', widget.task.id, 'due', result.due);
-        setState(() => _due = result.due);
+        await _setRepeatDue(result.due);
       }
       if (result.reminderMinutes != reminder) {
         await widget.repo.setTaskReminderOffset(widget.task, result.reminderMinutes);
@@ -214,20 +241,47 @@ class _TaskSheetState extends State<TaskSheet> {
         '${now.day.toString().padLeft(2, '0')}';
   }
 
+  String get _repeatTargetId => _seriesId ?? widget.task.id;
+
   Future<void> _setRecurrence(String rule) async {
     if (rule.isEmpty) {
-      await widget.repo.setField('task', widget.task.id, 'recurrence', null);
+      await widget.repo.setField('task', _repeatTargetId, 'recurrence', null);
       if (mounted) setState(() => _recurrence = '');
       return;
     }
     final canonical = rules.parseRule(rule).canonical ?? rule;
-    await widget.repo.setField('task', widget.task.id, 'recurrence', canonical);
+    await widget.repo.setField('task', _repeatTargetId, 'recurrence', canonical);
     if (mounted) setState(() => _recurrence = canonical);
   }
 
   Future<void> _clearRepeat() async {
-    await widget.repo.setField('task', widget.task.id, 'recurrence', null);
+    await widget.repo.setField('task', _repeatTargetId, 'recurrence', null);
     if (mounted) setState(() => _recurrence = '');
+  }
+
+  /// Writes a time chosen in the repeat sheet. On a finished occurrence the date
+  /// belongs to history, so only the time goes to the series, keeping the series'
+  /// own (future) date.
+  Future<void> _setRepeatDue(Map<String, Object?>? value) async {
+    if (_seriesId == null) {
+      await widget.repo.setField('task', widget.task.id, 'due', value);
+      if (mounted) setState(() => _due = value);
+      return;
+    }
+    final seriesDate = _seriesDue?['date']?.toString();
+    final next = value == null
+        ? null
+        : <String, Object?>{
+            'date': seriesDate ?? value['date'],
+            'time': ?value['time'],
+          };
+    await widget.repo.setField('task', _seriesId, 'due', next);
+    if (mounted) {
+      setState(() {
+        _seriesDue = next;
+        _due = value;
+      });
+    }
   }
 
   Future<void> _pickTime() async {
@@ -794,8 +848,8 @@ class _TaskSheetState extends State<TaskSheet> {
                       icon: Icons.repeat_rounded,
                       label: _recurrence.isEmpty ? 'Repeat' : _recurrenceLabel(_recurrence),
                       active: _recurrence.isNotEmpty,
-                      onTap: _pickRepeat,
-                      onClear: _recurrence.isEmpty ? null : _clearRepeat,
+                      onTap: _seriesLoaded ? _pickRepeat : null,
+                      onClear: _seriesLoaded && _recurrence.isNotEmpty ? _clearRepeat : null,
                     ),
                     PopupMenuButton<int>(
                       initialValue: _priority,
