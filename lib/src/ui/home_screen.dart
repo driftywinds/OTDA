@@ -1331,7 +1331,7 @@ class _TaskRow extends StatelessWidget {
     ];
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16 + depth * 18.0, compact ? 2 : 4, 16, compact ? 2 : 4),
+      padding: EdgeInsets.fromLTRB(10 + depth * 18.0, compact ? 3 : 5, 10, compact ? 3 : 5),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -1348,30 +1348,29 @@ class _TaskRow extends StatelessWidget {
             onTap: onOpen,
             onLongPress: onMenu,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
+              padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 24,
-                    child: hasChildren
-                        ? IconButton(
-                            tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(width: 24, height: 24),
-                            iconSize: 18,
-                            icon: Icon(
-                              collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                            onPressed: onToggleCollapse,
-                          )
-                        : null,
-                  ),
+                  if (hasChildren)
+                    SizedBox(
+                      width: 22,
+                      child: IconButton(
+                        tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 22, height: 22),
+                        iconSize: 18,
+                        icon: Icon(
+                          collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        onPressed: onToggleCollapse,
+                      ),
+                    ),
                   TaskCheck(done: task.isCompleted && showDone, priority: task.priority, onChanged: onToggle),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.fromLTRB(4, compact ? 6 : 9, 0, compact ? 6 : 9),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1387,8 +1386,8 @@ class _TaskRow extends StatelessWidget {
                             ),
                           ),
                           if (meta.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Wrap(spacing: 6, runSpacing: 4, children: meta),
+                            const SizedBox(height: 8),
+                            Wrap(spacing: 8, runSpacing: 6, children: meta),
                           ],
                         ],
                       ),

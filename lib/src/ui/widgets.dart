@@ -80,8 +80,8 @@ class MetaPill extends StatelessWidget {
     // neutral ones sit on the quiet field fill.
     final wash = color != null ? color!.withValues(alpha: 0.12) : scheme.field;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(9)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -89,12 +89,12 @@ class MetaPill extends StatelessWidget {
             Container(
               width: 8,
               height: 8,
-              margin: const EdgeInsets.only(right: 6),
+              margin: const EdgeInsets.only(right: 7),
               decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
             )
           else if (icon != null)
             Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(right: 5),
               child: Icon(icon, size: 13, color: tint),
             ),
           Flexible(
