@@ -33,7 +33,8 @@ Offline-first, with the same data model as the server so every device converges.
   and the device relay.
 
 - Package / bundle id: `com.dw.otda`
-- Target server: OpenTodo **v1.5.0** and later (`/api/v1`)
+- Target server: OpenTodo **v1.5.0 and later** (`/api/v1`); see
+  [the 1.6/1.7 impact note](docs/opentodo-1.7-impact.md)
 - Platforms: Android, iOS (the home-screen widget, the quick-add popup and the
   exact-alarm reminders are Android only)
 
