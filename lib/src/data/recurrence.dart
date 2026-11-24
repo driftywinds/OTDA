@@ -33,3 +33,27 @@ String recurrenceLabel(Task task) {
   final parsed = rules.parseRule(raw);
   return parsed.ok ? (parsed.canonical ?? raw) : raw;
 }
+
+/// The rule a row belongs to. An occurrence record has no `recurrence` of its
+/// own by design (`occurrenceFields` writes null: one record is not a series),
+/// so a finished occurrence resolves the rule from its `series_id`.
+String recurrenceFor(Task task, Iterable<Task> all) {
+  final own = task.raw['recurrence']?.toString() ?? '';
+  if (own.isNotEmpty) return own;
+  final seriesId = task.raw['series_id']?.toString();
+  if (seriesId == null || seriesId.isEmpty) return '';
+  for (final candidate in all) {
+    if (candidate.id == seriesId) {
+      return candidate.raw['recurrence']?.toString() ?? '';
+    }
+  }
+  return '';
+}
+
+/// The canonical display of a rule string, for a row whose rule came from the
+/// series rather than from the row itself.
+String recurrenceLabelOf(String rule) {
+  if (rule.isEmpty) return '';
+  final parsed = rules.parseRule(rule);
+  return parsed.ok ? (parsed.canonical ?? rule) : rule;
+}

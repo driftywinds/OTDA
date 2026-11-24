@@ -9,6 +9,25 @@ Task task(Map<String, Object?> raw) => Task('t', {'id': 't', ...raw});
 void main() {
   const today = '2026-11-18';
 
+  test('a finished occurrence resolves its rule from the series', () {
+    final series = Task('s', {
+      'id': 's',
+      'due': {'date': '2026-11-19'},
+      'recurrence': 'every day until 2026-12-27',
+    });
+    final record = Task('r', {
+      'id': 'r',
+      'series_id': 's',
+      'occurrence_date': '2026-11-18',
+      'completed_at': 1,
+    });
+
+    expect(recurrenceFor(record, [series, record]), 'every day until 2026-12-27');
+    expect(recurrenceLabelOf(recurrenceFor(record, [series, record])), 'every day until 2026-12-27');
+    expect(recurrenceFor(record, [record]), '', reason: 'no series in the replica');
+    expect(recurrenceFor(series, [series]), 'every day until 2026-12-27');
+  });
+
   test('a plain task ahead uses its due date', () {
     expect(upcomingDay(task({'due': {'date': '2026-11-21'}}), [task({'due': {'date': '2026-11-21'}})], today), '2026-11-21');
   });

@@ -999,6 +999,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     }
                     final row = entry as _TaskRowEntry;
                     final task = row.task;
+                    final recurrenceRule = recurrenceFor(task, _tasks);
                     return _TaskRow(
                       key: ValueKey(task.id),
                       task: task,
@@ -1009,6 +1010,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       progress: _subtaskProgress[task.id],
                       details: widget.state.rowDetails,
                       compact: widget.state.compact,
+                      recurrenceRule: recurrenceRule,
                       projectName: task.projectId == null ? null : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
                       dueOverride: switch (_view) {
@@ -1018,7 +1020,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       },
                       // Upcoming lists a repeating task on its next occurrence, which
                       // is not done even though today's was.
-                      showDone: !(_view == TaskView.upcoming && isRecurring(task)),
+                      showDone: !(_view == TaskView.upcoming && recurrenceRule.isNotEmpty),
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                       onMenu: () => _taskMenu(task),
@@ -1271,6 +1273,7 @@ class _TaskRow extends StatelessWidget {
     this.progress,
     this.details = 'all',
     this.compact = false,
+    this.recurrenceRule,
     this.projectName,
     this.projectColor,
     this.dueOverride,
@@ -1290,6 +1293,7 @@ class _TaskRow extends StatelessWidget {
   /// all, dates or minimal: how much of the row's metadata to show.
   final String details;
   final bool compact;
+  final String? recurrenceRule;
 
   /// The day to show instead of `due` (Upcoming projects a repeating task).
   final String? dueOverride;
@@ -1323,8 +1327,8 @@ class _TaskRow extends StatelessWidget {
         ),
       if (details == 'all') ...[
         if (estimate != null) MetaPill(icon: Icons.timelapse_rounded, label: durationLabel(estimate)),
-        if (isRecurring(task))
-          MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabel(task)),
+        if (recurrenceRule != null && recurrenceRule!.isNotEmpty)
+          MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabelOf(recurrenceRule!)),
         if (projectName != null)
           MetaPill(label: projectName!, dot: projectColor ?? scheme.primary),
       ],
