@@ -28,6 +28,10 @@ class SecureBiometricBackend implements BiometricBackend {
   final _plain = const FlutterSecureStorage();
   final _protected = const FlutterSecureStorage(
     aOptions: AndroidOptions.biometric(
+      // The plugin isolates keys per namespace. Without this, the plain
+      // identity store and the biometric store share the default namespace,
+      // so the biometric read reuses the non-biometric key and never prompts.
+      storageNamespace: 'otda_biometric',
       enforceBiometrics: true,
       requireBiometricsPerOperation: true,
       biometricPromptTitle: 'Unlock OTDA',
