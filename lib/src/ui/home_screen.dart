@@ -1632,6 +1632,7 @@ class _AppDrawer extends StatelessWidget {
                 navigator.push(MaterialPageRoute(builder: (_) => TrashScreen(state: state)));
               },
             )),
+            const Divider(height: 18, indent: 20, endIndent: 20),
             inset(ListTile(
               dense: true,
               visualDensity: rowDensity,
