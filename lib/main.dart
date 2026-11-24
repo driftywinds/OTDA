@@ -66,52 +66,57 @@ class _OtdaAppState extends State<OtdaApp> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = _color(_state.accentHex);
-    final lightPalette = _palette(_state.instanceLightSeeds, accent);
-    final darkPalette = _palette(_state.instanceDarkSeeds, accent);
-    final density = _state.compact ? VisualDensity.compact : VisualDensity.standard;
     return AnimatedBuilder(
       animation: _state,
-      builder: (context, _) => MaterialApp(
-        title: 'OTDA',
-        debugShowCheckedModeBanner: false,
-        themeMode: _state.themeMode,
-        theme: buildTheme(
-          Brightness.light,
-          fontFamily: _state.useAllo ? alloFont : null,
-          seed: accent,
-          palette: lightPalette,
-          density: density,
-        ),
-        darkTheme: buildTheme(
-          Brightness.dark,
-          fontFamily: _state.useAllo ? alloFont : null,
-          amoled: _state.amoled,
-          seed: accent,
-          palette: darkPalette,
-          density: density,
-        ),
-        // The appearance slider multiplies the phone's own text scale rather than
-        // replacing it, so accessibility settings still apply.
-        builder: (context, child) {
-          final system = MediaQuery.textScalerOf(context).scale(1);
-          return MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(system * _state.textScale),
-            ),
-            child: child ?? const SizedBox.shrink(),
-          );
-        },
-        home: _state.isRestoring
-            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-            : !_state.isSignedIn
-                ? ConnectScreen(state: _state)
-                : _state.mfaEnrolmentRequired
-                    ? MfaEnrolmentScreen(state: _state)
-                    : _state.isReady
-                        ? HomeScreen(state: _state)
-                        : SyncGateScreen(state: _state),
-      ),
+      builder: (context, _) {
+        // These read the live state. Computing them outside the builder made the
+        // accent (and density) stick at whatever they were when OtdaApp first
+        // built: the AnimatedBuilder rebuilt, but its closure kept the old theme.
+        final accent = _color(_state.accentHex);
+        final lightPalette = _palette(_state.instanceLightSeeds, accent);
+        final darkPalette = _palette(_state.instanceDarkSeeds, accent);
+        final density = _state.compact ? VisualDensity.compact : VisualDensity.standard;
+        return MaterialApp(
+          title: 'OTDA',
+          debugShowCheckedModeBanner: false,
+          themeMode: _state.themeMode,
+          theme: buildTheme(
+            Brightness.light,
+            fontFamily: _state.useAllo ? alloFont : null,
+            seed: accent,
+            palette: lightPalette,
+            density: density,
+          ),
+          darkTheme: buildTheme(
+            Brightness.dark,
+            fontFamily: _state.useAllo ? alloFont : null,
+            amoled: _state.amoled,
+            seed: accent,
+            palette: darkPalette,
+            density: density,
+          ),
+          // The appearance slider multiplies the phone's own text scale rather than
+          // replacing it, so accessibility settings still apply.
+          builder: (context, child) {
+            final system = MediaQuery.textScalerOf(context).scale(1);
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(system * _state.textScale),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: _state.isRestoring
+              ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+              : !_state.isSignedIn
+                  ? ConnectScreen(state: _state)
+                  : _state.mfaEnrolmentRequired
+                      ? MfaEnrolmentScreen(state: _state)
+                      : _state.isReady
+                          ? HomeScreen(state: _state)
+                          : SyncGateScreen(state: _state),
+        );
+      },
     );
   }
 
