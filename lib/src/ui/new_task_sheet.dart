@@ -8,6 +8,7 @@ import '../data/repo.dart';
 import '../quickadd_bridge.dart';
 import 'composer_state.dart';
 import 'highlight_controller.dart';
+import 'repeat_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -53,10 +54,12 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
 
   // `showMenu` opens against a position, so each menu chip needs its own anchor.
   final _durationKey = GlobalKey();
-  final _repeatKey = GlobalKey();
   final _priorityKey = GlobalKey();
   final _projectKey = GlobalKey();
   final _parentKey = GlobalKey();
+
+  /// The repeat sheet's per-task reminder choice, written once the task exists.
+  int? _reminderMinutes;
 
   /// Held so the popup can focus the line and raise the keyboard itself: in the
   /// widget's translucent window the autofocus request can land before the window
@@ -198,29 +201,6 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  Future<void> _pickCustom(String title, String? initial, void Function(String) apply) async {
-    final controller = TextEditingController(text: initial ?? '');
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'every week'),
-          onSubmitted: (text) => Navigator.of(context).pop(text),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Set')),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value == null || value.trim().isEmpty || !mounted) return;
-    setState(() => apply(value.trim()));
-  }
-
   Future<void> _save() async {
     final title = _parsed.title.isNotEmpty ? _parsed.title : _input.text.trim();
     if (title.isEmpty || _saving) return;
@@ -246,11 +226,14 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       fields['position'] = await widget.repo.nextChildPosition(parent.id);
     }
     if (!mounted) return;
-    await widget.repo.createTask(
+    final created = await widget.repo.createTask(
       title,
       projectId: parent?.projectId ?? _values.projectId,
       extra: fields,
     );
+    if (_reminderMinutes != null) {
+      await widget.repo.setTaskReminderOffset(created, _reminderMinutes);
+    }
     if (mounted) Navigator.of(context).pop(true);
   }
 
@@ -422,11 +405,10 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                             }),
                   ),
                   PropChip(
-                    key: _repeatKey,
                     icon: Icons.repeat,
                     label: _values.recurrence ?? 'Repeat',
                     active: _values.recurrence != null,
-                    onTap: () => _showRepeatMenu(_repeatKey),
+                    onTap: _showRepeatSheet,
                     onClear: _values.recurrence == null
                         ? null
                         : () => setState(() {
@@ -504,29 +486,37 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   static String _durationLabel(int minutes) =>
       minutes < 60 ? '${minutes}m' : (minutes % 60 == 0 ? '${minutes ~/ 60}h' : '${minutes ~/ 60}h ${minutes % 60}m');
 
-  Future<void> _showRepeatMenu(GlobalKey anchor) async {
-    const presets = ['every day', 'every weekday', 'every week', 'every month', 'every year'];
-    final choice = await showMenu<String>(
-      context: context,
-      position: _menuPosition(anchor),
-      initialValue: _values.recurrence,
-      items: [
-        for (final rule in presets) PopupMenuItem(value: rule, child: Text(rule)),
-        const PopupMenuItem(value: '__custom', child: Text('Custom…')),
-      ],
+  Future<void> _showRepeatSheet() async {
+    final due = _values.dueDate == null
+        ? null
+        : <String, Object?>{'date': _values.dueDate, 'time': ?_values.dueTime};
+    final result = await showRepeatSheet(
+      context,
+      today: todayString(),
+      due: due,
+      recurrence: _values.recurrence ?? '',
+      reminderMinutes: _reminderMinutes,
     );
-    if (choice == null || !mounted) return;
-    if (choice == '__custom') {
-      await _pickCustom('Repeat', _values.recurrence ?? 'every week', (value) {
-        _values.recurrence = value;
+    if (result == null || !mounted) return;
+    setState(() {
+      final rule = result.rule.trim();
+      _values.recurrence = rule.isEmpty ? null : rule;
+      if (rule.isEmpty) {
+        _values.release('recurrence');
+      } else {
         _values.claim('recurrence');
-      });
-    } else {
-      setState(() {
-        _values.recurrence = choice;
-        _values.claim('recurrence');
-      });
-    }
+      }
+      if (result.due == null) {
+        _values.dueDate = null;
+        _values.dueTime = null;
+        _values.release('due');
+      } else {
+        _values.dueDate = result.due!['date']?.toString();
+        _values.dueTime = result.due!['time']?.toString();
+        _values.claim('due');
+      }
+      _reminderMinutes = result.reminderMinutes;
+    });
   }
 
   Future<void> _showPriorityMenu(GlobalKey anchor) async {

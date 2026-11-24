@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../data/models.dart';
 import '../quickadd/rule.dart' as rules;
 import 'format.dart';
 import 'theme.dart';
@@ -31,7 +30,6 @@ const _reminderChoices = <int?, String>{
 /// series ends, the same four things the upstream date sheet groups together.
 Future<RepeatSelection?> showRepeatSheet(
   BuildContext context, {
-  required Task task,
   required String today,
   required Map<String, Object?>? due,
   required String recurrence,
@@ -43,7 +41,6 @@ Future<RepeatSelection?> showRepeatSheet(
     useSafeArea: true,
     showDragHandle: true,
     builder: (context) => _RepeatSheet(
-      task: task,
       today: today,
       due: due,
       recurrence: recurrence,
@@ -54,14 +51,12 @@ Future<RepeatSelection?> showRepeatSheet(
 
 class _RepeatSheet extends StatefulWidget {
   const _RepeatSheet({
-    required this.task,
     required this.today,
     required this.due,
     required this.recurrence,
     required this.reminderMinutes,
   });
 
-  final Task task;
   final String today;
   final Map<String, Object?>? due;
   final String recurrence;
@@ -440,6 +435,7 @@ class _CustomRepeatSheetState extends State<_CustomRepeatSheet> {
   late String _unit;
   late Set<int> _days;
   late bool _afterCompletion;
+  String _type = 'due';
 
   @override
   void initState() {
@@ -449,6 +445,7 @@ class _CustomRepeatSheetState extends State<_CustomRepeatSheet> {
     _interval = rule?.interval ?? 1;
     _unit = rule != null && rule.kind == 'interval' ? rule.unit : 'week';
     _afterCompletion = rule?.afterCompletion ?? false;
+    _type = _afterCompletion ? 'completion' : 'due';
     final due = widget.due == null ? DateTime.now() : DateTime.tryParse(widget.due!) ?? DateTime.now();
     _days = {due.weekday};
     if (rule != null && (rule.kind == 'weekday' || rule.kind == 'weekdays') && rule.days != 0) {
@@ -465,6 +462,44 @@ class _CustomRepeatSheetState extends State<_CustomRepeatSheet> {
         weekdays: _unit == 'week' ? _days : const {},
         afterCompletion: _afterCompletion,
       );
+
+  Future<void> _pickType() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('By Due Date'),
+              subtitle: const Text('Count from the date the task is due'),
+              trailing: _type == 'due' ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.of(context).pop('due'),
+            ),
+            ListTile(
+              title: const Text('By Completion'),
+              subtitle: const Text('Count from the day you tick it off'),
+              trailing: _type == 'completion' ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.of(context).pop('completion'),
+            ),
+            ListTile(
+              title: const Text('By Specific Dates'),
+              subtitle: const Text('Not supported by OpenTodo recurrence rules yet'),
+              enabled: false,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    setState(() {
+      _type = choice;
+      _afterCompletion = choice == 'completion';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -502,18 +537,26 @@ class _CustomRepeatSheetState extends State<_CustomRepeatSheet> {
             ),
             _SectionCard(
               children: [
-                SwitchListTile(
+                ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                  title: const Text('Count from completion'),
-                  subtitle: const Text('Next occurrence starts when you tick this one'),
-                  value: _afterCompletion,
-                  onChanged: _unit == 'week' && _days.isNotEmpty
-                      ? null
-                      : (value) => setState(() => _afterCompletion = value),
+                  title: const Text('Repeat Type'),
+                  subtitle: Text(switch (_type) {
+                    'completion' => 'By Completion',
+                    _ => 'By Due Date',
+                  }),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _pickType,
                 ),
                 Divider(height: 1, color: scheme.cardBorder),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Frequency', style: theme.textTheme.labelLarge),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
                   child: Row(
                     children: [
                       const Text('Every'),

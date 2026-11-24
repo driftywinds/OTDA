@@ -178,7 +178,6 @@ class _TaskSheetState extends State<TaskSheet> {
     if (!mounted) return;
     final result = await showRepeatSheet(
       context,
-      task: widget.task,
       today: today,
       due: _due,
       recurrence: _recurrence,
