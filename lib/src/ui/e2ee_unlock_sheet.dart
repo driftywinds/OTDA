@@ -48,7 +48,20 @@ class _UnlockSheetState extends State<_UnlockSheet> {
   void initState() {
     super.initState();
     BiometricUnlock.instance.enrolled(widget.record).then((enrolled) {
-      if (mounted) setState(() => _canBiometric = enrolled);
+      if (!mounted) return;
+      setState(() => _canBiometric = enrolled);
+      if (enrolled) {
+        // No extra tap: when this device has a working biometric copy, ask for
+        // it as soon as the sheet is up. Cancelling leaves the passphrase and
+        // recovery-key path exactly where it was.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future<void>.delayed(const Duration(milliseconds: 250), () {
+            if (mounted && _canBiometric && !_busy && _secret.text.isEmpty) {
+              _biometric();
+            }
+          });
+        });
+      }
     });
   }
 
@@ -97,8 +110,17 @@ class _UnlockSheetState extends State<_UnlockSheet> {
       if (ok) {
         Navigator.of(context).pop(true);
       } else {
-        setState(() => _error = 'Fingerprint/face unlock is no longer available. Use the passphrase.');
-        _canBiometric = false;
+        setState(() {
+          _error = 'Fingerprint/face did not unlock this vault. Use the passphrase or recovery key.';
+          _canBiometric = false;
+        });
+      }
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _error = 'Fingerprint/face did not unlock this vault. Use the passphrase or recovery key.';
+          _canBiometric = false;
+        });
       }
     } finally {
       if (mounted) setState(() => _busy = false);
