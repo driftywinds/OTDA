@@ -145,7 +145,7 @@ Map<String, Object?> _assemble(
       'id': task.id,
       'day': day,
       'title': task.title.isEmpty ? 'Task' : task.title,
-      'right': day.isEmpty ? '' : (day == today ? (task.dueTime ?? '') : _shortDay(day)),
+      'right': _right(day, today, task.dueTime),
       'overdue': label == 'Overdue',
       'done': task.isCompleted,
       'sid': ?sid,
@@ -197,4 +197,14 @@ String _shortDay(String day) {
   final date = DateTime.tryParse(day);
   if (date == null) return day;
   return '${date.day} ${months[date.month - 1]}';
+}
+
+/// The widget's right-hand text: the time today, and the day *and time* for
+/// anything later. A task due next Tuesday at 09:00 used to read "24 Nov",
+/// losing the time the person had assigned.
+String _right(String day, String today, String? time) {
+  if (day.isEmpty) return '';
+  final clock = (time == null || time.isEmpty) ? null : time;
+  if (day == today) return clock ?? '';
+  return clock == null ? _shortDay(day) : '${_shortDay(day)} $clock';
 }

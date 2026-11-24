@@ -123,6 +123,17 @@ void main() {
     expect(rows.where((row) => row['t'] == 'task'), hasLength(1));
   });
 
+  test('a future task keeps its exact time beside the day', () {
+    final snapshot = buildWidgetSnapshot([
+      task('a', {
+        'title': 'Call Sam',
+        'due': {'date': '2026-11-20', 'time': '09:30'},
+      }),
+    ], const [], today: today);
+    final row = (snapshot['rows'] as List).cast<Map>().firstWhere((r) => r['t'] == 'task');
+    expect(row['right'], '20 Nov 09:30');
+  });
+
   test('the list is capped and the remainder is counted', () {
     final snapshot = buildWidgetSnapshot([
       for (var i = 0; i < 40; i++)
