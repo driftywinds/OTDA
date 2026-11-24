@@ -18,6 +18,15 @@ beforeSettings { settings ->
         mavenCentral()
         gradlePluginPortal()
     }
+    // Flutter's included build asks for the Kotlin DSL plugin by its marker,
+    // which lives only on the Gradle Plugin Portal. That portal is also rate
+    // limited from shared runners, so resolve the implementation module directly
+    // from Maven Central when the marker is requested.
+    settings.pluginManagement.resolutionStrategy.eachPlugin {
+        if (requested.id.id == 'org.gradle.kotlin.kotlin-dsl' && requested.version != null) {
+            useModule("org.gradle.kotlin:gradle-kotlin-dsl-plugins:${requested.version}")
+        }
+    }
 
     settings.dependencyResolutionManagement.repositories.clear()
     settings.dependencyResolutionManagement.repositories {
