@@ -25,7 +25,12 @@ class SecureBiometricBackend implements BiometricBackend {
   static const _identitySlot = 'e2ee.biometricFor';
   static const _keySlot = 'e2ee.biometricKey';
 
-  final _plain = const FlutterSecureStorage();
+  final _plain = const FlutterSecureStorage(
+    // Keep the non-secret identity in its own namespace too, so an identity
+    // written by an older build (whose key lived in the default namespace) is
+    // not mistaken for a copy this build can actually open.
+    aOptions: AndroidOptions(storageNamespace: 'otda_biometric_identity'),
+  );
   final _protected = const FlutterSecureStorage(
     aOptions: AndroidOptions.biometric(
       // The plugin isolates keys per namespace. Without this, the plain
