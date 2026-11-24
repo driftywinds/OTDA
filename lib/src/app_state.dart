@@ -78,6 +78,7 @@ class AppState extends ChangeNotifier {
   static const _darkPref = 'ui.dark';
   static const _densityPref = 'ui.density';
   static const _rowDetailsPref = 'ui.row_details';
+  static const _textScalePref = 'ui.text_scale';
 
   /// system, light or dark.
   String _themeChoice = 'dark';
@@ -90,6 +91,9 @@ class AppState extends ChangeNotifier {
 
   /// all, dates or minimal: how much of a task row the list shows.
   String _rowDetails = 'all';
+
+  /// App text size, 0.8–1.4. Separate from the widget's own text size.
+  double _textScale = 1;
 
   /// The accent the person picked, `#rrggbb`, or null to follow the instance.
   String? _accentHex;
@@ -110,6 +114,7 @@ class AppState extends ChangeNotifier {
   String get density => _density;
   bool get compact => _density == 'compact';
   String get rowDetails => _rowDetails;
+  double get textScale => _textScale;
   String? get accentHex => _accentHex;
   Map<String, dynamic>? get instanceLightSeeds => _instanceLightSeeds;
   Map<String, dynamic>? get instanceDarkSeeds => _instanceDarkSeeds;
@@ -267,6 +272,7 @@ class AppState extends ChangeNotifier {
         _darkStyle = prefs.getString(_darkPref) ?? 'amoled';
       }
       _density = prefs.getString(_densityPref) ?? 'comfortable';
+      _textScale = (prefs.getDouble(_textScalePref) ?? 1).clamp(0.8, 1.4).toDouble();
       _rowDetails = prefs.getString(_rowDetailsPref) ?? 'all';
       final accent = prefs.getString(_accentPref) ?? '';
       _accentHex = accent.isEmpty ? null : accent;
@@ -320,6 +326,18 @@ class AppState extends ChangeNotifier {
     _density = value;
     notifyListeners();
     await _setPref(_densityPref, value);
+  }
+
+  /// App text size, clamped to the range the settings slider offers.
+  Future<void> setTextScale(double value) async {
+    _textScale = value.clamp(0.8, 1.4).toDouble();
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_textScalePref, _textScale);
+    } on Object {
+      // the choice stays in memory for this run
+    }
   }
 
   Future<void> setRowDetails(String value) async {

@@ -1411,9 +1411,6 @@ class _TaskRow extends StatelessWidget {
   }
 }
 
-/// The sidebar's rows share one compact height, so projects and the fixed
-/// destinations line up and a long project list still leaves room for the footer.
-const _sidebarRowDensity = VisualDensity(horizontal: 0, vertical: -4);
 const _sidebarRowPadding = EdgeInsets.symmetric(horizontal: 16);
 
 /// The sidebar: the workspace at the top (tap to switch), then the destinations
@@ -1473,6 +1470,12 @@ class _AppDrawer extends StatelessWidget {
     final scheme = theme.colorScheme;
     final current = workspaces.where((w) => w.id == workspaceId).firstOrNull;
     final workspaceName = current?.name ?? 'Workspace';
+    // The sidebar follows the same Density choice as the rest of the app; it used
+    // to be permanently compact, which made it feel like a different product.
+    final rowDensity = state.compact
+        ? const VisualDensity(horizontal: 0, vertical: -3)
+        : VisualDensity.standard;
+    final rowMinPadding = state.compact ? 2.0 : 6.0;
 
     // Rows are inset from the drawer edge and highlighted as rounded pills.
     Widget inset(Widget child) =>
@@ -1487,9 +1490,9 @@ class _AppDrawer extends StatelessWidget {
       final selected = view == target;
       return inset(ListTile(
         dense: true,
-        visualDensity: _sidebarRowDensity,
+        visualDensity: rowDensity,
         contentPadding: _sidebarRowPadding,
-        minVerticalPadding: 2,
+        minVerticalPadding: rowMinPadding,
         leading: mark(Icon(icon, size: 20)),
         title: Text(
           label,
@@ -1568,6 +1571,7 @@ class _AppDrawer extends StatelessWidget {
                     sharedProjects: sharedProjects,
                     onDelete: onDeleteProjects,
                     inset: inset,
+                    compact: state.compact,
                   ),
                   destination(TaskView.anytime, Icons.layers_outlined, 'Anytime'),
                   destination(TaskView.someday, Icons.bedtime_outlined, 'Someday'),
@@ -1578,9 +1582,9 @@ class _AppDrawer extends StatelessWidget {
             rule,
             inset(ListTile(
               dense: true,
-              visualDensity: _sidebarRowDensity,
+              visualDensity: rowDensity,
               contentPadding: _sidebarRowPadding,
-              minVerticalPadding: 2,
+              minVerticalPadding: rowMinPadding,
               leading: mark(const Icon(Icons.timeline_rounded, size: 20)),
               title: const Text('Activity', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1591,9 +1595,9 @@ class _AppDrawer extends StatelessWidget {
             )),
             inset(ListTile(
               dense: true,
-              visualDensity: _sidebarRowDensity,
+              visualDensity: rowDensity,
               contentPadding: _sidebarRowPadding,
-              minVerticalPadding: 2,
+              minVerticalPadding: rowMinPadding,
               leading: mark(const Icon(Icons.mail_outline_rounded, size: 20)),
               title: const Text('Invitations', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1604,9 +1608,9 @@ class _AppDrawer extends StatelessWidget {
             )),
             inset(ListTile(
               dense: true,
-              visualDensity: _sidebarRowDensity,
+              visualDensity: rowDensity,
               contentPadding: _sidebarRowPadding,
-              minVerticalPadding: 2,
+              minVerticalPadding: rowMinPadding,
               leading: mark(const Icon(Icons.insights_rounded, size: 20)),
               title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1617,9 +1621,9 @@ class _AppDrawer extends StatelessWidget {
             )),
             inset(ListTile(
               dense: true,
-              visualDensity: _sidebarRowDensity,
+              visualDensity: rowDensity,
               contentPadding: _sidebarRowPadding,
-              minVerticalPadding: 2,
+              minVerticalPadding: rowMinPadding,
               leading: mark(const Icon(Icons.delete_outline_rounded, size: 20)),
               title: const Text('Trash', style: TextStyle(fontWeight: FontWeight.w500)),
               onTap: () {
@@ -1630,9 +1634,9 @@ class _AppDrawer extends StatelessWidget {
             )),
             inset(ListTile(
               dense: true,
-              visualDensity: _sidebarRowDensity,
+              visualDensity: rowDensity,
               contentPadding: _sidebarRowPadding,
-              minVerticalPadding: 2,
+              minVerticalPadding: rowMinPadding,
               leading: AccountAvatar(state: state, size: 30),
               title: Text(
                 state.account?.displayName ?? 'Signed in',
@@ -1753,6 +1757,7 @@ class _ProjectSection extends StatefulWidget {
     required this.sharedProjects,
     required this.onDelete,
     required this.inset,
+    required this.compact,
   });
 
   final Map<String, String> projects;
@@ -1768,6 +1773,7 @@ class _ProjectSection extends StatefulWidget {
   final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDelete;
   final Widget Function(Widget child) inset;
+  final bool compact;
 
   @override
   State<_ProjectSection> createState() => _ProjectSectionState();
@@ -1908,6 +1914,9 @@ class _ProjectSectionState extends State<_ProjectSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final rowDensity = widget.compact
+        ? const VisualDensity(horizontal: 0, vertical: -3)
+        : VisualDensity.standard;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1964,9 +1973,9 @@ class _ProjectSectionState extends State<_ProjectSection> {
         for (final entry in widget.projects.entries)
           widget.inset(ListTile(
             dense: true,
-            visualDensity: _sidebarRowDensity,
+            visualDensity: rowDensity,
             contentPadding: _sidebarRowPadding,
-            minVerticalPadding: 2,
+            minVerticalPadding: widget.compact ? 2.0 : 6.0,
             selected: !_selecting && widget.currentId == entry.key,
             leading: _selecting
                 ? SizedBox(

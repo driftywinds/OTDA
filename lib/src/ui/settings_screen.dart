@@ -266,6 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => widget.state.setDensity(value),
                     ),
+                    _AppTextScaleRow(state: widget.state),
                     SettingsChoiceRow(
                       label: 'Task row',
                       value: widget.state.rowDetails,
@@ -320,8 +321,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+/// App text size: a device choice, independent of the widget's own text size.
+class _AppTextScaleRow extends StatelessWidget {
+  const _AppTextScaleRow({required this.state});
+
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
+    return AnimatedBuilder(
+      animation: state,
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Text size', style: style)),
+                Text(
+                  '${(state.textScale * 100).round()}%',
+                  style: style?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            Slider(
+              value: state.textScale,
+              min: 0.8,
+              max: 1.4,
+              divisions: 12,
+              label: '${(state.textScale * 100).round()}%',
+              onChanged: state.setTextScale,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {  const _Section({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;

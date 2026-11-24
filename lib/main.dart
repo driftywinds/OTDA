@@ -91,6 +91,17 @@ class _OtdaAppState extends State<OtdaApp> {
           palette: darkPalette,
           density: density,
         ),
+        // The appearance slider multiplies the phone's own text scale rather than
+        // replacing it, so accessibility settings still apply.
+        builder: (context, child) {
+          final system = MediaQuery.textScalerOf(context).scale(1);
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(system * _state.textScale),
+            ),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: _state.isRestoring
             ? const Scaffold(body: Center(child: CircularProgressIndicator()))
             : !_state.isSignedIn
