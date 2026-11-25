@@ -81,9 +81,9 @@ flutter:
     - assets/fonts/OFL.txt
     - assets/logo.png
 
-  # Allo (https://github.com/joshpuckett/allo), SIL Open Font License 1.1.
-  # Static weights rather than the variable file so every weight renders on
-  # every engine; the licence travels with the files.
+  # Allo v1.1.0 (https://github.com/joshpuckett/allo/releases/tag/v1.1.0),
+  # SIL Open Font License 1.1. Static weights rather than the variable file so
+  # every weight renders on every engine; the licence travels with the files.
   fonts:
     - family: Allo
       fonts:
