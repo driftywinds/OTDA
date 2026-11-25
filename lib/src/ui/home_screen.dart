@@ -88,10 +88,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _syncFlash = false;
   Timer? _syncTimer;
 
+  /// Mirrors the device preference so the card can appear/disappear when the
+  /// setting changes while this screen is still underneath Settings.
+  bool _showWeekStats = false;
+
   @override
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     widget.state.e2eeLocked.addListener(_askForPassphrase);
+    widget.state.addListener(_onLocalSettingsChanged);
+    _showWeekStats = widget.state.showWeekStats;
     // The account can already be locked when this screen is built (the record is
     // read during sign-in, before the shell exists). Listening alone would wait for
     // a change that already happened, so ask on the first frame.
@@ -119,6 +125,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _maybeOnboardNotifications() async {
     if (!mounted || widget.state.e2eeLocked.value) return;
     await showNotificationOnboardingOnce(context);
+  }
+
+  void _onLocalSettingsChanged() {
+    if (!mounted || _showWeekStats == widget.state.showWeekStats) return;
+    setState(() => _showWeekStats = widget.state.showWeekStats);
   }
 
   /// The widget's "+" was tapped: open the new-task sheet on that project.
@@ -171,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     widget.state.e2eeLocked.removeListener(_askForPassphrase);
+    widget.state.removeListener(_onLocalSettingsChanged);
     ReminderService.instance.pendingTask.removeListener(_openPendingFromWidget);
     ReminderService.instance.pendingNewTask.removeListener(_openPendingNewTask);
     WidgetsBinding.instance.removeObserver(this);
@@ -988,7 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 showSync: _syncFlash,
               ),
             ),
-            if (_view == TaskView.today && _weekStats != null)
+            if (_view == TaskView.today && _showWeekStats && _weekStats != null)
               SliverToBoxAdapter(
                 child: _WeekCard(stats: _weekStats!, onTap: _openStats),
               ),

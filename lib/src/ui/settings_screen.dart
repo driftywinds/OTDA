@@ -277,6 +277,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => widget.state.setRowDetails(value),
                     ),
+                    AnimatedBuilder(
+                      animation: widget.state,
+                      builder: (context, _) => SwitchListTile(
+                        dense: true,
+                        title: const Text('Weekly progress card'),
+                        subtitle: const Text('Show “tasks done this week” on Today; Stats stays in the sidebar'),
+                        value: widget.state.showWeekStats,
+                        onChanged: widget.state.setShowWeekStats,
+                      ),
+                    ),
                     SettingsChoiceRow(
                       label: 'Font',
                       value: widget.state.useAllo ? 'allo' : 'system',

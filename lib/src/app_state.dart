@@ -79,6 +79,7 @@ class AppState extends ChangeNotifier {
   static const _densityPref = 'ui.density';
   static const _rowDetailsPref = 'ui.row_details';
   static const _textScalePref = 'ui.text_scale';
+  static const _weekStatsPref = 'ui.week_stats';
 
   /// system, light or dark.
   String _themeChoice = 'dark';
@@ -94,6 +95,10 @@ class AppState extends ChangeNotifier {
 
   /// App text size, 0.8–1.4. Separate from the widget's own text size.
   double _textScale = 1;
+
+  /// The weekly progress card on Today is off by default; Stats is always in the
+  /// sidebar and opening it has no cost to the Today layout.
+  bool _showWeekStats = false;
 
   /// The accent the person picked, `#rrggbb`, or null to follow the instance.
   String? _accentHex;
@@ -115,6 +120,7 @@ class AppState extends ChangeNotifier {
   bool get compact => _density == 'compact';
   String get rowDetails => _rowDetails;
   double get textScale => _textScale;
+  bool get showWeekStats => _showWeekStats;
   String? get accentHex => _accentHex;
   Map<String, dynamic>? get instanceLightSeeds => _instanceLightSeeds;
   Map<String, dynamic>? get instanceDarkSeeds => _instanceDarkSeeds;
@@ -274,6 +280,7 @@ class AppState extends ChangeNotifier {
       _density = prefs.getString(_densityPref) ?? 'comfortable';
       _textScale = (prefs.getDouble(_textScalePref) ?? 1).clamp(0.8, 1.4).toDouble();
       _rowDetails = prefs.getString(_rowDetailsPref) ?? 'all';
+      _showWeekStats = prefs.getBool(_weekStatsPref) ?? false;
       final accent = prefs.getString(_accentPref) ?? '';
       _accentHex = accent.isEmpty ? null : accent;
     } on Object {
@@ -344,6 +351,17 @@ class AppState extends ChangeNotifier {
     _rowDetails = value;
     notifyListeners();
     await _setPref(_rowDetailsPref, value);
+  }
+
+  Future<void> setShowWeekStats(bool value) async {
+    _showWeekStats = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_weekStatsPref, value);
+    } on Object {
+      // the choice stays in memory for this run
+    }
   }
 
   /// The accent colour (`#rrggbb`), or null to follow the instance default.
