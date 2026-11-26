@@ -12,6 +12,7 @@ class DateContext {
     required this.vocabs,
     required this.dayMonthOrder,
     this.weekStart,
+    this.dashRanges = false,
   });
 
   /// Reference local calendar date, YYYY-MM-DD.
@@ -25,6 +26,10 @@ class DateContext {
 
   /// First day of the week, 0 = Sunday … 6 = Saturday; Monday when absent.
   final int? weekStart;
+
+  /// Quick-add lines treat "3-4" in a month-first locale as a range, not a date,
+  /// unless a date word introduces it. Date-only fields leave this off.
+  final bool dashRanges;
 }
 
 /// A phrase match over the token range [from, to).
@@ -644,6 +649,19 @@ String? _resolveMonthDay(String today, int year, int month, int day) {
 final RegExp numericDateRe = RegExp(r'^(\d{1,2})([/.-])(\d{1,2})(?:\2(\d{2}|\d{4}))?\.?$');
 final RegExp _isoRe = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})$');
 
+/// A phrase that introduces a date ("on", "by", "until", "bis zum") ends right
+/// before token [j].
+bool _dateWordBefore(List<Token> tokens, int j, DateContext ctx) {
+  for (final v in ctx.vocabs) {
+    for (final list in [v.before, v.byWords, v.untilWords]) {
+      for (var n = 1; n <= 3 && n <= j; n++) {
+        if (phraseAt(tokens, j - n, list, 'date-before') == n) return true;
+      }
+    }
+  }
+  return false;
+}
+
 ({String date, int n})? _numericDateAt(List<Token> tokens, int j, DateContext ctx) {
   final t = _tok(tokens, j);
   if (t == null || t.quoted) return null;
@@ -655,6 +673,16 @@ final RegExp _isoRe = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})$');
   final m = numericDateRe.firstMatch(t.norm);
   if (m == null) return null;
   final dotted = m[2] == '.';
+  // In a quick-add line, a month-first dashed day and month without a year is a
+  // range ("3-4 tomatoes") unless "on", "by" or "until" introduces it. "3/4" and
+  // "3-4-2027" remain dates, and day-first locales keep reading "3-4" as a date.
+  if (m[2] == '-' &&
+      m[4] == null &&
+      ctx.dashRanges &&
+      ctx.dayMonthOrder != DayMonthOrder.dm &&
+      !_dateWordBefore(tokens, j, ctx)) {
+    return null;
+  }
   // A trailing dot only belongs to the German "12.11." form.
   if (t.norm.endsWith('.') && !dotted) return null;
   // "9.30" is a time or a number in month/day locales; dotted dates are D.M only.

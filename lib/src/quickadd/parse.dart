@@ -229,6 +229,7 @@ ParseResult parse(String line, ParseContext ctx) {
     vocabs: vocabs,
     dayMonthOrder: ctx.dayMonthOrder ?? vocabs[0].dayMonthOrder,
     weekStart: ctx.weekStart,
+    dashRanges: true,
   );
   final bareHourIsTime = vocabs.any((v) => v.hourSuffixH);
   final dismissed = liveDismissals(line, ctx.dismissed);

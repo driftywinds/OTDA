@@ -125,6 +125,11 @@ remains the title **“invoices from September”**.
 
 Numeric order comes from the account's date format / active language.
 
+In a month-first locale, a **dashed** day and month without a year is treated as a
+range, not a date: `Buy 3-4 tomatoes` keeps the title. It becomes a date when a
+date word introduces it (`on 3-4`, `by 4-15`, `until 12-31`), and `3/4` and
+`3-4-2027` are always dates. Day-first locales still read `3-4` as 3 April.
+
 Dotted dates like `25.12.` are only accepted in a **day-month** locale; `3.30` is otherwise treated as a time only when it follows `at`.
 
 ### Relative periods

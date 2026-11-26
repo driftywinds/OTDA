@@ -47,8 +47,8 @@ Offline-first, with the same data model as the server so every device converges.
   and the device relay.
 
 - Package / bundle id: `com.dw.otda`
-- Target server: OpenTodo **v1.7.0** (`/api/v1`), backward-compatible with
-  **v1.5.0 and later**; see [the 1.6/1.7 impact note](docs/opentodo-1.7-impact.md)
+- Target server: OpenTodo **v1.8.0** (`/api/v1`), backward-compatible with
+  **v1.5.0 and later**; see [the 1.8 impact note](docs/opentodo-1.8-impact.md)
 - Platforms: Android, iOS (the home-screen widget, the quick-add popup and the
   exact-alarm reminders are Android only)
 
@@ -181,9 +181,10 @@ Write report tomorrow #work @call p2 +45m
 }
 ```
 
-It is a port of the web app's `web/src/lib/nlp` (OpenTodo v1.5.0), kept
-behaviour-identical and checked against the **same 306 shared test vectors** the
-web and Go implementations run (`test/quickadd/quickadd.vectors.json`). It runs
+It is a port of the web app's `web/src/lib/nlp` (OpenTodo v1.5.0, including the
+v1.8 dashed-range rule), kept behaviour-identical and checked against the **same
+306 shared test vectors** the web and Go implementations run
+(`test/quickadd/quickadd.vectors.json`). It runs
 entirely on the device, so the preview works offline and updates as you type.
 
 ### Design principles
