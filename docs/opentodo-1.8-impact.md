@@ -1,5 +1,9 @@
 # OpenTodo 1.8: what changes for OTDA
 
+> **Superseded:** 1.8.0 was never published as a release; its changes shipped in
+> v1.9.0. See [the combined 1.8/1.9 note](opentodo-1.9-impact.md) for the
+> current status.
+
 Checked on 26 November 2026 against the `v1.8.0` tag: its changelog, the v1.8.0
 OpenAPI document, and the v1.7.0…v1.8.0 diff. At the time of writing the tag
 exists but the GitHub Release page has not been published yet; the changelog is
