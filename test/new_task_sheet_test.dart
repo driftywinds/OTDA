@@ -73,9 +73,11 @@ void main() {
       home: Scaffold(body: NewTaskSheet(repo: repo, projects: const [])),
     ));
 
-    for (final label in ['Date', 'Time', 'Duration', 'Repeat', 'Priority', 'Parent', 'Inbox']) {
-      expect(find.text(label), findsWidgets, reason: 'the $label control is missing');
+    // The properties are icons, named by their tooltips; the project is a chip.
+    for (final label in ['Date', 'Time', 'Duration', 'Repeat', 'Priority', 'Parent']) {
+      expect(find.byTooltip(label), findsOneWidget, reason: 'the $label control is missing');
     }
+    expect(find.text('Inbox'), findsOneWidget);
   });
 
   testWidgets('the Repeat control opens the granular repeat sheet', (tester) async {
@@ -87,7 +89,7 @@ void main() {
       home: Scaffold(body: NewTaskSheet(repo: repo, projects: const [])),
     ));
 
-    await tester.tap(find.text('Repeat').last);
+    await tester.tap(find.byTooltip('Repeat'));
     await tester.pumpAndSettle();
 
     expect(find.text('Repeat ends'), findsOneWidget);

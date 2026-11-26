@@ -695,12 +695,269 @@ class _TaskSheetState extends State<TaskSheet> {
 
   static String _sizeLabel(double kb) => kb < 1024 ? '${kb.round()} KB' : '${(kb / 1024).toStringAsFixed(1)} MB';
 
+  // `showMenu` opens against a position, so each menu icon needs its own anchor.
+  final _energyKey = GlobalKey();
+  final _priorityKey = GlobalKey();
+  final _projectKey = GlobalKey();
+  final _sectionKey = GlobalKey();
+
+  Future<void> _pickEnergy() async {
+    final choice = await showMenu<String>(
+      context: context,
+      position: menuPositionFor(context, _energyKey),
+      initialValue: _energy,
+      items: const [
+        PopupMenuItem(value: '', child: Text('No energy')),
+        PopupMenuItem(value: 'deep', child: Text('Deep work')),
+        PopupMenuItem(value: 'medium', child: Text('Medium')),
+        PopupMenuItem(value: 'low', child: Text('Low')),
+      ],
+    );
+    if (choice == null || !mounted) return;
+    await _setEnergy(choice);
+  }
+
+  Future<void> _setPriority(int value) async {
+    setState(() => _priority = value);
+    await widget.repo.setField('task', widget.task.id, 'priority', value);
+  }
+
+  Future<void> _pickPriority() async {
+    final choice = await showMenu<int>(
+      context: context,
+      position: menuPositionFor(context, _priorityKey),
+      initialValue: _priority,
+      items: const [
+        PopupMenuItem(value: 1, child: Text('Priority 1')),
+        PopupMenuItem(value: 2, child: Text('Priority 2')),
+        PopupMenuItem(value: 3, child: Text('Priority 3')),
+        PopupMenuItem(value: 4, child: Text('Priority 4 (default)')),
+      ],
+    );
+    if (choice == null || !mounted) return;
+    await _setPriority(choice);
+  }
+
+  Future<void> _moveToProject(String? value) async {
+    if (value == _projectId) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _projectId = value);
+    try {
+      // Moving a parent carries every descendant; a subtask that leaves its
+      // parent's project loses the parent.
+      await widget.repo.moveToProject(widget.task, value);
+      if (_sectionId != null) {
+        await widget.repo.setField('task', widget.task.id, 'section_id', null);
+        if (mounted) setState(() => _sectionId = null);
+      }
+      await _loadSections();
+    } on Object catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _pickProject() async {
+    // The Inbox is the empty id, so a dismissed menu (null) is not mistaken for it.
+    final choice = await showMenu<String>(
+      context: context,
+      position: menuPositionFor(context, _projectKey),
+      initialValue: _projectId ?? '',
+      items: [
+        const PopupMenuItem<String>(value: '', child: Text('Inbox')),
+        for (final project in widget.projects)
+          if (!project.isDeleted && !project.isArchived)
+            PopupMenuItem<String>(value: project.id, child: Text(project.name)),
+      ],
+    );
+    if (choice == null || !mounted) return;
+    await _moveToProject(choice.isEmpty ? null : choice);
+  }
+
+  Future<void> _pickSection() async {
+    final choice = await showMenu<String>(
+      context: context,
+      position: menuPositionFor(context, _sectionKey),
+      initialValue: _sectionId ?? '',
+      items: [
+        const PopupMenuItem<String>(value: '', child: Text('No section')),
+        for (final section in _sections)
+          PopupMenuItem<String>(value: section.id, child: Text(section.name)),
+      ],
+    );
+    if (choice == null || !mounted) return;
+    await _setSection(choice.isEmpty ? null : choice);
+  }
+
+  Future<void> _clearStart() async {
+    await widget.repo.setField('task', widget.task.id, 'start', null);
+    if (mounted) setState(() => _start = null);
+  }
+
+  Future<void> _clearEstimate() async {
+    await widget.repo.setField('task', widget.task.id, 'estimate_minutes', null);
+    if (mounted) setState(() => _estimate = null);
+  }
+
+  Future<void> _toggleDone() async {
+    // Ticking a repeating task finishes one occurrence: the series stays open and
+    // comes round again, so the tick must not stick here.
+    if (_recurrence.isNotEmpty) {
+      if (_completed) return;
+      final messenger = ScaffoldMessenger.of(context);
+      await widget.repo.setCompleted(widget.task, true);
+      await refreshTaskSurfaces(widget.repo);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Done for now — it comes round again')),
+      );
+      return;
+    }
+    setState(() => _completed = !_completed);
+    await widget.repo.setCompleted(widget.task, _completed);
+    await refreshTaskSurfaces(widget.repo);
+  }
+
+  Future<void> _delete() async {
+    if (_recurrence.isEmpty) {
+      await widget.repo.trash(widget.task);
+    } else {
+      final scope = await showModalBottomSheet<SeriesScope>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  'This is a repeating task',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                subtitle: Text(_recurrenceLabel(_recurrence)),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.event_busy_outlined),
+                title: const Text('This occurrence'),
+                subtitle: const Text('Skip today; it comes round again'),
+                onTap: () => Navigator.of(context).pop(SeriesScope.occurrence),
+              ),
+              ListTile(
+                leading: const Icon(Icons.event_repeat_outlined),
+                title: const Text('This and future occurrences'),
+                subtitle: const Text('The past stays as history'),
+                onTap: () => Navigator.of(context).pop(SeriesScope.future),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever_outlined),
+                title: const Text('All occurrences, past and future'),
+                onTap: () => Navigator.of(context).pop(SeriesScope.all),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (scope == null) return;
+      await widget.repo.deleteSeries(widget.task, scope);
+    }
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
   String get _projectName {
     if (_projectId == null) return 'Inbox';
     for (final project in widget.projects) {
       if (project.id == _projectId) return project.name;
     }
     return 'Project';
+  }
+
+  /// What is set on the task, as chips: tap one to change it, tap its cross to
+  /// clear it. The project is always shown, since it says where the task lives.
+  List<Widget> _valueChips(String today, String? date, String? time, String? sectionName, ColorScheme scheme) {
+    return [
+      if (date != null)
+        ValueChip(
+          icon: Icons.event_rounded,
+          label: [friendlyDate(date, today), ?time].join(' · '),
+          onTap: _pickDate,
+          onClear: _clearDue,
+        ),
+      if (_deadline != null)
+        ValueChip(
+          icon: Icons.hourglass_top_rounded,
+          label: 'Due by ${friendlyDate(_deadline!, today)}',
+          onTap: _pickDeadline,
+          onClear: _clearDeadline,
+        ),
+      if (_start != null)
+        ValueChip(
+          icon: Icons.play_circle_outline,
+          label: _start == 'someday' ? 'Someday' : 'From ${friendlyDate(_start!, today)}',
+          onTap: _pickStart,
+          onClear: _clearStart,
+        ),
+      if (_estimate != null)
+        ValueChip(
+          icon: Icons.timelapse_rounded,
+          label: durationLabel(_estimate!),
+          onTap: _pickEstimate,
+          onClear: _clearEstimate,
+        ),
+      if (_energy.isNotEmpty)
+        ValueChip(
+          icon: Icons.bolt_rounded,
+          label: switch (_energy) {
+            'deep' => 'Deep work',
+            'medium' => 'Medium',
+            'low' => 'Low',
+            _ => _energy,
+          },
+          onTap: _pickEnergy,
+          onClear: () => _setEnergy(''),
+        ),
+      if (_recurrence.isNotEmpty)
+        ValueChip(
+          icon: Icons.repeat_rounded,
+          label: _recurrenceLabel(_recurrence),
+          onTap: _seriesLoaded ? _pickRepeat : null,
+          onClear: _seriesLoaded ? _clearRepeat : null,
+        ),
+      if (_priority < 4)
+        ValueChip(
+          icon: Icons.flag_rounded,
+          label: 'Priority $_priority',
+          color: priorityColor(_priority, scheme),
+          onTap: _pickPriority,
+          onClear: () => _setPriority(4),
+        ),
+      if (_labels.isNotEmpty)
+        ValueChip(
+          icon: Icons.label_outline_rounded,
+          label: _labelNames(_labels),
+          onTap: _editLabels,
+          onClear: () => _setLabels(const []),
+        ),
+      if (_subtaskTotal > 0)
+        ValueChip(
+          icon: Icons.account_tree_outlined,
+          label: '$_subtaskDone/$_subtaskTotal subtasks',
+          onTap: _addSubtask,
+        ),
+      if (sectionName != null)
+        ValueChip(
+          icon: Icons.view_stream_outlined,
+          label: sectionName,
+          onTap: _pickSection,
+          onClear: () => _setSection(null),
+        ),
+      ValueChip(
+        icon: _projectId == null ? Icons.inbox_outlined : Icons.folder_outlined,
+        label: _projectName,
+        muted: _projectId == null,
+        dropdown: true,
+        onTap: _pickProject,
+      ),
+    ];
   }
 
   @override
@@ -712,40 +969,20 @@ class _TaskSheetState extends State<TaskSheet> {
     final date = _due?['date']?.toString();
     final time = _due?['time']?.toString();
     final sectionName = _sections.where((s) => s.id == _sectionId).firstOrNull?.name;
+    const gutter = EdgeInsets.only(left: 10);
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(12, 0, 20, 20),
+          padding: const EdgeInsets.fromLTRB(6, 0, 16, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TaskCheck(
-                    done: _completed,
-                    priority: _priority,
-                    onChanged: () async {
-                      // Ticking a repeating task finishes one occurrence: the
-                      // series stays open and comes round again, so the tick must
-                      // not stick here.
-                      if (_recurrence.isNotEmpty) {
-                        if (_completed) return;
-                        final messenger = ScaffoldMessenger.of(context);
-                        await widget.repo.setCompleted(widget.task, true);
-                        await refreshTaskSurfaces(widget.repo);
-                        messenger.showSnackBar(
-                          const SnackBar(content: Text('Done for now — it comes round again')),
-                        );
-                        return;
-                      }
-                      setState(() => _completed = !_completed);
-                      await widget.repo.setCompleted(widget.task, _completed);
-                      await refreshTaskSurfaces(widget.repo);
-                    },
-                  ),
+                  TaskCheck(done: _completed, priority: _priority, onChanged: _toggleDone),
                   Expanded(
                     child: TextField(
                       controller: _title,
@@ -768,178 +1005,104 @@ class _TaskSheetState extends State<TaskSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: gutter,
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _valueChips(today, date, time, sectionName, scheme),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: gutter,
+                child: PropIconBar(
+                  columns: 6,
                   children: [
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.event_rounded,
-                      label: date == null ? 'Date' : friendlyDate(date, today),
+                      tooltip: 'Date',
                       active: date != null,
                       onTap: _pickDate,
-                      onClear: date == null ? null : _clearDue,
                     ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.schedule_rounded,
-                      label: time ?? 'Time',
+                      tooltip: 'Time',
                       active: time != null,
                       onTap: _pickTime,
                     ),
-                    PropChip(
-                      icon: Icons.outlined_flag_rounded,
-                      label: _deadline == null ? 'Deadline' : 'Due by ${friendlyDate(_deadline!, today)}',
+                    PropIconButton(
+                      icon: Icons.hourglass_top_rounded,
+                      tooltip: 'Deadline',
                       active: _deadline != null,
                       onTap: _pickDeadline,
-                      onClear: _deadline == null ? null : _clearDeadline,
                     ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.play_circle_outline,
-                      label: _start == null
-                          ? 'Start'
-                          : _start == 'someday'
-                              ? 'Someday'
-                              : 'From ${friendlyDate(_start!, today)}',
+                      tooltip: 'Start',
                       active: _start != null,
                       onTap: _pickStart,
-                      onClear: _start == null
-                          ? null
-                          : () async {
-                              await widget.repo.setField('task', widget.task.id, 'start', null);
-                              if (mounted) setState(() => _start = null);
-                            },
                     ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.timelapse_rounded,
-                      label: _estimate == null ? 'Estimate' : durationLabel(_estimate!),
+                      tooltip: 'Estimate',
                       active: _estimate != null,
                       onTap: _pickEstimate,
-                      onClear: _estimate == null
-                          ? null
-                          : () async {
-                              await widget.repo.setField('task', widget.task.id, 'estimate_minutes', null);
-                              if (mounted) setState(() => _estimate = null);
-                            },
                     ),
-                    PopupMenuButton<String>(
-                      initialValue: _energy,
+                    PropIconButton(
+                      key: _energyKey,
+                      icon: Icons.bolt_rounded,
                       tooltip: 'Energy',
-                      onSelected: _setEnergy,
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: '', child: Text('No energy')),
-                        PopupMenuItem(value: 'deep', child: Text('Deep work')),
-                        PopupMenuItem(value: 'medium', child: Text('Medium')),
-                        PopupMenuItem(value: 'low', child: Text('Low')),
-                      ],
-                      child: PropChip(
-                        icon: Icons.bolt_rounded,
-                        label: switch (_energy) {
-                          'deep' => 'Deep',
-                          'medium' => 'Medium',
-                          'low' => 'Low',
-                          _ => 'Energy',
-                        },
-                        active: _energy.isNotEmpty,
-                      ),
+                      active: _energy.isNotEmpty,
+                      onTap: _pickEnergy,
                     ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.repeat_rounded,
-                      label: _recurrence.isEmpty ? 'Repeat' : _recurrenceLabel(_recurrence),
+                      tooltip: 'Repeat',
                       active: _recurrence.isNotEmpty,
                       onTap: _seriesLoaded ? _pickRepeat : null,
-                      onClear: _seriesLoaded && _recurrence.isNotEmpty ? _clearRepeat : null,
                     ),
-                    PopupMenuButton<int>(
-                      initialValue: _priority,
+                    PropIconButton(
+                      key: _priorityKey,
+                      icon: Icons.flag_rounded,
                       tooltip: 'Priority',
-                      onSelected: (value) async {
-                        setState(() => _priority = value);
-                        await widget.repo.setField('task', widget.task.id, 'priority', value);
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 1, child: Text('Priority 1')),
-                        PopupMenuItem(value: 2, child: Text('Priority 2')),
-                        PopupMenuItem(value: 3, child: Text('Priority 3')),
-                        PopupMenuItem(value: 4, child: Text('Priority 4 (default)')),
-                      ],
-                      child: PropChip(
-                        icon: Icons.flag_rounded,
-                        label: _priority < 4 ? 'P$_priority' : 'Priority',
-                        active: _priority < 4,
-                        color: priorityColor(_priority, scheme),
-                      ),
+                      active: _priority < 4,
+                      color: priorityColor(_priority, scheme),
+                      onTap: _pickPriority,
                     ),
-                    PopupMenuButton<String?>(
-                      initialValue: _projectId,
+                    PropIconButton(
+                      key: _projectKey,
+                      icon: Icons.folder_outlined,
                       tooltip: 'Project',
-                      onSelected: (value) async {
-                        if (value == _projectId) return;
-                        final messenger = ScaffoldMessenger.of(context);
-                        setState(() => _projectId = value);
-                        try {
-                          // Moving a parent carries every descendant; a subtask
-                          // that leaves its parent's project loses the parent.
-                          await widget.repo.moveToProject(widget.task, value);
-                          if (_sectionId != null) {
-                            await widget.repo.setField('task', widget.task.id, 'section_id', null);
-                            if (mounted) setState(() => _sectionId = null);
-                          }
-                          await _loadSections();
-                        } on Object catch (e) {
-                          messenger.showSnackBar(SnackBar(content: Text('$e')));
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
-                        for (final project in widget.projects)
-                          if (!project.isDeleted && !project.isArchived)
-                            PopupMenuItem<String?>(value: project.id, child: Text(project.name)),
-                      ],
-                      child: PropChip(
-                        icon: Icons.folder_outlined,
-                        label: _projectName,
-                        active: _projectId != null,
-                      ),
+                      active: _projectId != null,
+                      onTap: _pickProject,
                     ),
                     if (_projectId != null)
-                      PopupMenuButton<String?>(
-                        initialValue: _sectionId,
+                      PropIconButton(
+                        key: _sectionKey,
+                        icon: Icons.view_stream_outlined,
                         tooltip: 'Section',
-                        onSelected: _setSection,
-                        itemBuilder: (_) => [
-                          const PopupMenuItem<String?>(value: null, child: Text('No section')),
-                          for (final section in _sections)
-                            PopupMenuItem<String?>(value: section.id, child: Text(section.name)),
-                        ],
-                        child: PropChip(
-                          icon: Icons.view_stream_outlined,
-                          label: sectionName ?? 'Section',
-                          active: _sectionId != null,
-                        ),
+                        active: _sectionId != null,
+                        onTap: _pickSection,
                       ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.label_outline_rounded,
-                      label: _labelNames(_labels),
+                      tooltip: 'Labels',
                       active: _labels.isNotEmpty,
                       onTap: _editLabels,
-                      onClear: _labels.isEmpty ? null : () => _setLabels(const []),
                     ),
-                    PropChip(
+                    PropIconButton(
                       icon: Icons.account_tree_outlined,
-                      label: _subtaskTotal == 0
-                          ? 'Add subtask'
-                          : '$_subtaskDone/$_subtaskTotal subtasks',
+                      tooltip: 'Add subtask',
                       active: _subtaskTotal > 0,
                       onTap: _addSubtask,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: gutter,
                 child: TextField(
                   controller: _notes,
                   minLines: 3,
@@ -954,7 +1117,7 @@ class _TaskSheetState extends State<TaskSheet> {
               ),
               const SizedBox(height: 8),
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: gutter,
                 child: Row(
                   children: [
                     Expanded(
@@ -980,7 +1143,7 @@ class _TaskSheetState extends State<TaskSheet> {
               ),
               if (_attachments.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(10, 0, 8, 8),
                   child: Text(
                     'No files yet.',
                     style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
@@ -990,7 +1153,7 @@ class _TaskSheetState extends State<TaskSheet> {
                 for (final attachment in _attachments)
                   ListTile(
                     dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                     leading: Icon(
                       attachment.encrypted && !E2eeSession.instance.unlocked
                           ? Icons.lock_outline
@@ -1010,79 +1173,39 @@ class _TaskSheetState extends State<TaskSheet> {
                     ),
                     onTap: _attachmentsBusy ? null : () => _openAttachment(attachment),
                   ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
+              // Three actions and Done used to share a row of labelled buttons, and
+              // on a narrow phone Done was pushed off the edge. The three are icons
+              // now, so Done always fits.
               Padding(
-                padding: const EdgeInsets.only(left: 8),
+                padding: gutter,
                 child: Row(
                   children: [
-                    TextButton.icon(
-                      style: TextButton.styleFrom(foregroundColor: scheme.error),
-                      onPressed: () async {
-                        if (_recurrence.isEmpty) {
-                          await widget.repo.trash(widget.task);
-                        } else {
-                          final scope = await showModalBottomSheet<SeriesScope>(
-                            context: context,
-                            showDragHandle: true,
-                            builder: (context) => SafeArea(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ListTile(
-                                    title: Text(
-                                      'This is a repeating task',
-                                      style: Theme.of(context).textTheme.titleSmall,
-                                    ),
-                                    subtitle: Text(_recurrenceLabel(_recurrence)),
-                                  ),
-                                  const Divider(height: 1),
-                                  ListTile(
-                                    leading: const Icon(Icons.event_busy_outlined),
-                                    title: const Text('This occurrence'),
-                                    subtitle: const Text('Skip today; it comes round again'),
-                                    onTap: () => Navigator.of(context).pop(SeriesScope.occurrence),
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(Icons.event_repeat_outlined),
-                                    title: const Text('This and future occurrences'),
-                                    subtitle: const Text('The past stays as history'),
-                                    onTap: () => Navigator.of(context).pop(SeriesScope.future),
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(Icons.delete_forever_outlined),
-                                    title: const Text('All occurrences, past and future'),
-                                    onTap: () => Navigator.of(context).pop(SeriesScope.all),
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
-                              ),
-                            ),
-                          );
-                          if (scope == null) return;
-                          await widget.repo.deleteSeries(widget.task, scope);
-                        }
-                        if (context.mounted) Navigator.of(context).pop(true);
-                      },
+                    IconButton(
+                      tooltip: 'Delete',
+                      color: scheme.error,
+                      onPressed: _delete,
                       icon: const Icon(Icons.delete_outline_rounded),
-                      label: const Text('Delete'),
                     ),
-                    TextButton.icon(
+                    IconButton(
+                      tooltip: 'Share page',
+                      color: scheme.onSurfaceVariant,
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => TaskPageScreen(repo: widget.repo, task: widget.task),
                         ),
                       ),
                       icon: const Icon(Icons.public_rounded),
-                      label: const Text('Share page'),
                     ),
-                    TextButton.icon(
+                    IconButton(
+                      tooltip: 'History',
+                      color: scheme.onSurfaceVariant,
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => TaskHistoryScreen(task: widget.task, repo: widget.repo),
                         ),
                       ),
                       icon: const Icon(Icons.history_rounded),
-                      label: const Text('History'),
                     ),
                     const Spacer(),
                     FilledButton(

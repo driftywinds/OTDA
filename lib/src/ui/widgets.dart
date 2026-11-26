@@ -58,78 +58,31 @@ class TaskCheck extends StatelessWidget {
   }
 }
 
-/// A small read-only fact on a task row: icon and text in one soft pill.
-class MetaPill extends StatelessWidget {
-  const MetaPill({super.key, required this.label, this.icon, this.color, this.dot});
-
-  final String label;
-  final IconData? icon;
-
-  /// Text and icon colour; the muted default when null.
-  final Color? color;
-
-  /// A leading colour dot (a project), drawn instead of [icon].
-  final Color? dot;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final tint = color ?? scheme.onSurfaceVariant;
-    // A coloured pill (due today, overdue) gets a wash of its own colour; the
-    // neutral ones sit on the quiet field fill.
-    final wash = color != null ? color!.withValues(alpha: 0.12) : scheme.field;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: wash, borderRadius: BorderRadius.circular(9)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (dot != null)
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(right: 7),
-              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-            )
-          else if (icon != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 5),
-              child: Icon(icon, size: 13, color: tint),
-            ),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(color: tint, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+/// Where a `showMenu` opens: against the widget that carries [anchor], or
+/// against [context] when that widget is not built.
+///
+/// `showMenu` needs exactly one of `position`/`positionBuilder`; passing neither
+/// asserts in debug and dereferences null in release.
+RelativeRect menuPositionFor(BuildContext context, GlobalKey anchor) {
+  final target = anchor.currentContext ?? context;
+  final box = target.findRenderObject()! as RenderBox;
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
+  return RelativeRect.fromRect(
+    Rect.fromPoints(topLeft, bottomRight),
+    Offset.zero & overlay.size,
+  );
 }
 
-/// A property control that shows its value. With [onTap] it opens a picker and
-/// clears on long-press; without, it is only the look, for use as the child of
-/// a [PopupMenuButton] that handles the tap itself.
-class PropChip extends StatelessWidget {
-  const PropChip({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.active,
-    this.onTap,
-    this.onClear,
-    this.color,
-  });
+/// The look of one property icon: a quiet glyph when the property is empty, the
+/// accent colour on a soft wash when it holds a value. It draws only; wrap it in
+/// a [PropIconButton] to make it tappable, or in a `PopupMenuButton`.
+class PropIcon extends StatelessWidget {
+  const PropIcon({super.key, required this.icon, this.active = false, this.color});
 
   final IconData icon;
-  final String label;
   final bool active;
-  final VoidCallback? onTap;
-  final VoidCallback? onClear;
 
   /// Accent for the active state; the theme's primary when null.
   final Color? color;
@@ -138,37 +91,155 @@ class PropChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accent = color ?? scheme.primary;
-    final foreground = active ? accent : scheme.onSurfaceVariant;
-    final shape = BorderRadius.circular(12);
-    return Material(
-      color: active ? accent.withValues(alpha: 0.12) : scheme.field,
-      shape: RoundedRectangleBorder(
-        borderRadius: shape,
-        side: BorderSide(color: active ? accent.withValues(alpha: 0.35) : Colors.transparent),
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: active ? accent.withValues(alpha: 0.13) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
+      child: Icon(icon, size: 22, color: active ? accent : scheme.onSurfaceVariant),
+    );
+  }
+}
+
+/// One property of a task as an icon: tap to set or change it. The value itself
+/// is shown by a [ValueChip] once there is one, so the bar stays a row of icons
+/// however many properties a task has.
+class PropIconButton extends StatelessWidget {
+  const PropIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.active,
+    this.onTap,
+    this.onLongPress,
+    this.color,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool active;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Opacity(
+            opacity: onTap == null ? 0.38 : 1,
+            child: PropIcon(icon: icon, active: active, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A grid of property icons, [columns] to a row, each centred in an equal cell so
+/// the rows line up whatever the screen width.
+class PropIconBar extends StatelessWidget {
+  const PropIconBar({super.key, required this.children, this.columns = 6});
+
+  final List<Widget> children;
+  final int columns;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite ? constraints.maxWidth : columns * 48.0;
+        // Rounded down so the cells can never add up to a hair more than the row
+        // and push the last one onto a line of its own.
+        final cell = (width / columns).floorToDouble();
+        return Wrap(
+          runSpacing: 4,
+          children: [
+            for (final child in children)
+              SizedBox(width: cell, child: Center(child: child)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A property's value as a small chip: tap it to change the value, tap the cross
+/// to clear it. [muted] is the neutral look for a value that is always there (the
+/// project, even when it is the Inbox).
+class ValueChip extends StatelessWidget {
+  const ValueChip({
+    super.key,
+    required this.label,
+    this.icon,
+    this.color,
+    this.muted = false,
+    this.dropdown = false,
+    this.onTap,
+    this.onClear,
+  });
+
+  final String label;
+  final IconData? icon;
+  final Color? color;
+  final bool muted;
+
+  /// A small chevron after the label, for a chip that opens a menu.
+  final bool dropdown;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final tint = muted ? scheme.onSurfaceVariant : (color ?? scheme.primary);
+    final shape = BorderRadius.circular(10);
+    return Material(
+      color: muted ? scheme.field : tint.withValues(alpha: 0.12),
+      borderRadius: shape,
       child: InkWell(
-        onTap: onTap,
-        onLongPress: onClear,
         borderRadius: shape,
+        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: EdgeInsets.fromLTRB(10, 6, onClear != null || dropdown ? 6 : 10, 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: foreground),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: foreground),
-              ),
-              if (active && onClear != null) ...[
+              if (icon != null) ...[
+                Icon(icon, size: 15, color: tint),
                 const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(color: tint),
+                ),
+              ),
+              if (onClear != null) ...[
+                const SizedBox(width: 2),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onClear,
-                  child: Icon(Icons.close, size: 14, color: foreground),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Icons.close_rounded, size: 15, color: tint),
+                  ),
                 ),
-              ],
+              ] else if (dropdown)
+                Icon(Icons.expand_more_rounded, size: 16, color: tint),
             ],
           ),
         ),

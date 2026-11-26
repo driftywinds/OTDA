@@ -49,5 +49,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('every day until 2026-11-27'), findsOneWidget);
+
+    // Every property is an icon named by its tooltip, and Done stays on screen.
+    for (final label in ['Date', 'Time', 'Deadline', 'Start', 'Estimate', 'Energy', 'Repeat', 'Priority', 'Project', 'Labels']) {
+      expect(find.byTooltip(label), findsOneWidget, reason: 'the $label icon is missing');
+    }
+    expect(find.text('Done'), findsOneWidget);
   });
 }

@@ -1063,6 +1063,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // Upcoming lists a repeating task on its next occurrence, which
                       // is not done even though today's was.
                       showDone: !(_view == TaskView.upcoming && recurrenceRule.isNotEmpty),
+                      showTodayLabel: _view != TaskView.today,
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                       onMenu: () => _taskMenu(task),
@@ -1320,6 +1321,7 @@ class _TaskRow extends StatelessWidget {
     this.projectColor,
     this.dueOverride,
     this.showDone = true,
+    this.showTodayLabel = true,
   });
 
   final Task task;
@@ -1343,6 +1345,10 @@ class _TaskRow extends StatelessWidget {
   /// Draw the task as finished when it is. False for a future occurrence of a
   /// repeating task, which is open even when the one before it was done.
   final bool showDone;
+
+  /// Write "Today" for a task due today with no time. False on the Today view,
+  /// where every row is today's and the word is only noise.
+  final bool showTodayLabel;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final VoidCallback onMenu;
@@ -1357,102 +1363,144 @@ class _TaskRow extends StatelessWidget {
     final days = date == null ? null : daysBetween(today, date);
     final overdue = days != null && days < 0;
     final estimate = task.estimateMinutes;
+    final done = task.isCompleted && showDone;
+    final muted = scheme.onSurfaceVariant;
 
-    final meta = <Widget>[
-      if (progress != null && details != 'minimal')
-        MetaPill(icon: Icons.account_tree_outlined, label: progress!),
-      if (date != null && details != 'minimal')
-        MetaPill(
-          icon: Icons.event_rounded,
-          label: [friendlyDate(date, today), ?task.dueTime].join(' · '),
-          color: overdue ? scheme.error : (days == 0 ? scheme.primary : null),
-        ),
+    // The right-hand side carries the details: the date on top, in the colour that
+    // says how urgent it is, and the small facts under it. The title gets the rest
+    // of the row to itself.
+    String? dateLabel;
+    if (date != null && details != 'minimal') {
+      dateLabel = days == 0
+          ? (task.dueTime ?? (showTodayLabel ? 'Today' : null))
+          : [friendlyDate(date, today), ?task.dueTime].join(' ');
+    }
+    final dateColor = done ? muted : (overdue ? scheme.error : (days == 0 ? scheme.primary : muted));
+
+    final small = theme.textTheme.labelSmall?.copyWith(color: muted, fontWeight: FontWeight.w600);
+    final facts = <Widget>[
+      if (progress != null && details != 'minimal') ...[
+        Icon(Icons.account_tree_outlined, size: 12, color: muted),
+        Text(progress!, style: small),
+      ],
       if (details == 'all') ...[
-        if (estimate != null) MetaPill(icon: Icons.timelapse_rounded, label: durationLabel(estimate)),
         if (recurrenceRule != null && recurrenceRule!.isNotEmpty)
-          MetaPill(icon: Icons.repeat_rounded, label: recurrenceLabelOf(recurrenceRule!)),
+          Icon(Icons.repeat_rounded, size: 13, color: muted),
+        if (estimate != null) Text(durationLabel(estimate), style: small),
         if (projectName != null)
-          MetaPill(label: projectName!, dot: projectColor ?? scheme.primary),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 88),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(color: projectColor ?? scheme.primary, shape: BoxShape.circle),
+                ),
+                Flexible(child: Text(projectName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: small)),
+              ],
+            ),
+          ),
       ],
     ];
+    final hasDetails = dateLabel != null || facts.isNotEmpty;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(10 + depth * 18.0, compact ? 3 : 5, 10, compact ? 3 : 5),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: scheme.softShadow,
-        ),
-        child: Material(
-          color: scheme.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(color: scheme.cardBorder),
-          ),
-          clipBehavior: Clip.antiAlias,
+    final leftInset = 6.0 + depth * 20.0;
+    final chevronWidth = hasChildren ? 22.0 : 0.0;
+    final vertical = compact ? 0.0 : 3.0;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Colors.transparent,
           child: InkWell(
             onTap: onOpen,
             onLongPress: onMenu,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (hasChildren)
-                    SizedBox(
-                      width: 22,
-                      child: IconButton(
-                        tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(width: 22, height: 22),
-                        iconSize: 18,
-                        icon: Icon(
-                          collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        onPressed: onToggleCollapse,
-                      ),
-                    ),
-                  TaskCheck(done: task.isCompleted && showDone, priority: task.priority, onChanged: onToggle),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(4, compact ? 6 : 9, 0, compact ? 6 : 9),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            task.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              decoration: task.isCompleted && showDone ? TextDecoration.lineThrough : null,
-                              decorationColor: scheme.onSurfaceVariant,
-                              color: task.isCompleted && showDone ? scheme.onSurfaceVariant : scheme.onSurface,
-                            ),
+              padding: EdgeInsets.fromLTRB(leftInset, vertical, 16, vertical),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (hasChildren)
+                      SizedBox(
+                        width: chevronWidth,
+                        child: IconButton(
+                          tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 22, height: 22),
+                          iconSize: 18,
+                          icon: Icon(
+                            collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
+                            color: muted,
                           ),
-                          if (meta.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Wrap(spacing: 8, runSpacing: 6, children: meta),
-                          ],
-                        ],
+                          onPressed: onToggleCollapse,
+                        ),
+                      ),
+                    TaskCheck(done: done, priority: task.priority, onChanged: onToggle),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          task.title,
+                          maxLines: compact ? 1 : 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            decoration: done ? TextDecoration.lineThrough : null,
+                            decorationColor: muted,
+                            color: done ? muted : scheme.onSurface,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Task actions',
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 18,
-                    icon: Icon(Icons.more_horiz_rounded, color: scheme.onSurfaceVariant),
-                    onPressed: onMenu,
-                  ),
-                ],
+                    if (hasDetails) ...[
+                      const SizedBox(width: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (dateLabel != null)
+                              Text(
+                                dateLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: dateColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            if (facts.isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(top: dateLabel != null ? 2 : 0),
+                                child: Wrap(
+                                  alignment: WrapAlignment.end,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6,
+                                  runSpacing: 2,
+                                  children: facts,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
+        // A hairline between rows instead of a card round each one, starting under
+        // the title so the checks line up in a column.
+        Divider(height: 1, thickness: 1, indent: leftInset + chevronWidth + 44, endIndent: 0),
+      ],
     );
   }
 }

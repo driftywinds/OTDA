@@ -4,9 +4,11 @@ import 'package:flutter/services.dart' show SystemChannels;
 import 'package:material_ui/material_ui.dart';
 
 import '../data/models.dart';
+import '../data/recurrence.dart';
 import '../data/repo.dart';
 import '../quickadd_bridge.dart';
 import 'composer_state.dart';
+import 'format.dart';
 import 'highlight_controller.dart';
 import 'repeat_sheet.dart';
 import 'theme.dart';
@@ -154,21 +156,34 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  /// Where a menu opens: anchored to the chip that asked for it.
-  ///
-  /// `showMenu` requires exactly one of `position`/`positionBuilder`. Passing
-  /// neither asserts in debug and dereferences a null position in release, which
-  /// is the blank screen this used to show.
-  RelativeRect _menuPosition(GlobalKey anchor) {
-    final box = anchor.currentContext!.findRenderObject()! as RenderBox;
-    final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
-    return RelativeRect.fromRect(
-      Rect.fromPoints(topLeft, bottomRight),
-      Offset.zero & overlay.size,
-    );
-  }
+  /// Where a menu opens: anchored to the icon that asked for it.
+  RelativeRect _menuPosition(GlobalKey anchor) => menuPositionFor(context, anchor);
+
+  void _clearDue() => setState(() {
+        _values.dueDate = null;
+        _values.dueTime = null;
+        _values.release('due');
+      });
+
+  void _clearEstimate() => setState(() {
+        _values.estimate = null;
+        _values.release('estimate');
+      });
+
+  void _clearRecurrence() => setState(() {
+        _values.recurrence = null;
+        _values.release('recurrence');
+      });
+
+  void _clearPriority() => setState(() {
+        _values.priority = 4;
+        _values.release('priority');
+      });
+
+  void _clearParent() => setState(() {
+        _parent = null;
+        _values.release('project');
+      });
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -268,7 +283,10 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     return title.length > 28 ? '${title.substring(0, 27)}…' : title;
   }
 
-  /// The line under the input: what the line was understood to mean.
+  /// The line under the input: where the task will land, and what is set on it.
+  /// What the line was understood to mean shows first; the values a person chose
+  /// with the icons show when the line contributed none, each one tappable to
+  /// change and clearable.
   List<Widget> _preview(ThemeData theme) {
     final scheme = theme.colorScheme;
     Widget chip(String label, IconData icon, {bool muted = false}) => Chip(
@@ -289,26 +307,72 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       // ignoring it silently.
       for (final miss in _parsed.unmatched) chip('$miss — no match', Icons.help_outline, muted: true),
     ];
-    if (recognised.isNotEmpty) {
-      return [Wrap(spacing: 6, runSpacing: 4, children: recognised)];
-    }
 
+    final today = todayString();
     final chosen = <Widget>[
-      if (_values.dueDate != null) chip([_values.dueDate, ?_values.dueTime].join(' '), Icons.event),
-      if (_values.estimate != null) chip(_estimateText, Icons.timelapse),
-      if (_values.recurrence != null) chip(_values.recurrence!, Icons.repeat),
-      if (_values.priority < 4) chip('P${_values.priority}', Icons.flag),
-      if (_values.projectId != null) chip(_projectName, Icons.folder),
+      if (_values.dueDate != null)
+        ValueChip(
+          icon: Icons.event_rounded,
+          label: [friendlyDate(_values.dueDate!, today), ?_values.dueTime].join(' · '),
+          onTap: _pickDate,
+          onClear: _clearDue,
+        ),
+      if (_values.estimate != null)
+        ValueChip(
+          icon: Icons.timelapse_rounded,
+          label: _estimateText,
+          onTap: () => _showDurationMenu(_durationKey),
+          onClear: _clearEstimate,
+        ),
+      if (_values.recurrence != null)
+        ValueChip(
+          icon: Icons.repeat_rounded,
+          label: recurrenceLabelOf(_values.recurrence!),
+          onTap: _showRepeatSheet,
+          onClear: _clearRecurrence,
+        ),
+      if (_values.priority < 4)
+        ValueChip(
+          icon: Icons.flag_rounded,
+          label: 'P${_values.priority}',
+          color: priorityColor(_values.priority, scheme),
+          onTap: () => _showPriorityMenu(_priorityKey),
+          onClear: _clearPriority,
+        ),
     ];
-    if (chosen.isNotEmpty) return [Wrap(spacing: 6, runSpacing: 4, children: chosen)];
 
-    return [
-      Text(
-        _input.text.trim().isEmpty
-            ? 'Type a task — "call Sam tomorrow 3pm p1 +#work 30m"'
-            : 'No date, repeat or project understood yet',
-        style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+    final shown = <Widget>[
+      ValueChip(
+        key: _projectKey,
+        icon: _values.projectId == null ? Icons.inbox_outlined : Icons.folder_outlined,
+        label: _projectName,
+        muted: _values.projectId == null,
+        dropdown: _parent == null,
+        onTap: _parent == null ? () => _showProjectMenu(_projectKey) : null,
       ),
+      ...(recognised.isNotEmpty ? recognised : chosen),
+      if (_parent != null)
+        ValueChip(
+          icon: Icons.account_tree_outlined,
+          label: _parentLabel,
+          onTap: _pickParent,
+          onClear: _clearParent,
+        ),
+    ];
+
+    final nothingSet = recognised.isEmpty && chosen.isEmpty && _parent == null;
+    return [
+      Wrap(spacing: 6, runSpacing: 6, children: shown),
+      if (nothingSet)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            _input.text.trim().isEmpty
+                ? 'Type a task — "call Sam tomorrow 3pm p1 +#work 30m"'
+                : 'No date, repeat or project understood yet',
+            style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
     ];
   }
 
@@ -357,104 +421,53 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _preview(theme)),
               ),
               const Divider(),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              const SizedBox(height: 8),
+              PropIconBar(
+                columns: 6,
                 children: [
-                  PropChip(
+                  PropIconButton(
                     icon: Icons.event_rounded,
-                    label: _values.dueDate ?? 'Date',
+                    tooltip: 'Date',
                     active: _values.dueDate != null,
                     onTap: _pickDate,
-                    onClear: _values.dueDate == null
-                        ? null
-                        : () => setState(() {
-                              _values.dueDate = null;
-                              _values.dueTime = null;
-                              _values.release('due');
-                            }),
                   ),
-                  PropChip(
-                    icon: Icons.schedule,
-                    label: _values.dueTime ?? 'Time',
+                  PropIconButton(
+                    icon: Icons.schedule_rounded,
+                    tooltip: 'Time',
                     active: _values.dueTime != null,
                     onTap: _pickTime,
-                    onClear: _values.dueTime == null
-                        ? null
-                        : () => setState(() {
-                              _values.dueTime = null;
-                              _values.release('due');
-                            }),
                   ),
-                  PropChip(
+                  PropIconButton(
                     key: _durationKey,
-                    icon: Icons.timelapse,
-                    label: _estimateText,
+                    icon: Icons.timelapse_rounded,
+                    tooltip: 'Duration',
                     active: _values.estimate != null,
                     onTap: () => _showDurationMenu(_durationKey),
-                    onClear: _values.estimate == null
-                        ? null
-                        : () => setState(() {
-                              _values.estimate = null;
-                              _values.release('estimate');
-                            }),
                   ),
-                  PropChip(
-                    icon: Icons.repeat,
-                    label: _values.recurrence ?? 'Repeat',
+                  PropIconButton(
+                    icon: Icons.repeat_rounded,
+                    tooltip: 'Repeat',
                     active: _values.recurrence != null,
                     onTap: _showRepeatSheet,
-                    onClear: _values.recurrence == null
-                        ? null
-                        : () => setState(() {
-                              _values.recurrence = null;
-                              _values.release('recurrence');
-                            }),
                   ),
-                  PropChip(
+                  PropIconButton(
                     key: _priorityKey,
                     icon: Icons.flag_rounded,
-                    label: _values.priority < 4 ? 'P${_values.priority}' : 'Priority',
+                    tooltip: 'Priority',
                     active: _values.priority < 4,
                     color: priorityColor(_values.priority, theme.colorScheme),
                     onTap: () => _showPriorityMenu(_priorityKey),
-                    onClear: _values.priority < 4
-                        ? () => setState(() {
-                              _values.priority = 4;
-                              _values.release('priority');
-                            })
-                        : null,
                   ),
-                  PropChip(
+                  PropIconButton(
                     key: _parentKey,
                     icon: Icons.account_tree_outlined,
-                    label: _parentLabel,
+                    tooltip: 'Parent',
                     active: _parent != null,
                     onTap: _loadingParents ? null : _pickParent,
-                    onClear: _parent == null
-                        ? null
-                        : () => setState(() {
-                              _parent = null;
-                              _values.release('project');
-                            }),
-                  ),
-                  PropChip(
-                    key: _projectKey,
-                    icon: Icons.folder_outlined,
-                    label: _projectName,
-                    active: _values.projectId != null,
-                    onTap: _parent == null ? () => _showProjectMenu(_projectKey) : null,
-                    onClear: _parent != null || _values.projectId == null
-                        ? null
-                        : () => setState(() {
-                              _values.projectId = null;
-                              _values.release('project');
-                            }),
                   ),
                 ],
               ),
@@ -539,26 +552,27 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   }
 
   Future<void> _showProjectMenu(GlobalKey anchor) async {
-    final choice = await showMenu<String?>(
+    // The Inbox is the empty id, so that a dismissed menu (null) is told apart
+    // from choosing it.
+    final choice = await showMenu<String>(
       context: context,
       position: _menuPosition(anchor),
-      initialValue: _values.projectId,
+      initialValue: _values.projectId ?? '',
       items: [
-        const PopupMenuItem<String?>(value: null, child: Text('Inbox')),
+        const PopupMenuItem<String>(value: '', child: Text('Inbox')),
         for (final project in widget.projects)
           if (!project.isDeleted && !project.isArchived)
-            PopupMenuItem<String?>(value: project.id, child: Text(project.name)),
+            PopupMenuItem<String>(value: project.id, child: Text(project.name)),
       ],
     );
-    if (!mounted) return;
+    if (choice == null || !mounted) return;
     setState(() {
-      _values.projectId = choice;
+      _values.projectId = choice.isEmpty ? null : choice;
       _values.claim('project');
     });
   }
 }
 
-/// A searchable list of the tasks a new task can nest under.
 class _ParentPicker extends StatefulWidget {
   const _ParentPicker({required this.tasks, required this.projects, this.selectedId});
 
