@@ -21,6 +21,7 @@ import 'data/server_history.dart';
 import 'data/repo.dart';
 import 'e2ee/session.dart';
 import 'reminders/service.dart';
+import 'security/app_lock.dart';
 import 'data/sync_engine.dart';
 import 'util/log.dart';
 
@@ -80,6 +81,7 @@ class AppState extends ChangeNotifier {
   static const _rowDetailsPref = 'ui.row_details';
   static const _textScalePref = 'ui.text_scale';
   static const _weekStatsPref = 'ui.week_stats';
+  static const _appLockPref = 'ui.app_lock';
 
   /// The instance theme's seeds, kept so the widget popup (which has no network
   /// and no session) can wear the same palette as the app.
@@ -104,6 +106,10 @@ class AppState extends ChangeNotifier {
   /// sidebar and opening it has no cost to the Today layout.
   bool _showWeekStats = false;
 
+  /// The app-lock preference is device-local and off by default. The actual
+  /// locked/unlocked state lives in [AppLock], not in the account.
+  bool _appLockEnabled = false;
+
   /// The accent the person picked, `#rrggbb`, or null to follow the instance.
   String? _accentHex;
 
@@ -125,6 +131,7 @@ class AppState extends ChangeNotifier {
   String get rowDetails => _rowDetails;
   double get textScale => _textScale;
   bool get showWeekStats => _showWeekStats;
+  bool get appLockEnabled => _appLockEnabled;
   String? get accentHex => _accentHex;
   Map<String, dynamic>? get instanceLightSeeds => _instanceLightSeeds;
   Map<String, dynamic>? get instanceDarkSeeds => _instanceDarkSeeds;
@@ -285,6 +292,8 @@ class AppState extends ChangeNotifier {
       _textScale = (prefs.getDouble(_textScalePref) ?? 1).clamp(0.8, 1.4).toDouble();
       _rowDetails = prefs.getString(_rowDetailsPref) ?? 'all';
       _showWeekStats = prefs.getBool(_weekStatsPref) ?? false;
+      _appLockEnabled = prefs.getBool(_appLockPref) ?? false;
+      AppLock.instance.setEnabled(_appLockEnabled);
       final accent = prefs.getString(_accentPref) ?? '';
       _accentHex = accent.isEmpty ? null : accent;
       _readInstanceSeeds(prefs.getString(_instanceSeedsPref));
@@ -382,6 +391,20 @@ class AppState extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_weekStatsPref, value);
+    } on Object {
+      // the choice stays in memory for this run
+    }
+  }
+
+  /// Turns the UI lock on or off. Enabling from Settings passes `lock: false`
+  /// because the user just authenticated; a cold start locks it.
+  Future<void> setAppLockEnabled(bool value, {bool lock = true}) async {
+    _appLockEnabled = value;
+    AppLock.instance.setEnabled(value, lock: lock);
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_appLockPref, value);
     } on Object {
       // the choice stays in memory for this run
     }
@@ -835,6 +858,7 @@ class AppState extends ChangeNotifier {
     _gateError = null;
     _gateStarted = null;
     _bootstrapRunning = false;
+    if (_appLockEnabled) AppLock.instance.lockNow();
     notifyListeners();
   }
 

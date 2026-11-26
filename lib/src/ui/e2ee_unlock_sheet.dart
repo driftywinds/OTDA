@@ -4,10 +4,10 @@ import '../e2ee/biometric.dart';
 import '../e2ee/crypto.dart';
 import '../e2ee/keys.dart' as keys;
 import '../e2ee/session.dart';
-import 'biometric_offer.dart';
 
 /// Asks for the passphrase (or the recovery key) the first time this device meets
-/// an encrypted account, and after "Lock this device".
+/// an encrypted account. The account key is remembered after that, so ordinary
+/// app opens do not ask again; app lock is a separate setting.
 ///
 /// Returns true when the device is unlocked. Accounts without a key record never see
 /// this sheet: [E2eeSession.enabled] is false and nothing asks.
@@ -88,8 +88,7 @@ class _UnlockSheetState extends State<_UnlockSheet> {
         await E2eeSession.instance.unlockWithPassphrase(widget.record, secret);
       }
       if (!mounted) return;
-      await offerBiometricEnrollment(context);
-      if (mounted) Navigator.of(context).pop(true);
+      Navigator.of(context).pop(true);
     } on E2eeError catch (e) {
       setState(() => _error = e.message);
     } on Object {

@@ -54,7 +54,7 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Unlock your encrypted OTDA vault with Face ID instead of typing the passphrase.</string>
+	<string>Unlock OTDA, or its encrypted vault, with Face ID.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

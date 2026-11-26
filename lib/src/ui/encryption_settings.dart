@@ -4,12 +4,10 @@ import 'package:material_ui/material_ui.dart';
 import '../api/api_exception.dart';
 import '../app_state.dart';
 import '../e2ee/attachments.dart';
-import '../e2ee/biometric.dart';
 import '../e2ee/crypto.dart';
 import '../e2ee/keys.dart';
 import '../e2ee/lifecycle.dart';
 import '../e2ee/session.dart';
-import 'biometric_offer.dart';
 import 'reauth.dart';
 import 'settings_rows.dart';
 import 'theme.dart';
@@ -30,7 +28,6 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
   E2eeMigrationProgress? _progress;
   String? _error;
   E2eeMigrationMode? _pending;
-  bool _biometric = false;
 
   E2eeSession get _session => E2eeSession.instance;
 
@@ -54,14 +51,6 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
   void initState() {
     super.initState();
     _loadPending();
-    _loadBiometric();
-  }
-
-  Future<void> _loadBiometric() async {
-    final record = _session.record;
-    if (record == null) return;
-    final enrolled = await BiometricUnlock.instance.enrolled(record);
-    if (mounted) setState(() => _biometric = enrolled);
   }
 
   Future<void> _loadPending() async {
@@ -121,8 +110,6 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
       if (repo != null) await _session.openLocalReplica(repo.db);
       if (mounted) {
         setState(() {});
-        await offerBiometricEnrollment(context);
-        await _loadBiometric();
       }
       return true;
     } on Object catch (e) {
@@ -280,7 +267,8 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
             const SizedBox(height: 6),
             Text(
               enabled
-                  ? 'Personal fields are ciphertext on the server. Shared projects stay readable to their members and are never encrypted.'
+                  ? 'Personal fields are ciphertext on the server. Shared projects stay readable to their members and are never encrypted. '
+                      'The passphrase is remembered on this device after the first unlock.'
                   : 'Content fields are stored in the clear on your server. Turning encryption on rewrites them as ciphertext and shows a recovery key once.',
               style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
@@ -339,33 +327,6 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
                   subtitle: 'Continue sealing or decrypting the remaining fields',
                   onTap: _busy ? null : _finishPending,
                 ),
-              if (unlocked && BiometricUnlock.instance.supported)
-                _biometric
-                    ? SettingsAction(
-                        icon: Icons.fingerprint_rounded,
-                        title: 'Fingerprint/face unlock',
-                        subtitle: 'On — opens the vault when it is locked',
-                        trailing: TextButton(
-                          onPressed: _busy
-                              ? null
-                              : () async {
-                                  await BiometricUnlock.instance.disable();
-                                  if (mounted) setState(() => _biometric = false);
-                                },
-                          child: const Text('Turn off'),
-                        ),
-                      )
-                    : SettingsAction(
-                        icon: Icons.fingerprint_rounded,
-                        title: 'Add fingerprint/face unlock',
-                        subtitle: 'Use the phone lock instead of typing the passphrase',
-                        onTap: _busy
-                            ? null
-                            : () async {
-                                await offerBiometricEnrollment(context);
-                                await _loadBiometric();
-                              },
-                      ),
               Divider(height: 1, color: scheme.cardBorder),
               SettingsAction(
                 icon: Icons.cleaning_services_outlined,

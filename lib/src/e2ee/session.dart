@@ -26,8 +26,9 @@ class E2eeLockedException implements Exception {
 /// The device's view of the account's encryption: the wrapped record (from the
 /// server or the last copy kept here) and, once unlocked, the account key.
 ///
-/// The key lives in the platform keystore, never in the database or prefs, and is
-/// forgotten by "Lock this device".
+/// The key lives in the platform keystore after the first unlock, so a normal app
+/// open does not ask for the passphrase again. Signing out or turning encryption
+/// off forgets it. App lock is separate: it gates the UI, not this key.
 class E2eeSession {
   E2eeSession._();
 
@@ -67,15 +68,20 @@ class E2eeSession {
       final fetched = map is Map ? k.KeyRecord.fromJson(map.cast<String, Object?>()) : null;
       record = fetched;
       e2eeLog('record: ${fetched == null ? 'none' : 'present, ${fetched.iterations} iterations'}');
-      if (fetched != null) {
-        await _storage.write(key: _recordSlot, value: jsonEncode(fetched.toJson()));
+      if (fetched == null) {
+        // Encryption was turned off on the server: the saved key has nothing left
+        // to decrypt and must not survive into a later re-enable.
+        await forget();
+        return null;
       }
+      await _checkSavedKeyAgainst(fetched);
+      await _storage.write(key: _recordSlot, value: jsonEncode(fetched.toJson()));
       return fetched;
     } on ApiException catch (e) {
       if (e.status == 404) {
         e2eeLog('record: 404, not encrypted');
         record = null;
-        await BiometricUnlock.instance.disable();
+        await forget();
         return null;
       }
       e2eeLog('record FAILED: $e');
@@ -85,18 +91,11 @@ class E2eeSession {
 
   /// Called at start-up, before any sync: what this device knows without a network.
   ///
-  /// The account key is deliberately never restored from storage. Keeping it
-  /// there made the vault stay unlocked across restarts, so neither the
-  /// passphrase nor the biometric prompt was ever asked for again. The wrapped
-  /// record remains, and a biometric copy (when enrolled) is the only persistent
-  /// way back in without typing the passphrase.
+  /// The account key is restored from the platform keystore after the first
+  /// successful unlock, so a normal restart does not ask for the passphrase again.
+  /// The key record is stored beside it; a record belonging to a different account
+  /// key discards the saved copy rather than trying to use it.
   Future<void> restore() async {
-    // Clear a key left by an older build that did persist it.
-    try {
-      await _storage.delete(key: _keySlot);
-    } on Object {
-      // no platform keystore: nothing to clear
-    }
     final saved = await _storage.read(key: _recordSlot);
     if (saved != null) {
       try {
@@ -105,6 +104,94 @@ class E2eeSession {
         // a corrupt copy is worthless; the server sends the record again
       }
     }
+    await _restoreSavedKey();
+  }
+
+  String _recordTag(k.KeyRecord value) => '${value.salt}|${value.wrappedByPassphrase}|${value.createdAt}';
+
+  /// Reads the saved key entry. Supports the old raw-base64 shape as well as the
+  /// JSON shape that carries the record it belongs to.
+  Future<({String key, int createdAt, String tag})?> _readKeyEntry() async {
+    final raw = await _storage.read(key: _keySlot);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final key = decoded['key']?.toString() ?? '';
+        if (key.isEmpty) return null;
+        return (
+          key: key,
+          createdAt: (decoded['createdAt'] as num?)?.toInt() ?? 0,
+          tag: decoded['tag']?.toString() ?? '',
+        );
+      }
+    } on Object {
+      // The older build stored the key as bare base64; fall through to that.
+    }
+    return (key: raw, createdAt: 0, tag: '');
+  }
+
+  Future<void> _writeKeyEntry(k.KeyRecord fromServer, Uint8List key) =>
+      _storage.write(
+        key: _keySlot,
+        value: jsonEncode({
+          'key': b64url(key),
+          'createdAt': fromServer.createdAt,
+          'tag': _recordTag(fromServer),
+        }),
+      );
+
+  bool _sameSavedAccount(int savedCreatedAt, String savedTag, k.KeyRecord current) {
+    if (savedTag.isEmpty) return true; // older entry: let the key be used once
+    if (savedTag == _recordTag(current)) return true;
+    // A passphrase change keeps createdAt and only rewraps the same account key.
+    return savedCreatedAt != 0 && savedCreatedAt == current.createdAt;
+  }
+
+  Future<void> _restoreSavedKey() async {
+    final entry = await _readKeyEntry();
+    if (entry == null) return;
+    final current = record;
+    if (current == null) {
+      await _clearSavedKey();
+      return;
+    }
+    try {
+      final key = unb64url(entry.key);
+      if (key.length != 32) throw const FormatException('bad key length');
+      if (!_sameSavedAccount(entry.createdAt, entry.tag, current)) {
+        await _clearSavedKey();
+        return;
+      }
+      _accountKey = key;
+      // Refresh an older/rewrapped entry with the current record identity.
+      await _writeKeyEntry(current, key);
+    } on Object {
+      await _clearSavedKey();
+    }
+  }
+
+  Future<void> _clearSavedKey() async {
+    _accountKey = null;
+    try {
+      await _storage.delete(key: _keySlot);
+    } on Object {
+      // no platform keystore
+    }
+  }
+
+  /// After the server sends a newer record, keep the saved key only when it still
+  /// belongs to the same account key. A rewritten passphrase keeps `createdAt`;
+  /// turning encryption off and on again creates a new one.
+  Future<void> _checkSavedKeyAgainst(k.KeyRecord fetched) async {
+    if (!persistToKeystore) return;
+    final entry = await _readKeyEntry();
+    if (entry == null) return;
+    if (!_sameSavedAccount(entry.createdAt, entry.tag, fetched)) {
+      await _clearSavedKey();
+      return;
+    }
+    if (_accountKey != null) await _writeKeyEntry(fetched, _accountKey!);
   }
 
   Future<void> unlockWithPassphrase(k.KeyRecord fromServer, String passphrase) async {
@@ -147,14 +234,12 @@ class E2eeSession {
     _accountKey = key;
     _sealing = true;
     if (!persistToKeystore) return;
-    // The raw key stays in memory only. Persisting it here is what made the
-    // passphrase/biometric unlock unnecessary after the first setup.
-    try {
-      await _storage.delete(key: _keySlot);
-    } on Object {
-      // no platform keystore: nothing to clean up
-    }
+    // Keep the account key across restarts. The old raw-key slot is rewritten in
+    // the tagged JSON shape, and the retired E2EE biometric copy is removed: app
+    // lock is now the only biometric surface.
+    await _writeKeyEntry(fromServer, key);
     await _storage.write(key: _recordSlot, value: jsonEncode(fromServer.toJson()));
+    await BiometricUnlock.instance.disable();
   }
 
   /// Test seam: adopt a key without the keystore, for the replica tests.
@@ -169,9 +254,7 @@ class E2eeSession {
 
   /// Forgets the key but keeps the record, so the next unlock works offline.
   Future<void> lock() async {
-    _accountKey = null;
-    if (!persistToKeystore) return;
-    await _storage.delete(key: _keySlot);
+    await _clearSavedKey();
   }
 
   /// Signing out and turning encryption off must leave nothing behind.

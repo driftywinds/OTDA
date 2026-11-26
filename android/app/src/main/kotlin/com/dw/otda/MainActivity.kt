@@ -6,7 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -17,7 +17,7 @@ import io.flutter.plugin.common.MethodChannel
  *  - the system screens a reliable reminder depends on: notification, exact-alarm and battery
  *    settings, and the phone-maker "Autostart" page.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     private var channel: MethodChannel? = null
     private var initialLink: String? = null

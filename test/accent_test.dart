@@ -12,10 +12,7 @@ void main() {
     await tester.pumpWidget(const OtdaApp());
     await tester.pump();
 
-    final builder = tester.widget<AnimatedBuilder>(find.ancestor(
-      of: find.byType(MaterialApp),
-      matching: find.byType(AnimatedBuilder),
-    ).first);
+    final builder = tester.widget<AnimatedBuilder>(find.byKey(const ValueKey('otda-state')));
     final state = builder.animation as AppState;
     final before = tester.widget<MaterialApp>(find.byType(MaterialApp)).darkTheme!.colorScheme.primary;
 
