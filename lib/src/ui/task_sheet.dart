@@ -266,10 +266,22 @@ class _TaskSheetState extends State<TaskSheet> {
       // The start and deadline belong to the series too. Move them by the same
       // number of days as the due date, never turning a missing field into one.
       if (shift != null && shift != 0) {
+        final current = await widget.repo.task(widget.task.id);
+        String? movedStart;
+        String? movedDeadline;
         for (final field in ['start', 'deadline']) {
-          final old = widget.task.raw[field]?.toString() ?? '';
+          final old = current?.raw[field]?.toString() ?? widget.task.raw[field]?.toString() ?? '';
           if (old.isEmpty || old == 'someday') continue;
-          await widget.repo.setField('task', widget.task.id, field, _shiftDate(old, shift));
+          final moved = _shiftDate(old, shift);
+          await widget.repo.setField('task', widget.task.id, field, moved);
+          if (field == 'start') movedStart = moved;
+          if (field == 'deadline') movedDeadline = moved;
+        }
+        if (mounted) {
+          setState(() {
+            if (movedStart != null) _start = movedStart;
+            if (movedDeadline != null) _deadline = movedDeadline;
+          });
         }
       }
       if (mounted) setState(() => _due = value);

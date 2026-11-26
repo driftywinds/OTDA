@@ -407,6 +407,16 @@ class Workspace {
 
   /// The workspace's accent colour, as the server stores it (`#rrggbb`).
   String get color => raw['color']?.toString() ?? '';
+
+  /// The workspace's feature switches (`calendar`, `reviews`, …). Missing keys
+  /// mean on; the server only stores the ones that were switched off.
+  Map<String, dynamic> get features {
+    final value = raw['features'];
+    return value is Map ? value.cast<String, dynamic>() : const {};
+  }
+
+  bool featureEnabled(String name) => features[name] != false;
+
   List<WorkspaceMember> get members => [
         for (final raw in (this.raw['members'] as List?) ?? const [])
           if (raw is Map) WorkspaceMember.fromJson(raw.cast<String, dynamic>()),

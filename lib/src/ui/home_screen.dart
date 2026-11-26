@@ -60,6 +60,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Workspace> _workspaces = const [];
   Set<String> _sharedProjects = const {};
   String? _workspaceId;
+
+  /// The active workspace's feature switches; empty means everything is on.
+  Map<String, dynamic> _workspaceFeatures = const {};
+
+  /// Whether personal views include tasks assigned to someone else. Account
+  /// synced through `user_prefs.today_assignees`.
+  bool _showAssignedToOthers = false;
+
   String _calendarDay = '';
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -245,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final projects = await repo.projects();
     final workspaces = await repo.workspaces();
     final memberships = await repo.memberships();
+    final prefs = await repo.userPrefs();
     final collapsedRaw = await repo.db.meta('ui.collapsed');
     if (!mounted) return;
     final defaultWorkspace = workspaces.where((w) => w.isDefault).map((w) => w.id).firstOrNull ??
@@ -270,13 +279,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           entry.key: '${entry.value.where((t) => t.isCompleted).length}/${entry.value.length}',
       };
       _weekStats = computeStats(
-        tasks: tasks,
+        tasks: [for (final task in tasks) if (_isMyTask(task)) task],
         projects: projects,
         labels: const [],
         period: periodFor(StatsPeriodKind.thisWeek, _today),
         today: _today,
       );
       _workspaces = workspaces;
+      _showAssignedToOthers = prefs['today_assignees']?.toString() == 'all';
       _sharedProjects = {
         for (final membership in memberships)
           if (membership.isShared) membership.projectId,
@@ -286,6 +296,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!workspaces.any((workspace) => workspace.id == _workspaceId)) {
         _workspaceId = defaultWorkspace;
       }
+      final activeWorkspace = workspaces.where((w) => w.id == _workspaceId).firstOrNull;
+      _workspaceFeatures = activeWorkspace?.features ?? const {};
+      if (_view == TaskView.calendar && !_calendarEnabled) _view = TaskView.today;
       // A project without a workspace belongs to the account's default one.
       bool here(Project p) =>
           (p.workspaceId ?? defaultWorkspace) == _workspaceId || _workspaceId == null;
@@ -313,13 +326,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
+  bool get _calendarEnabled => _workspaceFeatures['calendar'] != false;
+
+  bool get _reviewsEnabled => _workspaceFeatures['reviews'] != false;
+
+  bool get _isPersonalView =>
+      _view == TaskView.today || _view == TaskView.upcoming || _view == TaskView.anytime || _view == TaskView.someday;
+
+  /// A personal view shows unassigned tasks and tasks assigned to me; the
+  /// account can opt back into seeing other people's tasks.
+  bool _isMine(Task task) {
+    if (_showAssignedToOthers) return true;
+    return _isMyTask(task);
+  }
+
+  /// The account's own tasks, independent of the "show others" choice. Counts and
+  /// the Today card keep following this even while other people's rows are shown.
+  bool _isMyTask(Task task) {
+    final me = widget.state.account?.userId ?? '';
+    if (me.isEmpty) return true;
+    final assignee = task.raw['assignee_id']?.toString() ?? '';
+    return assignee.isEmpty || assignee == me;
+  }
+
   List<Task> get _visible {
     final today = _today;
     switch (_view) {
       case TaskView.today:
         // What is due, plus what was finished today: ticking one off moves it down
         // into "Done today" instead of vanishing.
-        return _tasks.where((t) => inToday(t.raw, today) || _finishedToday(t, today)).toList()
+        return _tasks.where((t) => _isMine(t) && (inToday(t.raw, today) || _finishedToday(t, today))).toList()
           ..sort((a, b) {
             if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
             final ak = '${a.dueDate ?? a.deadline ?? '9999'}${a.dueTime ?? '99:99'}';
@@ -346,13 +382,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // a monthly or daily task does not sit in the past and vanish from here.
         final dated = <(String, Task)>[
           for (final t in _tasks)
-            if (upcomingDay(t, _tasks, today) case final day?) (day, t),
+            if (upcomingDay(t, _tasks, today) case final day? when _isMine(t)) (day, t),
         ]..sort((a, b) => '${a.$1}${a.$2.dueTime ?? '99:99'}'
             .compareTo('${b.$1}${b.$2.dueTime ?? '99:99'}'));
         _upcomingDays = {for (final e in dated) e.$2.id: e.$1};
         // Everything with no date at all comes last, under Anytime, so the view
         // that answers "what is coming" also lists what has no day yet.
-        final anytime = _tasks.where((t) => inAnytime(t.raw, today)).toList()
+        final anytime = _tasks.where((t) => _isMine(t) && inAnytime(t.raw, today)).toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
         return [for (final e in dated) e.$2, ...anytime];
       case TaskView.history:
@@ -391,10 +427,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
       case TaskView.anytime:
-        return _tasks.where((t) => inAnytime(t.raw, today)).toList()
+        return _tasks.where((t) => _isMine(t) && inAnytime(t.raw, today)).toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
       case TaskView.someday:
-        return _tasks.where((t) => inSomedayView(t.raw)).toList()
+        return _tasks.where((t) => _isMine(t) && inSomedayView(t.raw)).toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
     }
   }
@@ -691,6 +727,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openStats() async {
+    if (!_reviewsEnabled) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => StatsScreen(state: widget.state)),
     );
@@ -757,15 +794,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _load();
   }
 
+  Future<void> _setShowAssignedToOthers(bool value) async {
+    await widget.state.repo?.setUserPref('today_assignees', value ? 'all' : 'mine');
+    if (!mounted) return;
+    setState(() => _showAssignedToOthers = value);
+    await _load();
+  }
+
   void _go(TaskView view, {String? projectId}) {
+    final target = view == TaskView.calendar && !_calendarEnabled ? TaskView.today : view;
     setState(() {
-      _view = view;
+      _view = target;
       _projectId = projectId ?? _projectId;
-      if (view != TaskView.search) {
+      if (target != TaskView.search) {
         _searchField.clear();
         _query = '';
       }
-      if (view == TaskView.calendar && _calendarDay.isEmpty) _calendarDay = _today;
+      if (target == TaskView.calendar && _calendarDay.isEmpty) _calendarDay = _today;
     });
     // Close the sidebar when it is what navigated; never pop the screen itself.
     _scaffoldKey.currentState?.closeDrawer();
@@ -992,6 +1037,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         sharedProjects: _sharedProjects,
         onDeleteProjects: _deleteProjects,
         onWorkspace: _chooseWorkspace,
+        showCalendar: _calendarEnabled,
+        showReviews: _reviewsEnabled,
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -1022,7 +1069,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
               actions: [
-                // Both actions sit in equal 48px boxes so the icons are evenly
+                if (_isPersonalView)
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: PopupMenuButton<bool>(
+                      tooltip: 'View options',
+                      icon: Icon(
+                        _showAssignedToOthers ? Icons.filter_alt : Icons.filter_alt_outlined,
+                        color: _showAssignedToOthers ? scheme.primary : null,
+                      ),
+                      onSelected: (_) => _setShowAssignedToOthers(!_showAssignedToOthers),
+                      itemBuilder: (_) => [
+                        CheckedPopupMenuItem<bool>(
+                          value: true,
+                          checked: _showAssignedToOthers,
+                          child: const Text('Show tasks assigned to others'),
+                        ),
+                      ],
+                    ),
+                  ),
+                // The actions sit in equal 48px boxes so the icons are evenly
                 // spaced, and the spinner takes the same box instead of nudging
                 // its neighbour while a sync runs.
                 SizedBox(
@@ -1060,11 +1127,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ? friendlyDate(_calendarDay, _today)
                         : (_view == TaskView.inbox ? 'Everything, in one place' : null)),
                 state: widget.state,
-                shown: tasks.length,
+                shown: _isPersonalView ? tasks.where(_isMyTask).length : tasks.length,
                 showSync: _syncFlash,
               ),
             ),
-            if (_view == TaskView.today && _showWeekStats && _weekStats != null)
+            if (_view == TaskView.today && _reviewsEnabled && _showWeekStats && _weekStats != null)
               SliverToBoxAdapter(
                 child: _WeekCard(stats: _weekStats!, onTap: _openStats),
               ),
@@ -1645,6 +1712,8 @@ class _AppDrawer extends StatelessWidget {
     required this.sharedProjects,
     required this.onDeleteProjects,
     required this.onWorkspace,
+    required this.showCalendar,
+    required this.showReviews,
   });
 
   final AppState state;
@@ -1667,6 +1736,8 @@ class _AppDrawer extends StatelessWidget {
   final Set<String> sharedProjects;
   final void Function(List<String> projectIds) onDeleteProjects;
   final VoidCallback onWorkspace;
+  final bool showCalendar;
+  final bool showReviews;
 
   /// `v1.5.0` reads as `v1.5.0`, not `vv1.5.0`.
   static String _versionLabel(String? version) => serverVersionLabel(version);
@@ -1758,7 +1829,8 @@ class _AppDrawer extends StatelessWidget {
             rule,
             destination(TaskView.search, Icons.search, 'Search'),
             destination(TaskView.upcoming, Icons.date_range_outlined, 'Upcoming'),
-            destination(TaskView.calendar, Icons.calendar_month_outlined, 'Calendar'),
+            if (showCalendar)
+              destination(TaskView.calendar, Icons.calendar_month_outlined, 'Calendar'),
             rule,
             Expanded(
               child: ListView(
@@ -1813,19 +1885,20 @@ class _AppDrawer extends StatelessWidget {
                 navigator.push(MaterialPageRoute(builder: (_) => InvitationsScreen(state: state)));
               },
             )),
-            inset(ListTile(
-              dense: true,
-              visualDensity: rowDensity,
-              contentPadding: _sidebarRowPadding,
-              minVerticalPadding: rowMinPadding,
-              leading: mark(const Icon(Icons.insights_rounded, size: 20)),
-              title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w500)),
-              onTap: () {
-                final navigator = Navigator.of(context);
-                navigator.pop();
-                navigator.push(MaterialPageRoute(builder: (_) => StatsScreen(state: state)));
-              },
-            )),
+            if (showReviews)
+              inset(ListTile(
+                dense: true,
+                visualDensity: rowDensity,
+                contentPadding: _sidebarRowPadding,
+                minVerticalPadding: rowMinPadding,
+                leading: mark(const Icon(Icons.insights_rounded, size: 20)),
+                title: const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w500)),
+                onTap: () {
+                  final navigator = Navigator.of(context);
+                  navigator.pop();
+                  navigator.push(MaterialPageRoute(builder: (_) => StatsScreen(state: state)));
+                },
+              )),
             inset(ListTile(
               dense: true,
               visualDensity: rowDensity,
