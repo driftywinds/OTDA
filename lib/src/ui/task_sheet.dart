@@ -171,9 +171,9 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   /// A long-press on a subtask's handle drags it; the new order is written as
-  /// positions, which is what every list orders subtasks by.
+  /// positions, which is what every list orders subtasks by. `onReorderItem`
+  /// already adjusts the target index for the removed row.
   Future<void> _reorderChildren(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex -= 1;
     if (newIndex == oldIndex) return;
     final moved = [..._children];
     moved.insert(newIndex, moved.removeAt(oldIndex));
@@ -1050,7 +1050,7 @@ class _TaskSheetState extends State<TaskSheet> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
-          onReorder: _reorderChildren,
+          onReorderItem: _reorderChildren,
           children: [
             for (var i = 0; i < _children.length; i++)
               _subtaskRow(i, theme, scheme, today, labelNames),
@@ -1120,8 +1120,9 @@ class _TaskSheetState extends State<TaskSheet> {
         ),
         ReorderableDelayedDragStartListener(
           index: index,
-          child: Tooltip(
-            message: 'Hold to reorder',
+          child: Semantics(
+            button: true,
+            label: 'Hold to reorder',
             child: Padding(
               padding: const EdgeInsets.fromLTRB(6, 10, 2, 10),
               child: Icon(Icons.drag_handle_rounded, color: scheme.onSurfaceVariant),
