@@ -24,7 +24,8 @@ bool scheduled(Map<String, Object?> t) => hasDue(t) || start(t).isNotEmpty || se
 bool placed(Map<String, Object?> t) =>
     (t['project_id']?.toString() ?? '').isNotEmpty || scheduled(t);
 
-/// Open, live, unplaced, and no known ancestor placed.
+/// The web client's Inbox predicate, kept for the shared view vectors. The app's
+/// Inbox is a consolidated all-project list now; [home_screen] does not use this.
 bool inInbox(Map<String, Object?> task, {List<Map<String, Object?>> parents = const []}) {
   if (_completed(task) || _deleted(task) || placed(task)) return false;
   for (final parent in parents) {

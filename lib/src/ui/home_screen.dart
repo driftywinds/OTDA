@@ -68,6 +68,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// occurrence of a repeating task.
   Map<String, String> _upcomingDays = const {};
 
+  /// The day shown on an Upcoming row inside the consolidated Inbox, including a
+  /// future deadline or start date that is not the task's due date.
+  Map<String, String> _inboxDays = const {};
+
   /// Every occurrence between the calendar's window edges, so a daily task is
   /// shown on every day it falls due.
   ///
@@ -311,7 +315,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   List<Task> get _visible {
     final today = _today;
-    final byId = {for (final t in _tasks) t.id: t.raw};
     switch (_view) {
       case TaskView.today:
         // What is due, plus what was finished today: ticking one off moves it down
@@ -324,8 +327,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             return ak.compareTo(bk);
           });
       case TaskView.inbox:
-        return _tasks.where((t) => inInboxOf(t.raw, byId)).toList()
-          ..sort((a, b) => _position(a).compareTo(_position(b)));
+        // The consolidated view: every live task, from every project and every
+        // schedule state. Completed-today rows come first, then the sections are
+        // assembled in _entries().
+        return _tasks
+            .where((t) => !t.isDeleted && (!t.isCompleted || _finishedToday(t, today)))
+            .toList()
+          ..sort((a, b) {
+            if (a.isCompleted != b.isCompleted) return a.isCompleted ? -1 : 1;
+            if (a.isCompleted) {
+              return (b.completedAt ?? 0).compareTo(a.completedAt ?? 0);
+            }
+            return _position(a).compareTo(_position(b));
+          });
       case TaskView.upcoming:
         // Upcoming is every open task with a day ahead of today, plus a repeating
         // task whose stored due has passed: it is shown on its next occurrence, so
@@ -383,6 +397,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return _tasks.where((t) => inSomedayView(t.raw)).toList()
           ..sort((a, b) => _position(a).compareTo(_position(b)));
     }
+  }
+
+  /// The day a consolidated-Inbox row belongs under when it is not due today:
+  /// a projected repeat, a future deadline, or a future start date.
+  String? _nextScheduledDay(Task task, String today) {
+    final projected = upcomingDay(task, _tasks, today);
+    if (projected != null && projected.compareTo(today) > 0) return projected;
+    final deadline = task.raw['deadline']?.toString() ?? '';
+    if (deadline.compareTo(today) > 0) return deadline;
+    final start = task.raw['start']?.toString() ?? '';
+    if (start.isNotEmpty && start != 'someday' && start.compareTo(today) > 0) return start;
+    return null;
   }
 
   /// Completed today, in the device's own day.
@@ -778,6 +804,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// at the top level, with no write.
   List<Object> _entries(List<Task> tasks) {
     final today = _today;
+    if (_view == TaskView.inbox) {
+      final done = tasks
+          .where((t) => t.isCompleted && _finishedToday(t, today))
+          .toList()
+        ..sort((a, b) => (b.completedAt ?? 0).compareTo(a.completedAt ?? 0));
+      final open = tasks.where((t) => !t.isCompleted).toList();
+      final todayTasks = <Task>[];
+      final upcoming = <(String?, Task)>[];
+      final anytime = <Task>[];
+      final someday = <Task>[];
+      for (final task in open) {
+        if (inSomedayView(task.raw)) {
+          someday.add(task);
+        } else if (inToday(task.raw, today)) {
+          todayTasks.add(task);
+        } else {
+          final day = _nextScheduledDay(task, today);
+          if (day != null) {
+            upcoming.add((day, task));
+          } else if (inAnytime(task.raw, today)) {
+            anytime.add(task);
+          } else {
+            // A sector-only task is still part of "everything"; keep it in the
+            // scheduled block with no date rather than dropping it.
+            upcoming.add((null, task));
+          }
+        }
+      }
+      todayTasks.sort((a, b) {
+        final ak = '${a.dueDate ?? a.deadline ?? '9999'}${a.dueTime ?? '99:99'}';
+        final bk = '${b.dueDate ?? b.deadline ?? '9999'}${b.dueTime ?? '99:99'}';
+        return ak.compareTo(bk);
+      });
+      upcoming.sort((a, b) {
+        final ak = '${a.$1 ?? '9999'}${a.$2.dueTime ?? '99:99'}';
+        final bk = '${b.$1 ?? '9999'}${b.$2.dueTime ?? '99:99'}';
+        return ak.compareTo(bk);
+      });
+      _inboxDays = {
+        for (final entry in upcoming)
+          if (entry.$1 != null) entry.$2.id: entry.$1!,
+      };
+      return [
+        if (done.isNotEmpty) ...['Done today', ..._nest(done)],
+        if (todayTasks.isNotEmpty) ...['Today', ..._nest(todayTasks)],
+        if (upcoming.isNotEmpty) ...['Upcoming', ..._nest([for (final entry in upcoming) entry.$2])],
+        if (anytime.isNotEmpty) ...['Anytime', ..._nest(anytime)],
+        if (someday.isNotEmpty) ...['Someday', ..._nest(someday)],
+      ];
+    }
     if (_view == TaskView.today) {
       final open = tasks.where((t) => !t.isCompleted).toList();
       final done = tasks.where((t) => t.isCompleted).toList();
@@ -980,7 +1056,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: _Header(
                 subtitle: _view == TaskView.today
                     ? longToday(DateTime.now())
-                    : (_view == TaskView.calendar ? friendlyDate(_calendarDay, _today) : null),
+                    : (_view == TaskView.calendar
+                        ? friendlyDate(_calendarDay, _today)
+                        : (_view == TaskView.inbox ? 'Everything, in one place' : null)),
                 state: widget.state,
                 shown: tasks.length,
                 showSync: _syncFlash,
@@ -1046,6 +1124,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
                       dueOverride: switch (_view) {
                         TaskView.upcoming => _upcomingDays[task.id],
+                        TaskView.inbox => _inboxDays[task.id],
                         TaskView.calendar => _calendarDay,
                         _ => null,
                       },
@@ -1235,7 +1314,7 @@ class _EmptyState extends StatelessWidget {
     final scheme = theme.colorScheme;
     final (icon, title, hint) = switch (view) {
       TaskView.today => (Icons.wb_sunny_outlined, 'Nothing due today', 'Enjoy the quiet, or add something with +.'),
-      TaskView.inbox => (Icons.inbox_outlined, 'Inbox is empty', 'New tasks without a home land here.'),
+      TaskView.inbox => (Icons.inbox_outlined, 'No tasks yet', 'Every task from every project will show up here.'),
       TaskView.upcoming => (Icons.date_range_outlined, 'Nothing coming up', 'Tasks with a future date show up here.'),
       TaskView.search => (Icons.search, 'Search your tasks', 'Type above to look through titles and notes.'),
       TaskView.calendar => (Icons.calendar_month_outlined, 'Nothing this day', 'Pick another day above.'),

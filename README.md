@@ -28,15 +28,18 @@ Offline-first, with the same data model as the server so every device converges.
   declined from the app.
 - Public links: a project can be published as a read-only (or tickable) page with an
   expiry, and a task as a view/reply/tick page. The URL is shown once, then revocable.
-- Inbox, Today, Upcoming (ending with Anytime), Anytime, Someday, History, Search,
-  project lists, a month calendar, reminders and the home-screen widget.
+- Inbox is the consolidated view: Done today, Today, Upcoming, Anytime and Someday
+  across every project. Other views: Today, Upcoming (ending with Anytime), Anytime,
+  Someday, History, Search, project lists, a month calendar, reminders and the
+  home-screen widget.
 - Two-factor authentication management (enrol, recovery codes, trusted browsers),
   statistics, a shared-project activity feed, per-task history, JSON/ZIP export and
   device-local theming.
 - End-to-end encryption: turn it on from Settings with a one-time recovery key, rewrite
   existing content with progress (interrupted runs resume), encrypt plaintext as it
   arrives, purge old content history, and turn it off again with a fresh confirmation.
-  After an unlock, keep the key behind fingerprint/face; the passphrase still works.
+  The account key is remembered on the device after the first passphrase unlock. App
+  lock is a separate, off-by-default fingerprint/face/device-PIN gate for the UI.
 - Attachments: pick files, encrypt personal ones with the `OTAT1` chunked format, upload
   with size/sha256, verify every chunk on open, view images in-app and share the rest.
   Enabling or disabling encryption re-uploads existing files as new rows first.
