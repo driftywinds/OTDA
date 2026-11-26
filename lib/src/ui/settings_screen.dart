@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import '../security/app_lock.dart';
 import '../reminders/debug_log.dart';
 import '../reminders/service.dart';
 import '../system_bridge.dart';
@@ -213,6 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+                _Section(title: 'App lock', children: [_AppLockCard(state: widget.state)]),
                 _Section(title: 'End-to-end encryption', children: [EncryptionSettingsCard(state: widget.state)]),
                 _Section(title: 'Notifications', children: [_NotificationsCard(state: widget.state)]),
                 const _Section(title: 'Home screen widget', children: [_WidgetCard()]),
@@ -538,6 +540,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
   String _time = '09:00';
   String _maker = '';
   int _armed = 0;
+  bool _showDiagnostics = false;
 
   @override
   void initState() {
@@ -772,47 +775,47 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
           status(Icons.error_outline_rounded, 'Last error', service.lastError!, good: false),
         ],
         divider,
-        Theme(
-          data: theme.copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            leading: Icon(Icons.science_outlined, size: 20, color: scheme.primary),
-            title: Text('Tests & diagnostics', style: style?.copyWith(fontWeight: FontWeight.w600)),
-            subtitle: Text('Notification, alarm and log checks', style: theme.textTheme.bodySmall),
-            children: [
-              action(Icons.notification_add_outlined, 'Show a test notification now',
-                  'Proves the permission and the sound', () async {
-                _say(await service.sendTestNow());
-                await _refresh();
-              }),
-              action(Icons.alarm_outlined, 'Test in 1 minute',
-                  'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
-                _say(await service.scheduleTest(const Duration(minutes: 1)));
-                await _refresh();
-              }),
-              action(Icons.copy_all_outlined, 'Copy debug log',
-                  'Permissions, what is armed, and recent events. Paste it to share', () async {
-                final report = await service.debugReport();
-                await Clipboard.setData(ClipboardData(text: report));
-                _say('Copied ${report.split('\n').length} lines to the clipboard.');
-              }),
-              action(Icons.delete_sweep_outlined, 'Clear debug log', 'Start fresh before a test', () async {
-                await DebugLog.clear();
-                _say('Log cleared.');
-              }),
-              if (repo != null)
-                action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
-                    'Creates a task, arms it, and lets you try Complete and Snooze', () async {
-                  _say(await service.createRealTest(repo));
-                  await widget.state.afterDataChanged();
-                  await _refresh();
-                }),
-            ],
+        SettingsAction(
+          icon: Icons.science_outlined,
+          title: 'Tests & diagnostics',
+          subtitle: 'Notification, alarm and log checks',
+          trailing: AnimatedRotation(
+            turns: _showDiagnostics ? 0.5 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: Icon(Icons.expand_more_rounded, size: 20, color: scheme.onSurfaceVariant),
           ),
+          onTap: () => setState(() => _showDiagnostics = !_showDiagnostics),
         ),
+        if (_showDiagnostics) ...[
+          divider,
+          action(Icons.notification_add_outlined, 'Show a test notification now',
+              'Proves the permission and the sound', () async {
+            _say(await service.sendTestNow());
+            await _refresh();
+          }),
+          action(Icons.alarm_outlined, 'Test in 1 minute',
+              'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
+            _say(await service.scheduleTest(const Duration(minutes: 1)));
+            await _refresh();
+          }),
+          action(Icons.copy_all_outlined, 'Copy debug log',
+              'Permissions, what is armed, and recent events. Paste it to share', () async {
+            final report = await service.debugReport();
+            await Clipboard.setData(ClipboardData(text: report));
+            _say('Copied ${report.split('\n').length} lines to the clipboard.');
+          }),
+          action(Icons.delete_sweep_outlined, 'Clear debug log', 'Start fresh before a test', () async {
+            await DebugLog.clear();
+            _say('Log cleared.');
+          }),
+          if (repo != null)
+            action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
+                'Creates a task, arms it, and lets you try Complete and Snooze', () async {
+              _say(await service.createRealTest(repo));
+              await widget.state.afterDataChanged();
+              await _refresh();
+            }),
+        ],
       ],
     );
   }
@@ -1075,6 +1078,101 @@ class _AccentRow extends StatelessWidget {
 }
 /// turning it off. Every mutating route needs a recent password or code, so the
 /// card asks for one when the server answers `reauth_required`.
+class _AppLockCard extends StatefulWidget {
+  const _AppLockCard({required this.state});
+
+  final AppState state;
+
+  @override
+  State<_AppLockCard> createState() => _AppLockCardState();
+}
+
+class _AppLockCardState extends State<_AppLockCard> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _toggle(bool value) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (value) {
+        if (!await AppLock.instance.canAuthenticate()) {
+          if (mounted) {
+            setState(() => _error = 'Set a screen lock on this device first, then try again.');
+          }
+          return;
+        }
+        final result = await AppLock.instance.authenticate(reason: 'Turn on OTDA app lock');
+        if (!result.ok) {
+          if (mounted) setState(() => _error = result.error);
+          return;
+        }
+        await widget.state.setAppLockEnabled(true, lock: false);
+      } else {
+        final result = await AppLock.instance.authenticate(reason: 'Turn off OTDA app lock');
+        if (!result.ok) {
+          if (mounted) setState(() => _error = result.error);
+          return;
+        }
+        await widget.state.setAppLockEnabled(false);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = widget.state.appLockEnabled;
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.state, AppLock.instance]),
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              secondary: Icon(
+                enabled ? Icons.phonelink_lock_rounded : Icons.phonelink_lock_outlined,
+                color: enabled ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+              ),
+              title: Text('App lock', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                enabled
+                    ? 'On — asks after 30 seconds away, or on a fresh start.'
+                    : 'Off — OTDA opens without an authentication prompt.',
+              ),
+              value: enabled,
+              onChanged: _busy ? null : _toggle,
+            ),
+            if (enabled)
+              SettingsAction(
+                icon: Icons.lock_rounded,
+                title: 'Lock now',
+                subtitle: 'Require authentication again',
+                onTap: _busy ? null : AppLock.instance.lockNow,
+              ),
+            Text(
+              'This locks the app interface. End-to-end encryption stays unlocked in the background so sync and reminders keep working.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TwoFactorCard extends StatefulWidget {
   const _TwoFactorCard({required this.state});
 

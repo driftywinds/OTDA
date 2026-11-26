@@ -33,7 +33,7 @@ class SettingsAction extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
         child: Row(
           children: [
             Icon(icon, size: 20, color: color),
