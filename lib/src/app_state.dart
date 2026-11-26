@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart' show ThemeMode;
@@ -80,6 +80,10 @@ class AppState extends ChangeNotifier {
   static const _rowDetailsPref = 'ui.row_details';
   static const _textScalePref = 'ui.text_scale';
   static const _weekStatsPref = 'ui.week_stats';
+
+  /// The instance theme's seeds, kept so the widget popup (which has no network
+  /// and no session) can wear the same palette as the app.
+  static const _instanceSeedsPref = 'ui.instance_seeds';
 
   /// system, light or dark.
   String _themeChoice = 'dark';
@@ -283,10 +287,29 @@ class AppState extends ChangeNotifier {
       _showWeekStats = prefs.getBool(_weekStatsPref) ?? false;
       final accent = prefs.getString(_accentPref) ?? '';
       _accentHex = accent.isEmpty ? null : accent;
+      _readInstanceSeeds(prefs.getString(_instanceSeedsPref));
     } on Object {
       _useAllo = true; // a missing store keeps the default look
     }
     notifyListeners();
+  }
+
+  void _readInstanceSeeds(String? stored) {
+    if (stored == null || stored.isEmpty) return;
+    try {
+      final json = jsonDecode(stored);
+      if (json is! Map) return;
+      final light = json['light'];
+      final dark = json['dark'];
+      if (_instanceLightSeeds == null && light is Map) {
+        _instanceLightSeeds = Map<String, dynamic>.from(light);
+      }
+      if (_instanceDarkSeeds == null && dark is Map) {
+        _instanceDarkSeeds = Map<String, dynamic>.from(dark);
+      }
+    } on Object {
+      // a damaged copy is only a missing palette
+    }
   }
 
   /// Reads the profile's picture version and, when there is one, its bytes.
@@ -392,6 +415,10 @@ class AppState extends ChangeNotifier {
       _instanceLightSeeds = seeds.light;
       _instanceDarkSeeds = seeds.dark;
       notifyListeners();
+      await _setPref(
+        _instanceSeedsPref,
+        jsonEncode({'light': seeds.light, 'dark': seeds.dark}),
+      );
     } on Object {
       // Older servers, offline, or no instance theme: keep the app's palette.
     }
@@ -802,6 +829,7 @@ class AppState extends ChangeNotifier {
     _mfaStatus = null;
     _instanceLightSeeds = null;
     _instanceDarkSeeds = null;
+    await _setPref(_instanceSeedsPref, '');
     _gate = SyncGate.syncing;
     _gateProgress = null;
     _gateError = null;

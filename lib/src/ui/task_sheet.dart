@@ -695,22 +695,16 @@ class _TaskSheetState extends State<TaskSheet> {
 
   static String _sizeLabel(double kb) => kb < 1024 ? '${kb.round()} KB' : '${(kb / 1024).toStringAsFixed(1)} MB';
 
-  // `showMenu` opens against a position, so each menu icon needs its own anchor.
-  final _energyKey = GlobalKey();
-  final _priorityKey = GlobalKey();
-  final _projectKey = GlobalKey();
-  final _sectionKey = GlobalKey();
-
   Future<void> _pickEnergy() async {
-    final choice = await showMenu<String>(
-      context: context,
-      position: menuPositionFor(context, _energyKey),
-      initialValue: _energy,
+    final choice = await showChoiceSheet<String>(
+      context,
+      title: 'Energy',
+      selected: _energy,
       items: const [
-        PopupMenuItem(value: '', child: Text('No energy')),
-        PopupMenuItem(value: 'deep', child: Text('Deep work')),
-        PopupMenuItem(value: 'medium', child: Text('Medium')),
-        PopupMenuItem(value: 'low', child: Text('Low')),
+        ChoiceItem('', 'No energy'),
+        ChoiceItem('deep', 'Deep work'),
+        ChoiceItem('medium', 'Medium'),
+        ChoiceItem('low', 'Low'),
       ],
     );
     if (choice == null || !mounted) return;
@@ -723,15 +717,15 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   Future<void> _pickPriority() async {
-    final choice = await showMenu<int>(
-      context: context,
-      position: menuPositionFor(context, _priorityKey),
-      initialValue: _priority,
+    final choice = await showChoiceSheet<int>(
+      context,
+      title: 'Priority',
+      selected: _priority,
       items: const [
-        PopupMenuItem(value: 1, child: Text('Priority 1')),
-        PopupMenuItem(value: 2, child: Text('Priority 2')),
-        PopupMenuItem(value: 3, child: Text('Priority 3')),
-        PopupMenuItem(value: 4, child: Text('Priority 4 (default)')),
+        ChoiceItem(1, 'Priority 1', icon: Icons.flag_rounded),
+        ChoiceItem(2, 'Priority 2', icon: Icons.flag_rounded),
+        ChoiceItem(3, 'Priority 3', icon: Icons.flag_rounded),
+        ChoiceItem(4, 'Priority 4 (default)', icon: Icons.outlined_flag_rounded),
       ],
     );
     if (choice == null || !mounted) return;
@@ -757,16 +751,16 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   Future<void> _pickProject() async {
-    // The Inbox is the empty id, so a dismissed menu (null) is not mistaken for it.
-    final choice = await showMenu<String>(
-      context: context,
-      position: menuPositionFor(context, _projectKey),
-      initialValue: _projectId ?? '',
+    // The Inbox is the empty id, so a dismissed sheet (null) is not mistaken for it.
+    final choice = await showChoiceSheet<String>(
+      context,
+      title: 'Project',
+      selected: _projectId ?? '',
       items: [
-        const PopupMenuItem<String>(value: '', child: Text('Inbox')),
+        const ChoiceItem('', 'Inbox', icon: Icons.inbox_outlined),
         for (final project in widget.projects)
           if (!project.isDeleted && !project.isArchived)
-            PopupMenuItem<String>(value: project.id, child: Text(project.name)),
+            ChoiceItem(project.id, project.name, icon: Icons.folder_outlined),
       ],
     );
     if (choice == null || !mounted) return;
@@ -774,14 +768,13 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   Future<void> _pickSection() async {
-    final choice = await showMenu<String>(
-      context: context,
-      position: menuPositionFor(context, _sectionKey),
-      initialValue: _sectionId ?? '',
+    final choice = await showChoiceSheet<String>(
+      context,
+      title: 'Section',
+      selected: _sectionId ?? '',
       items: [
-        const PopupMenuItem<String>(value: '', child: Text('No section')),
-        for (final section in _sections)
-          PopupMenuItem<String>(value: section.id, child: Text(section.name)),
+        const ChoiceItem('', 'No section'),
+        for (final section in _sections) ChoiceItem(section.id, section.name),
       ],
     );
     if (choice == null || !mounted) return;
@@ -1050,7 +1043,6 @@ class _TaskSheetState extends State<TaskSheet> {
                       onTap: _pickEstimate,
                     ),
                     PropIconButton(
-                      key: _energyKey,
                       icon: Icons.bolt_rounded,
                       tooltip: 'Energy',
                       active: _energy.isNotEmpty,
@@ -1063,7 +1055,6 @@ class _TaskSheetState extends State<TaskSheet> {
                       onTap: _seriesLoaded ? _pickRepeat : null,
                     ),
                     PropIconButton(
-                      key: _priorityKey,
                       icon: Icons.flag_rounded,
                       tooltip: 'Priority',
                       active: _priority < 4,
@@ -1071,7 +1062,6 @@ class _TaskSheetState extends State<TaskSheet> {
                       onTap: _pickPriority,
                     ),
                     PropIconButton(
-                      key: _projectKey,
                       icon: Icons.folder_outlined,
                       tooltip: 'Project',
                       active: _projectId != null,
@@ -1079,7 +1069,6 @@ class _TaskSheetState extends State<TaskSheet> {
                     ),
                     if (_projectId != null)
                       PropIconButton(
-                        key: _sectionKey,
                         icon: Icons.view_stream_outlined,
                         tooltip: 'Section',
                         active: _sectionId != null,

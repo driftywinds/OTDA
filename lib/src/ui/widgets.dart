@@ -58,20 +58,62 @@ class TaskCheck extends StatelessWidget {
   }
 }
 
-/// Where a `showMenu` opens: against the widget that carries [anchor], or
-/// against [context] when that widget is not built.
+/// One option in a [showChoiceSheet].
+class ChoiceItem<T> {
+  const ChoiceItem(this.value, this.label, {this.icon});
+
+  final T value;
+  final String label;
+  final IconData? icon;
+}
+
+/// A list of options in a bottom sheet; the chosen value, or null when the sheet
+/// is dismissed (so an option that means "none" needs a value of its own).
 ///
-/// `showMenu` needs exactly one of `position`/`positionBuilder`; passing neither
-/// asserts in debug and dereferences null in release.
-RelativeRect menuPositionFor(BuildContext context, GlobalKey anchor) {
-  final target = anchor.currentContext ?? context;
-  final box = target.findRenderObject()! as RenderBox;
-  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
-  final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-  final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
-  return RelativeRect.fromRect(
-    Rect.fromPoints(topLeft, bottomRight),
-    Offset.zero & overlay.size,
+/// This replaces menus anchored to a button. An anchored menu is placed once, so
+/// when it took the keyboard down and the composer slid with it, the menu stayed
+/// where the button used to be.
+Future<T?> showChoiceSheet<T>(
+  BuildContext context, {
+  required String title,
+  required List<ChoiceItem<T>> items,
+  T? selected,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) {
+      final theme = Theme.of(context);
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(title, style: theme.textTheme.titleMedium),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final item in items)
+                    ListTile(
+                      leading: item.icon == null ? null : Icon(item.icon),
+                      title: Text(item.label),
+                      selected: item.value == selected,
+                      trailing: item.value == selected ? const Icon(Icons.check_rounded) : null,
+                      onTap: () => Navigator.of(context).pop(item.value),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
   );
 }
 

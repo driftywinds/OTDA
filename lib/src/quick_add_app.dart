@@ -1,26 +1,64 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'app_state.dart';
 import 'reminders/debug_log.dart';
 import 'reminders/service.dart';
 import 'system_bridge.dart';
 import 'ui/new_task_sheet.dart';
-import 'ui/theme.dart';
+import 'ui/app_themes.dart';
 
 /// The widget's "+" popup: the same composer as the app's plus button, in a
 /// see-through window over whatever app is in front. It opens the replica without
 /// the main app, saves the task, re-arms reminders and refreshes the widget, then
 /// closes itself. The task reaches the server the next time the app syncs.
-class QuickAddApp extends StatelessWidget {
+class QuickAddApp extends StatefulWidget {
   const QuickAddApp({super.key});
 
   @override
+  State<QuickAddApp> createState() => _QuickAddAppState();
+}
+
+class _QuickAddAppState extends State<QuickAddApp> {
+  // The popup runs in its own engine with no session, but the appearance settings
+  // are device preferences: reading them here is what makes it wear the app's
+  // accent, font, density and dark style instead of the stock look.
+  final _state = AppState();
+
+  @override
+  void initState() {
+    super.initState();
+    _state.loadLocalPreferences();
+  }
+
+  @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      home: const _QuickAddHost(),
+    return AnimatedBuilder(
+      animation: _state,
+      builder: (context, _) {
+        final themes = buildAppThemes(_state);
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          themeMode: themes.mode,
+          theme: themes.light,
+          darkTheme: themes.dark,
+          builder: (context, child) {
+            final system = MediaQuery.textScalerOf(context).scale(1);
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(system * _state.textScale),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: const _QuickAddHost(),
+        );
+      },
     );
   }
 }

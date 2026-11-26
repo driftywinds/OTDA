@@ -54,12 +54,6 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
   bool _saving = false;
   String? _lastParsedText;
 
-  // `showMenu` opens against a position, so each menu chip needs its own anchor.
-  final _durationKey = GlobalKey();
-  final _priorityKey = GlobalKey();
-  final _projectKey = GlobalKey();
-  final _parentKey = GlobalKey();
-
   /// The repeat sheet's per-task reminder choice, written once the task exists.
   int? _reminderMinutes;
 
@@ -155,9 +149,6 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
       });
     });
   }
-
-  /// Where a menu opens: anchored to the icon that asked for it.
-  RelativeRect _menuPosition(GlobalKey anchor) => menuPositionFor(context, anchor);
 
   void _clearDue() => setState(() {
         _values.dueDate = null;
@@ -321,7 +312,7 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
         ValueChip(
           icon: Icons.timelapse_rounded,
           label: _estimateText,
-          onTap: () => _showDurationMenu(_durationKey),
+          onTap: () => _showDurationMenu(),
           onClear: _clearEstimate,
         ),
       if (_values.recurrence != null)
@@ -336,19 +327,18 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
           icon: Icons.flag_rounded,
           label: 'P${_values.priority}',
           color: priorityColor(_values.priority, scheme),
-          onTap: () => _showPriorityMenu(_priorityKey),
+          onTap: () => _showPriorityMenu(),
           onClear: _clearPriority,
         ),
     ];
 
     final shown = <Widget>[
       ValueChip(
-        key: _projectKey,
         icon: _values.projectId == null ? Icons.inbox_outlined : Icons.folder_outlined,
         label: _projectName,
         muted: _values.projectId == null,
         dropdown: _parent == null,
-        onTap: _parent == null ? () => _showProjectMenu(_projectKey) : null,
+        onTap: _parent == null ? () => _showProjectMenu() : null,
       ),
       ...(recognised.isNotEmpty ? recognised : chosen),
       if (_parent != null)
@@ -442,11 +432,10 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                     onTap: _pickTime,
                   ),
                   PropIconButton(
-                    key: _durationKey,
                     icon: Icons.timelapse_rounded,
                     tooltip: 'Duration',
                     active: _values.estimate != null,
-                    onTap: () => _showDurationMenu(_durationKey),
+                    onTap: () => _showDurationMenu(),
                   ),
                   PropIconButton(
                     icon: Icons.repeat_rounded,
@@ -455,15 +444,13 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
                     onTap: _showRepeatSheet,
                   ),
                   PropIconButton(
-                    key: _priorityKey,
                     icon: Icons.flag_rounded,
                     tooltip: 'Priority',
                     active: _values.priority < 4,
                     color: priorityColor(_values.priority, theme.colorScheme),
-                    onTap: () => _showPriorityMenu(_priorityKey),
+                    onTap: () => _showPriorityMenu(),
                   ),
                   PropIconButton(
-                    key: _parentKey,
                     icon: Icons.account_tree_outlined,
                     tooltip: 'Parent',
                     active: _parent != null,
@@ -478,16 +465,13 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     );
   }
 
-  Future<void> _showDurationMenu(GlobalKey anchor) async {
+  Future<void> _showDurationMenu() async {
     const presets = [15, 30, 45, 60, 90, 120, 180, 240];
-    final choice = await showMenu<int>(
-      context: context,
-      position: _menuPosition(anchor),
-      initialValue: _values.estimate,
-      items: [
-        for (final minutes in presets)
-          PopupMenuItem(value: minutes, child: Text(_durationLabel(minutes))),
-      ],
+    final choice = await showChoiceSheet<int>(
+      context,
+      title: 'Duration',
+      selected: _values.estimate,
+      items: [for (final minutes in presets) ChoiceItem(minutes, _durationLabel(minutes))],
     );
     if (choice == null || !mounted) return;
     setState(() {
@@ -532,16 +516,16 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  Future<void> _showPriorityMenu(GlobalKey anchor) async {
-    final choice = await showMenu<int>(
-      context: context,
-      position: _menuPosition(anchor),
-      initialValue: _values.priority,
+  Future<void> _showPriorityMenu() async {
+    final choice = await showChoiceSheet<int>(
+      context,
+      title: 'Priority',
+      selected: _values.priority,
       items: const [
-        PopupMenuItem(value: 1, child: Text('P1 — highest')),
-        PopupMenuItem(value: 2, child: Text('P2')),
-        PopupMenuItem(value: 3, child: Text('P3')),
-        PopupMenuItem(value: 4, child: Text('P4 — default')),
+        ChoiceItem(1, 'P1 — highest', icon: Icons.flag_rounded),
+        ChoiceItem(2, 'P2', icon: Icons.flag_rounded),
+        ChoiceItem(3, 'P3', icon: Icons.flag_rounded),
+        ChoiceItem(4, 'P4 — default', icon: Icons.outlined_flag_rounded),
       ],
     );
     if (choice == null || !mounted) return;
@@ -551,18 +535,18 @@ class _NewTaskSheetState extends State<NewTaskSheet> {
     });
   }
 
-  Future<void> _showProjectMenu(GlobalKey anchor) async {
-    // The Inbox is the empty id, so that a dismissed menu (null) is told apart
+  Future<void> _showProjectMenu() async {
+    // The Inbox is the empty id, so that a dismissed sheet (null) is told apart
     // from choosing it.
-    final choice = await showMenu<String>(
-      context: context,
-      position: _menuPosition(anchor),
-      initialValue: _values.projectId ?? '',
+    final choice = await showChoiceSheet<String>(
+      context,
+      title: 'Project',
+      selected: _values.projectId ?? '',
       items: [
-        const PopupMenuItem<String>(value: '', child: Text('Inbox')),
+        const ChoiceItem('', 'Inbox', icon: Icons.inbox_outlined),
         for (final project in widget.projects)
           if (!project.isDeleted && !project.isArchived)
-            PopupMenuItem<String>(value: project.id, child: Text(project.name)),
+            ChoiceItem(project.id, project.name, icon: Icons.folder_outlined),
       ],
     );
     if (choice == null || !mounted) return;

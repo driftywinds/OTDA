@@ -838,6 +838,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Depth-first rows for one group: roots keep the list's order, children go
   /// under their parent by position, folded parents hide their subtree.
+  /// The parent's title for a subtask drawn as a top-level row, which happens when
+  /// its parent is not in the same group (another day, or not listed at all).
+  String? _orphanParentTitle(Task task) {
+    final parent = task.parentId;
+    if (parent == null || parent.isEmpty || parent == task.id) return null;
+    return _tasks.where((t) => t.id == parent).firstOrNull?.title;
+  }
+
   List<_TaskRowEntry> _nest(List<Task> tasks) {
     final byId = {for (final task in tasks) task.id: task};
     final rank = {for (var i = 0; i < tasks.length; i++) tasks[i].id: i};
@@ -1053,7 +1061,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       details: widget.state.rowDetails,
                       compact: widget.state.compact,
                       recurrenceRule: recurrenceRule,
-                      projectName: task.projectId == null ? null : _projectNames[task.projectId],
+                      // Inside a project every row is in it; naming it again is noise.
+                      projectName: task.projectId == null || _view == TaskView.project
+                          ? null
+                          : _projectNames[task.projectId],
                       projectColor: task.projectId == null ? null : _projectColors[task.projectId],
                       dueOverride: switch (_view) {
                         TaskView.upcoming => _upcomingDays[task.id],
@@ -1064,6 +1075,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // is not done even though today's was.
                       showDone: !(_view == TaskView.upcoming && recurrenceRule.isNotEmpty),
                       showTodayLabel: _view != TaskView.today,
+                      parentTitle: row.depth == 0 ? _orphanParentTitle(task) : null,
                       onToggle: () => _toggle(task),
                       onOpen: () => _open(task),
                       onMenu: () => _taskMenu(task),
@@ -1301,6 +1313,9 @@ class _TaskRowEntry {
   final bool collapsed;
 }
 
+/// How far each level of subtasks is pushed in.
+const _indentStep = 28.0;
+
 class _TaskRow extends StatelessWidget {
   const _TaskRow({
     super.key,
@@ -1322,6 +1337,7 @@ class _TaskRow extends StatelessWidget {
     this.dueOverride,
     this.showDone = true,
     this.showTodayLabel = true,
+    this.parentTitle,
   });
 
   final Task task;
@@ -1349,6 +1365,10 @@ class _TaskRow extends StatelessWidget {
   /// Write "Today" for a task due today with no time. False on the Today view,
   /// where every row is today's and the word is only noise.
   final bool showTodayLabel;
+
+  /// The title of this task's parent when the parent is not in the list (so the
+  /// row cannot sit under it): a subtask on its own says whose it is.
+  final String? parentTitle;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final VoidCallback onMenu;
@@ -1407,7 +1427,7 @@ class _TaskRow extends StatelessWidget {
     ];
     final hasDetails = dateLabel != null || facts.isNotEmpty;
 
-    final leftInset = 6.0 + depth * 20.0;
+    final leftInset = 6.0 + depth * _indentStep;
     final chevronWidth = hasChildren ? 22.0 : 0.0;
     final vertical = compact ? 0.0 : 3.0;
 
@@ -1419,7 +1439,19 @@ class _TaskRow extends StatelessWidget {
           child: InkWell(
             onTap: onOpen,
             onLongPress: onMenu,
-            child: Padding(
+            child: Stack(
+              children: [
+                // A rail for each level of nesting, like the bar beside a nested
+                // list, so a subtask reads as belonging to the task above it.
+                for (var level = 0; level < depth; level++)
+                  Positioned(
+                    left: 6.0 + level * _indentStep + 14,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    child: ColoredBox(color: scheme.outlineVariant.withValues(alpha: 0.7)),
+                  ),
+                Padding(
               padding: EdgeInsets.fromLTRB(leftInset, vertical, 16, vertical),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 48),
@@ -1445,16 +1477,40 @@ class _TaskRow extends StatelessWidget {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          task.title,
-                          maxLines: compact ? 1 : 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            decoration: done ? TextDecoration.lineThrough : null,
-                            decorationColor: muted,
-                            color: done ? muted : scheme.onSurface,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              task.title,
+                              maxLines: compact ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                fontSize: depth > 0 ? 15 : null,
+                                fontWeight: FontWeight.w500,
+                                decoration: done ? TextDecoration.lineThrough : null,
+                                decorationColor: muted,
+                                color: done ? muted : scheme.onSurface,
+                              ),
+                            ),
+                            if (parentTitle != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.subdirectory_arrow_right_rounded, size: 13, color: muted),
+                                    const SizedBox(width: 3),
+                                    Flexible(
+                                      child: Text(
+                                        parentTitle!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: small,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
@@ -1494,6 +1550,8 @@ class _TaskRow extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+              ],
             ),
           ),
         ),
