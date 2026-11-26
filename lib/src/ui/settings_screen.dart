@@ -16,6 +16,7 @@ import '../data/repo.dart';
 import 'admin_view.dart';
 import 'encryption_settings.dart';
 import 'export_screen.dart';
+import 'format.dart';
 import 'reauth.dart';
 import 'settings_rows.dart';
 import 'trash_screen.dart';
@@ -622,47 +623,25 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
     final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
     final service = ReminderService.instance;
 
-    Widget status(String label, String value, {bool good = true, VoidCallback? onTap}) => InkWell(
+    Widget status(IconData icon, String label, String value, {bool good = true, VoidCallback? onTap}) => SettingsAction(
+          icon: icon,
+          title: label,
+          subtitle: value,
+          subtitleColor: good ? null : scheme.error,
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Expanded(child: Text(label, style: style)),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: style?.copyWith(
-                      color: good ? scheme.onSurfaceVariant : scheme.error,
-                      fontWeight: good ? null : FontWeight.w600,
-                    ),
-                  ),
-                ),
-                // The rows are still tappable, but the trailing arrow on every one of
-                // them read as "next" and made the card look like a menu of five
-                // steps. The width is kept so values stay aligned with the other cards.
-                const SizedBox(width: 24),
-              ],
-            ),
-          ),
         );
 
-    Widget action(IconData icon, String title, String subtitle, Future<void> Function() run) => ListTile(
-          dense: true,
-          leading: Icon(icon, size: 18, color: scheme.primary),
-          title: Text(title, style: style),
-          subtitle: Text(subtitle),
-          onTap: run,
-        );
+    Widget action(IconData icon, String title, String subtitle, Future<void> Function() run) =>
+        SettingsAction(icon: icon, title: title, subtitle: subtitle, onTap: run);
 
     const divider = Divider(height: 1, indent: 16, endIndent: 16);
     final repo = widget.state.repo;
-    final next = service.lastPlan.take(5).toList();
+    final next = service.lastPlan.take(3).toList();
     final xiaomiFamily = _maker.contains('xiaomi') || _maker.contains('redmi') || _maker.contains('poco');
+    final now = DateTime.now();
+    final today = '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
 
     return Column(
       children: [
@@ -692,16 +671,30 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
           },
         ),
         divider,
-        status('Time for tasks without one', _time, onTap: _pickTime),
-        divider,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'SYSTEM ACCESS',
+              style: theme.textTheme.labelSmall?.copyWith(
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
         status(
+          Icons.notifications_outlined,
           'Notifications',
-          _allowed == null ? '…' : (_allowed! ? 'Allowed' : 'Blocked, tap to allow'),
+          _allowed == null ? '…' : (_allowed! ? 'Allowed' : 'Blocked — tap to allow'),
           good: _allowed ?? true,
           onTap: _allowed == true ? SystemBridge.openNotificationSettings : _allow,
         ),
         divider,
         status(
+          Icons.alarm_outlined,
           'Exact alarms',
           _exact == null ? '…' : (_exact! ? 'Allowed' : 'Off, reminders may be late'),
           good: _exact ?? true,
@@ -709,6 +702,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
         ),
         divider,
         status(
+          Icons.battery_saver_outlined,
           'Battery',
           _battery == null ? '…' : (_battery! ? 'Unrestricted' : 'Optimised, may delay reminders'),
           good: _battery ?? true,
@@ -716,51 +710,109 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
         ),
         if (xiaomiFamily) ...[
           divider,
-          status('Autostart (Xiaomi)', 'Turn on for OTDA', onTap: SystemBridge.openAutostart),
+          status(Icons.restart_alt_rounded, 'Autostart (Xiaomi)', 'Turn on for OTDA',
+              onTap: SystemBridge.openAutostart),
         ],
         divider,
-        status('Sound and pop-up', 'Reminders channel',
+        status(Icons.volume_up_outlined, 'Sound and pop-up', 'Reminders channel',
             onTap: () => SystemBridge.openChannelSettings(ReminderService.channelReminders)),
         divider,
-        status('Armed reminders', '$_armed'),
-        for (final reminder in next) ...[
+        status(Icons.schedule_rounded, 'Time for tasks without one', _time, onTap: _pickTime),
+        divider,
+        status(Icons.notifications_active_outlined, 'Armed reminders', '$_armed'),
+        if (next.isNotEmpty) ...[
           divider,
-          status('Next', ReminderService.describe(reminder)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'NEXT REMINDERS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          for (final reminder in next)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule_rounded, size: 16, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reminder.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: style?.copyWith(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          '${friendlyDate(reminder.day, today)} · '
+                          '${reminder.at.hour.toString().padLeft(2, '0')}:'
+                          '${reminder.at.minute.toString().padLeft(2, '0')}',
+                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
         if (service.lastError != null) ...[
           divider,
-          status('Last error', service.lastError!, good: false),
+          status(Icons.error_outline_rounded, 'Last error', service.lastError!, good: false),
         ],
         divider,
-        action(Icons.notifications_active_outlined, 'Allow notifications',
-            'Shows the system permission dialog', _allow),
-        action(Icons.notification_add_outlined, 'Show a test notification now',
-            'Proves the permission and the sound', () async {
-          _say(await service.sendTestNow());
-          await _refresh();
-        }),
-        action(Icons.alarm_outlined, 'Test in 1 minute',
-            'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
-          _say(await service.scheduleTest(const Duration(minutes: 1)));
-          await _refresh();
-        }),
-        action(Icons.copy_all_outlined, 'Copy debug log',
-            'Permissions, what is armed, and recent events. Paste it to share', () async {
-          final report = await service.debugReport();
-          await Clipboard.setData(ClipboardData(text: report));
-          _say('Copied ${report.split('\n').length} lines to the clipboard.');
-        }),
-        action(Icons.delete_sweep_outlined, 'Clear debug log', 'Start fresh before a test', () async {
-          await DebugLog.clear();
-          _say('Log cleared.');
-        }),
-        if (repo != null)
-          action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
-              'Creates a task, arms it, and lets you try Complete and Snooze', () async {
-            _say(await service.createRealTest(repo));
-            await widget.state.afterDataChanged();
-            await _refresh();
-          }),
+        Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            leading: Icon(Icons.science_outlined, size: 20, color: scheme.primary),
+            title: Text('Tests & diagnostics', style: style?.copyWith(fontWeight: FontWeight.w600)),
+            subtitle: Text('Notification, alarm and log checks', style: theme.textTheme.bodySmall),
+            children: [
+              action(Icons.notification_add_outlined, 'Show a test notification now',
+                  'Proves the permission and the sound', () async {
+                _say(await service.sendTestNow());
+                await _refresh();
+              }),
+              action(Icons.alarm_outlined, 'Test in 1 minute',
+                  'Goes through the alarm clock. Lock the phone and swipe the app away', () async {
+                _say(await service.scheduleTest(const Duration(minutes: 1)));
+                await _refresh();
+              }),
+              action(Icons.copy_all_outlined, 'Copy debug log',
+                  'Permissions, what is armed, and recent events. Paste it to share', () async {
+                final report = await service.debugReport();
+                await Clipboard.setData(ClipboardData(text: report));
+                _say('Copied ${report.split('\n').length} lines to the clipboard.');
+              }),
+              action(Icons.delete_sweep_outlined, 'Clear debug log', 'Start fresh before a test', () async {
+                await DebugLog.clear();
+                _say('Log cleared.');
+              }),
+              if (repo != null)
+                action(Icons.task_alt_outlined, 'Test with a real task in 2 minutes',
+                    'Creates a task, arms it, and lets you try Complete and Snooze', () async {
+                  _say(await service.createRealTest(repo));
+                  await widget.state.afterDataChanged();
+                  await _refresh();
+                }),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1423,7 +1475,7 @@ class _TwoFactorCardState extends State<_TwoFactorCard> {
 
     final on = status?.enrolled ?? false;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1431,22 +1483,12 @@ class _TwoFactorCardState extends State<_TwoFactorCard> {
             children: [
               Icon(
                 on ? Icons.verified_user_rounded : Icons.shield_outlined,
-                size: 18,
-                color: on
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
+                size: 19,
+                color: on ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Two-factor authentication', style: style)),
-              Text(
-                on ? 'On' : 'Off',
-                style: style?.copyWith(
-                  color: on
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SizedBox(width: 9),
+              Expanded(child: Text('Two-factor authentication', style: style?.copyWith(fontWeight: FontWeight.w600))),
+              SettingsStatusBadge(text: on ? 'On' : 'Off', good: on),
             ],
           ),
           const SizedBox(height: 6),
@@ -1457,45 +1499,46 @@ class _TwoFactorCardState extends State<_TwoFactorCard> {
                       '${status.required ? 'The server owner requires it.' : 'Optional for this account.'}'
                 : 'A six-digit code from an authenticator app, asked for after the password. '
                       '${status?.required == true ? 'The server owner requires it.' : 'Optional for this account.'}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           if (_error != null) ...[
             const SizedBox(height: 6),
             Text(
               _error!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
             ),
           ],
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              if (!on)
-                FilledButton.tonal(
-                  onPressed: _busy ? null : _turnOn,
-                  child: Text(_busy ? 'Starting…' : 'Turn on'),
-                ),
-              if (on) ...[
-                OutlinedButton(
-                  onPressed: _busy ? null : _regenerate,
-                  child: const Text('New recovery codes'),
-                ),
-                OutlinedButton(
-                  onPressed: _busy ? null : _devices,
-                  child: const Text('Remembered browsers'),
-                ),
-                TextButton(
-                  onPressed: _busy ? null : _turnOff,
-                  child: const Text('Turn off'),
-                ),
-              ],
-            ],
-          ),
+          const SizedBox(height: 6),
+          if (!on)
+            SettingsAction(
+              icon: Icons.shield_outlined,
+              title: _busy ? 'Starting…' : 'Turn on two-factor authentication',
+              subtitle: 'Ask for a code after your password',
+              onTap: _busy ? null : _turnOn,
+            )
+          else ...[
+            SettingsAction(
+              icon: Icons.password_rounded,
+              title: 'New recovery codes',
+              subtitle: 'Replace all ${status!.recoveryCodesRemaining} remaining codes',
+              onTap: _busy ? null : _regenerate,
+            ),
+            Divider(height: 1, color: theme.colorScheme.cardBorder),
+            SettingsAction(
+              icon: Icons.devices_rounded,
+              title: 'Remembered browsers',
+              subtitle: 'Review devices that skip the code',
+              onTap: _busy ? null : _devices,
+            ),
+            Divider(height: 1, color: theme.colorScheme.cardBorder),
+            SettingsAction(
+              icon: Icons.shield_outlined,
+              title: 'Turn off two-factor authentication',
+              subtitle: 'Return to password-only sign-in',
+              destructive: true,
+              onTap: _busy ? null : _turnOff,
+            ),
+          ],
         ],
       ),
     );

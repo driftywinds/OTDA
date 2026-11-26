@@ -11,6 +11,8 @@ import '../e2ee/lifecycle.dart';
 import '../e2ee/session.dart';
 import 'biometric_offer.dart';
 import 'reauth.dart';
+import 'settings_rows.dart';
+import 'theme.dart';
 
 /// The account's encryption: turn it on (with the one-time recovery key), finish
 /// an interrupted rewrite, purge old content history, or turn it off.
@@ -262,12 +264,16 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
             Row(
               children: [
                 Icon(enabled ? Icons.lock_rounded : Icons.lock_open_rounded, size: 19, color: scheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     enabled ? (unlocked ? 'Encryption is on and unlocked' : 'Encryption is on and locked') : 'Encryption is off',
-                    style: theme.textTheme.titleSmall,
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                   ),
+                ),
+                SettingsStatusBadge(
+                  text: !enabled ? 'Off' : (unlocked ? 'Unlocked' : 'Locked'),
+                  good: enabled && unlocked,
                 ),
               ],
             ),
@@ -301,85 +307,79 @@ class _EncryptionSettingsCardState extends State<EncryptionSettingsCard> {
               const SizedBox(height: 8),
               Text(_error!, style: TextStyle(color: scheme.error, fontSize: 12)),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (!enabled) ...[
               if (_pending != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: OutlinedButton.icon(
-                    onPressed: _busy ? null : _finishPending,
-                    icon: const Icon(Icons.sync_rounded, size: 18),
-                    label: const Text('Finish turning encryption off'),
-                  ),
+                SettingsAction(
+                  icon: Icons.sync_rounded,
+                  title: 'Finish turning encryption off',
+                  subtitle: 'Decrypt the fields left from an interrupted rewrite',
+                  onTap: _busy ? null : _finishPending,
                 ),
-              FilledButton.icon(
-                onPressed: _busy ? null : _enable,
-                icon: const Icon(Icons.lock_rounded, size: 18),
-                label: const Text('Turn on encryption'),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _enable,
+                  icon: const Icon(Icons.lock_rounded, size: 18),
+                  label: const Text('Turn on encryption'),
+                ),
               ),
             ] else ...[
               if (!unlocked)
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _unlock,
-                  icon: const Icon(Icons.key_rounded, size: 18),
-                  label: const Text('Unlock with passphrase'),
+                SettingsAction(
+                  icon: Icons.key_rounded,
+                  title: 'Unlock with passphrase',
+                  subtitle: 'Open the vault on this device',
+                  onTap: _busy ? null : _unlock,
                 ),
               if (_pending != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: OutlinedButton.icon(
-                    onPressed: _busy ? null : _finishPending,
-                    icon: const Icon(Icons.sync_rounded, size: 18),
-                    label: const Text('Finish the rewrite'),
-                  ),
+                SettingsAction(
+                  icon: Icons.sync_rounded,
+                  title: 'Finish the rewrite',
+                  subtitle: 'Continue sealing or decrypting the remaining fields',
+                  onTap: _busy ? null : _finishPending,
                 ),
               if (unlocked && BiometricUnlock.instance.supported)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: _biometric
-                      ? Row(
-                          children: [
-                            Icon(Icons.fingerprint_rounded, size: 18, color: scheme.primary),
-                            const SizedBox(width: 6),
-                            const Expanded(child: Text('Fingerprint/face unlocks your vault')),
-                            TextButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      await BiometricUnlock.instance.disable();
-                                      if (mounted) setState(() => _biometric = false);
-                                    },
-                              child: const Text('Turn off'),
-                            ),
-                          ],
-                        )
-                      : OutlinedButton.icon(
+                _biometric
+                    ? SettingsAction(
+                        icon: Icons.fingerprint_rounded,
+                        title: 'Fingerprint/face unlock',
+                        subtitle: 'On — opens the vault when it is locked',
+                        trailing: TextButton(
                           onPressed: _busy
                               ? null
                               : () async {
-                                  await offerBiometricEnrollment(context);
-                                  await _loadBiometric();
+                                  await BiometricUnlock.instance.disable();
+                                  if (mounted) setState(() => _biometric = false);
                                 },
-                          icon: const Icon(Icons.fingerprint_rounded, size: 18),
-                          label: const Text('Add fingerprint/face vault unlock'),
+                          child: const Text('Turn off'),
                         ),
-                ),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  TextButton.icon(
-                    onPressed: _busy ? null : _purge,
-                    icon: const Icon(Icons.cleaning_services_outlined, size: 17),
-                    label: const Text('Purge content history'),
-                  ),
-                  TextButton.icon(
-                    onPressed: _busy ? null : _disable,
-                    style: TextButton.styleFrom(foregroundColor: scheme.error),
-                    icon: const Icon(Icons.lock_open_rounded, size: 17),
-                    label: const Text('Turn off encryption'),
-                  ),
-                ],
+                      )
+                    : SettingsAction(
+                        icon: Icons.fingerprint_rounded,
+                        title: 'Add fingerprint/face unlock',
+                        subtitle: 'Use the phone lock instead of typing the passphrase',
+                        onTap: _busy
+                            ? null
+                            : () async {
+                                await offerBiometricEnrollment(context);
+                                await _loadBiometric();
+                              },
+                      ),
+              Divider(height: 1, color: scheme.cardBorder),
+              SettingsAction(
+                icon: Icons.cleaning_services_outlined,
+                title: 'Purge content history',
+                subtitle: 'Delete superseded encrypted versions from the server',
+                onTap: _busy ? null : _purge,
+              ),
+              Divider(height: 1, color: scheme.cardBorder),
+              SettingsAction(
+                icon: Icons.lock_open_rounded,
+                title: 'Turn off encryption',
+                subtitle: 'Content returns to plaintext on the server',
+                destructive: true,
+                onTap: _busy ? null : _disable,
               ),
             ],
           ],
