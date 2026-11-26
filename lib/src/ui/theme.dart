@@ -89,6 +89,22 @@ Color priorityColor(int priority, ColorScheme scheme) => switch (priority) {
       _ => scheme.outline,
     };
 
+/// What a task detail is, so each kind keeps one colour everywhere: a date reads
+/// as a date at a glance, without reading the chip.
+enum DetailKind { date, time, repeat, deadline, start, estimate, energy, labels }
+
+/// Fixed hues, like the priority colours, so a kind looks the same in every theme.
+Color detailColor(DetailKind kind) => switch (kind) {
+      DetailKind.date => const Color(0xFF4C93F0),
+      DetailKind.time => const Color(0xFF22B8A8),
+      DetailKind.repeat => const Color(0xFFA070E8),
+      DetailKind.deadline => const Color(0xFFF0803C),
+      DetailKind.start => const Color(0xFF6C78F0),
+      DetailKind.estimate => const Color(0xFF4DB872),
+      DetailKind.energy => const Color(0xFFD9A81E),
+      DetailKind.labels => const Color(0xFFE05C9F),
+    };
+
 /// The bundled faces a person can choose from. A null family is the
 /// platform's own font.
 const alloFont = 'Allo';

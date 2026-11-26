@@ -1428,7 +1428,6 @@ class _TaskRow extends StatelessWidget {
     final hasDetails = dateLabel != null || facts.isNotEmpty;
 
     final leftInset = 6.0 + depth * _indentStep;
-    final chevronWidth = hasChildren ? 22.0 : 0.0;
     final vertical = compact ? 0.0 : 3.0;
 
     return Column(
@@ -1458,21 +1457,6 @@ class _TaskRow extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (hasChildren)
-                      SizedBox(
-                        width: chevronWidth,
-                        child: IconButton(
-                          tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(width: 22, height: 22),
-                          iconSize: 18,
-                          icon: Icon(
-                            collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
-                            color: muted,
-                          ),
-                          onPressed: onToggleCollapse,
-                        ),
-                      ),
                     TaskCheck(done: done, priority: task.priority, onChanged: onToggle),
                     Expanded(
                       child: Padding(
@@ -1483,7 +1467,9 @@ class _TaskRow extends StatelessWidget {
                             Text(
                               task.title,
                               maxLines: compact ? 1 : 2,
-                              overflow: TextOverflow.ellipsis,
+                              // Next to the fold arrow a long title fades out
+                              // instead of running into it.
+                              overflow: hasChildren ? TextOverflow.fade : TextOverflow.ellipsis,
                               style: theme.textTheme.bodyLarge?.copyWith(
                                 fontSize: depth > 0 ? 15 : null,
                                 fontWeight: FontWeight.w500,
@@ -1514,8 +1500,23 @@ class _TaskRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (hasChildren)
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: IconButton(
+                          tooltip: collapsed ? 'Show subtasks' : 'Hide subtasks',
+                          padding: EdgeInsets.zero,
+                          iconSize: 22,
+                          icon: Icon(
+                            collapsed ? Icons.chevron_right_rounded : Icons.expand_more_rounded,
+                            color: muted,
+                          ),
+                          onPressed: onToggleCollapse,
+                        ),
+                      ),
                     if (hasDetails) ...[
-                      const SizedBox(width: 12),
+                      SizedBox(width: hasChildren ? 4 : 12),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 150),
                         child: Column(
@@ -1557,7 +1558,7 @@ class _TaskRow extends StatelessWidget {
         ),
         // A hairline between rows instead of a card round each one, starting under
         // the title so the checks line up in a column.
-        Divider(height: 1, thickness: 1, indent: leftInset + chevronWidth + 44, endIndent: 0),
+        Divider(height: 1, thickness: 1, indent: leftInset + 44, endIndent: 0),
       ],
     );
   }

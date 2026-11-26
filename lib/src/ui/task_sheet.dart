@@ -14,6 +14,7 @@ import '../reminders/service.dart';
 import 'format.dart';
 import 'new_task_sheet.dart';
 import 'repeat_sheet.dart';
+import 'task_details.dart';
 import 'task_history_screen.dart';
 import 'task_page_screen.dart';
 import 'theme.dart';
@@ -64,6 +65,9 @@ class _TaskSheetState extends State<TaskSheet> {
   List<Section> _sections = const [];
   int _subtaskDone = 0;
   int _subtaskTotal = 0;
+
+  /// The direct subtasks in their manual order; empty for a task with none.
+  List<Task> _children = const [];
 
   /// The repeat rule as stored (`every month`, `every 3 days after completion`),
   /// empty for a one-off task.
@@ -122,12 +126,66 @@ class _TaskSheetState extends State<TaskSheet> {
   }
 
   Future<void> _loadProgress() async {
-    final progress = await widget.repo.subtaskProgress(widget.task.id);
+    final children = [
+      for (final child in await widget.repo.childrenOf(widget.task.id))
+        if (!child.isDeleted) child,
+    ];
     if (!mounted) return;
     setState(() {
-      _subtaskDone = progress.done;
-      _subtaskTotal = progress.total;
+      _children = children;
+      _subtaskDone = children.where((c) => c.isCompleted).length;
+      _subtaskTotal = children.length;
     });
+  }
+
+  Future<void> _toggleChild(Task child) async {
+    final repeats = (child.raw['recurrence']?.toString() ?? '').isNotEmpty;
+    if (repeats) {
+      // Ticking a repeating subtask finishes one occurrence; it comes round again.
+      if (child.isCompleted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      await widget.repo.setCompleted(child, true);
+      await refreshTaskSurfaces(widget.repo);
+      messenger.showSnackBar(const SnackBar(content: Text('Done for now — it comes round again')));
+    } else {
+      await widget.repo.setCompleted(child, !child.isCompleted);
+      await refreshTaskSurfaces(widget.repo);
+    }
+    await _loadProgress();
+  }
+
+  Future<void> _editChild(Task child) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => TaskSheet(
+        task: child,
+        repo: widget.repo,
+        projects: widget.projects,
+        authorId: widget.authorId,
+      ),
+    );
+    await _loadProgress();
+  }
+
+  /// A long-press on a subtask's handle drags it; the new order is written as
+  /// positions, which is what every list orders subtasks by.
+  Future<void> _reorderChildren(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex == oldIndex) return;
+    final moved = [..._children];
+    moved.insert(newIndex, moved.removeAt(oldIndex));
+    setState(() => _children = moved);
+    for (var i = 0; i < moved.length; i++) {
+      final current = (moved[i].raw['position'] as num?)?.toDouble();
+      if (current != i.toDouble()) {
+        await widget.repo.setField('task', moved[i].id, 'position', i.toDouble());
+      }
+    }
+    await refreshTaskSurfaces(widget.repo);
+    await _loadProgress();
   }
 
   Future<void> _loadLabels() async {
@@ -300,6 +358,14 @@ class _TaskSheetState extends State<TaskSheet> {
     final value = <String, Object?>{'date': _due!['date'], 'time': time};
     await widget.repo.setField('task', widget.task.id, 'due', value);
     setState(() => _due = value);
+  }
+
+  Future<void> _clearTime() async {
+    final date = _due?['date'];
+    if (date == null) return;
+    final value = <String, Object?>{'date': date};
+    await widget.repo.setField('task', widget.task.id, 'due', value);
+    if (mounted) setState(() => _due = value);
   }
 
   Future<void> _clearDue() async {
@@ -871,14 +937,24 @@ class _TaskSheetState extends State<TaskSheet> {
       if (date != null)
         ValueChip(
           icon: Icons.event_rounded,
-          label: [friendlyDate(date, today), ?time].join(' · '),
+          label: friendlyDate(date, today),
+          color: (daysBetween(today, date) ?? 0) < 0 ? scheme.error : detailColor(DetailKind.date),
           onTap: _pickDate,
           onClear: _clearDue,
+        ),
+      if (date != null && time != null)
+        ValueChip(
+          icon: Icons.schedule_rounded,
+          label: time,
+          color: detailColor(DetailKind.time),
+          onTap: _pickTime,
+          onClear: _clearTime,
         ),
       if (_deadline != null)
         ValueChip(
           icon: Icons.hourglass_top_rounded,
           label: 'Due by ${friendlyDate(_deadline!, today)}',
+          color: detailColor(DetailKind.deadline),
           onTap: _pickDeadline,
           onClear: _clearDeadline,
         ),
@@ -886,6 +962,7 @@ class _TaskSheetState extends State<TaskSheet> {
         ValueChip(
           icon: Icons.play_circle_outline,
           label: _start == 'someday' ? 'Someday' : 'From ${friendlyDate(_start!, today)}',
+          color: detailColor(DetailKind.start),
           onTap: _pickStart,
           onClear: _clearStart,
         ),
@@ -893,6 +970,7 @@ class _TaskSheetState extends State<TaskSheet> {
         ValueChip(
           icon: Icons.timelapse_rounded,
           label: durationLabel(_estimate!),
+          color: detailColor(DetailKind.estimate),
           onTap: _pickEstimate,
           onClear: _clearEstimate,
         ),
@@ -905,6 +983,7 @@ class _TaskSheetState extends State<TaskSheet> {
             'low' => 'Low',
             _ => _energy,
           },
+          color: detailColor(DetailKind.energy),
           onTap: _pickEnergy,
           onClear: () => _setEnergy(''),
         ),
@@ -912,6 +991,7 @@ class _TaskSheetState extends State<TaskSheet> {
         ValueChip(
           icon: Icons.repeat_rounded,
           label: _recurrenceLabel(_recurrence),
+          color: detailColor(DetailKind.repeat),
           onTap: _seriesLoaded ? _pickRepeat : null,
           onClear: _seriesLoaded ? _clearRepeat : null,
         ),
@@ -927,14 +1007,9 @@ class _TaskSheetState extends State<TaskSheet> {
         ValueChip(
           icon: Icons.label_outline_rounded,
           label: _labelNames(_labels),
+          color: detailColor(DetailKind.labels),
           onTap: _editLabels,
           onClear: () => _setLabels(const []),
-        ),
-      if (_subtaskTotal > 0)
-        ValueChip(
-          icon: Icons.account_tree_outlined,
-          label: '$_subtaskDone/$_subtaskTotal subtasks',
-          onTap: _addSubtask,
         ),
       if (sectionName != null)
         ValueChip(
@@ -951,6 +1026,110 @@ class _TaskSheetState extends State<TaskSheet> {
         onTap: _pickProject,
       ),
     ];
+  }
+
+  /// The subtasks, right under the task's own details: each with its details in
+  /// colour beneath its title, an edit button and a handle to drag it into place.
+  Widget _subtaskSection(ThemeData theme, ColorScheme scheme, String today) {
+    final labelNames = {for (final label in _allLabels) label.id: label.name};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 0, 0),
+          child: Text(
+            'SUBTASKS  $_subtaskDone/$_subtaskTotal',
+            style: theme.textTheme.labelSmall?.copyWith(
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorder: _reorderChildren,
+          children: [
+            for (var i = 0; i < _children.length; i++)
+              _subtaskRow(i, theme, scheme, today, labelNames),
+          ],
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: TextButton.icon(
+              onPressed: _addSubtask,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add subtask'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _subtaskRow(int index, ThemeData theme, ColorScheme scheme, String today, Map<String, String> labelNames) {
+    final child = _children[index];
+    final chips = taskDetailChips(child, today: today, scheme: scheme, labelNames: labelNames);
+    return Row(
+      key: ValueKey(child.id),
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        TaskCheck(
+          done: child.isCompleted,
+          priority: child.priority,
+          onChanged: () => _toggleChild(child),
+        ),
+        Expanded(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _editChild(child),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    child.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      decoration: child.isCompleted ? TextDecoration.lineThrough : null,
+                      color: child.isCompleted ? scheme.onSurfaceVariant : scheme.onSurface,
+                    ),
+                  ),
+                  if (chips.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Wrap(spacing: 6, runSpacing: 4, children: chips),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Edit subtask',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(Icons.edit_outlined, size: 20, color: scheme.onSurfaceVariant),
+          onPressed: () => _editChild(child),
+        ),
+        ReorderableDelayedDragStartListener(
+          index: index,
+          child: Tooltip(
+            message: 'Hold to reorder',
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(6, 10, 2, 10),
+              child: Icon(Icons.drag_handle_rounded, color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1006,6 +1185,12 @@ class _TaskSheetState extends State<TaskSheet> {
                   children: _valueChips(today, date, time, sectionName, scheme),
                 ),
               ),
+              if (_children.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Divider(),
+                _subtaskSection(theme, scheme, today),
+                const Divider(),
+              ],
               const SizedBox(height: 10),
               Padding(
                 padding: gutter,
