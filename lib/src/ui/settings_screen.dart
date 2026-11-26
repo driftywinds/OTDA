@@ -626,16 +626,20 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
     final style = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
     final service = ReminderService.instance;
 
-    Widget status(IconData icon, String label, String value, {bool good = true, VoidCallback? onTap}) => SettingsAction(
+    // SettingsAction insets 8px; the switch rows above use 16px. Pad the actions
+    // by 8 more so every row in this card lines up with the other cards.
+    Widget inset(Widget child) => Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: child);
+
+    Widget status(IconData icon, String label, String value, {bool good = true, VoidCallback? onTap}) => inset(SettingsAction(
           icon: icon,
           title: label,
           subtitle: value,
           subtitleColor: good ? null : scheme.error,
           onTap: onTap,
-        );
+        ));
 
     Widget action(IconData icon, String title, String subtitle, Future<void> Function() run) =>
-        SettingsAction(icon: icon, title: title, subtitle: subtitle, onTap: run);
+        inset(SettingsAction(icon: icon, title: title, subtitle: subtitle, onTap: run));
 
     const divider = Divider(height: 1, indent: 16, endIndent: 16);
     final repo = widget.state.repo;
@@ -775,7 +779,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
           status(Icons.error_outline_rounded, 'Last error', service.lastError!, good: false),
         ],
         divider,
-        SettingsAction(
+        inset(SettingsAction(
           icon: Icons.science_outlined,
           title: 'Tests & diagnostics',
           subtitle: 'Notification, alarm and log checks',
@@ -785,7 +789,7 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
             child: Icon(Icons.expand_more_rounded, size: 20, color: scheme.onSurfaceVariant),
           ),
           onTap: () => setState(() => _showDiagnostics = !_showDiagnostics),
-        ),
+        )),
         if (_showDiagnostics) ...[
           divider,
           action(Icons.notification_add_outlined, 'Show a test notification now',
