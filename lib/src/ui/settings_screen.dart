@@ -189,6 +189,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       onChanged: (value) => _set('row_layout', value),
                     ),
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      title: const Text('Complete subtasks with parent'),
+                      subtitle: const Text('Off keeps open subtasks in the completed task instead of ticking them'),
+                      value: _prefs['complete_subtasks']?.toString() != 'keep',
+                      onChanged: (value) => _set('complete_subtasks', value ? 'complete' : 'keep'),
+                    ),
                     ListTile(
                       dense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),

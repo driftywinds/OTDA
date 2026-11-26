@@ -6,6 +6,7 @@ import '../api/api_exception.dart';
 import 'clock.dart';
 import '../util/log.dart';
 import 'db.dart';
+import 'kept.dart';
 import 'models.dart';
 import '../quickadd/rule.dart' as rules;
 import 'series.dart';
@@ -30,11 +31,11 @@ class Repo {
       for (final project in projects)
         if (project['deleted_at'] != null) project['id'] as String,
     };
-    return [
+    return withoutKept([
       for (final row in rows)
         if (row['project_id'] == null || !trashed.contains(row['project_id']))
           Task(row['id'] as String, row),
-    ];
+    ]);
   }
 
   Future<List<Project>> projects() async =>
@@ -406,6 +407,14 @@ class Repo {
       if (!completed) {
         // Reopening a parent reopens only the parent; never its subtasks.
         await db.putField('task', task.id, 'completed_at', null, ts, engine.device);
+        return;
+      }
+      final prefs = await userPrefs();
+      if (prefs['complete_subtasks']?.toString() == 'keep') {
+        // The account chose to keep open subtasks. They stay open and become
+        // "kept": hidden from lists by withoutKept(), still visible in this
+        // task's Subtasks section.
+        await db.putField('task', task.id, 'completed_at', now, ts, engine.device);
         return;
       }
       // Completing a plain task completes its open descendants too: one
