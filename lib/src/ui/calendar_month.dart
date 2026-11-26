@@ -22,8 +22,6 @@ const _weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /// A month grid, Monday first and always six rows so changing month keeps the
 /// height. Reads only [Task.dueDate], [Task.isCompleted] and [Task.isDeleted].
-///
-/// Nothing here animates, so callers can pump a single frame after a tap.
 class MonthCalendar extends StatefulWidget {
   const MonthCalendar({
     super.key,
@@ -45,26 +43,58 @@ class MonthCalendar extends StatefulWidget {
   State<MonthCalendar> createState() => _MonthCalendarState();
 }
 
-class _MonthCalendarState extends State<MonthCalendar> {
+class _MonthCalendarState extends State<MonthCalendar> with SingleTickerProviderStateMixin {
   static const double _cellHeight = 46;
 
   late DateTime _month;
   DateTime? _selected;
+  late final AnimationController _slideController;
+  Animation<Offset> _slide = const AlwaysStoppedAnimation(Offset.zero);
 
   @override
   void initState() {
     super.initState();
     final start = widget.initialMonth ?? DateTime.now();
     _month = DateTime(start.year, start.month);
+    _slideController = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    super.dispose();
   }
 
   static int _dayKey(DateTime day) => day.year * 10000 + day.month * 100 + day.day;
 
-  void _move(int months) => setState(() => _month = DateTime(_month.year, _month.month + months));
+  void _animateTo(DateTime next, int direction) {
+    if (next.year == _month.year && next.month == _month.month) return;
+    setState(() {
+      _month = next;
+      _slide = Tween(
+        begin: Offset(direction > 0 ? 0.08 : -0.08, 0),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
+    });
+    _slideController.forward(from: 0);
+  }
+
+  void _move(int months) {
+    _animateTo(DateTime(_month.year, _month.month + months), months.sign);
+  }
 
   void _showThisMonth() {
     final now = DateTime.now();
-    setState(() => _month = DateTime(now.year, now.month));
+    final months = (now.year - _month.year) * 12 + now.month - _month.month;
+    if (months == 0) return;
+    _animateTo(DateTime(now.year, now.month), months.sign);
+  }
+
+  void _swipe(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 120) return;
+    // A left swipe brings the next month in, a right swipe the previous one.
+    _move(velocity < 0 ? 1 : -1);
   }
 
   void _tap(DateTime day) {
@@ -95,71 +125,83 @@ class _MonthCalendarState extends State<MonthCalendar> {
     final first = DateTime(_month.year, _month.month);
     final start = DateTime(first.year, first.month, 1 - (first.weekday - 1));
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => _move(-1),
-              tooltip: 'Previous month',
-              style: IconButton.styleFrom(backgroundColor: scheme.field),
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Expanded(
-              child: TextButton(
-                onPressed: _showThisMonth,
-                child: Text(
-                  '${_monthNames[_month.month - 1]} ${_month.year}',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: _swipe,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => _move(-1),
+                tooltip: 'Previous month',
+                style: IconButton.styleFrom(backgroundColor: scheme.field),
+                icon: const Icon(Icons.chevron_left),
               ),
-            ),
-            IconButton(
-              onPressed: () => _move(1),
-              tooltip: 'Next month',
-              style: IconButton.styleFrom(backgroundColor: scheme.field),
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            for (final label in _weekdays)
               Expanded(
-                child: Center(
+                child: TextButton(
+                  onPressed: _showThisMonth,
                   child: Text(
-                    label,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
+                    '${_monthNames[_month.month - 1]} ${_month.year}',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        for (var row = 0; row < 6; row++)
-          SizedBox(
-            height: _cellHeight,
-            child: Row(
+              IconButton(
+                onPressed: () => _move(1),
+                tooltip: 'Next month',
+                style: IconButton.styleFrom(backgroundColor: scheme.field),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          SlideTransition(
+            position: _slide,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                for (var col = 0; col < 7; col++)
-                  Expanded(
-                    child: _dayCell(
-                      DateTime(start.year, start.month, start.day + row * 7 + col),
-                      today,
-                      total,
-                      open,
-                      theme,
+                Row(
+                  children: [
+                    for (final label in _weekdays)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            label,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (var row = 0; row < 6; row++)
+                  SizedBox(
+                    height: _cellHeight,
+                    child: Row(
+                      children: [
+                        for (var col = 0; col < 7; col++)
+                          Expanded(
+                            child: _dayCell(
+                              DateTime(start.year, start.month, start.day + row * 7 + col),
+                              today,
+                              total,
+                              open,
+                              theme,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
               ],
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 

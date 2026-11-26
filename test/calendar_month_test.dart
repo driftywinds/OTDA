@@ -89,6 +89,19 @@ void main() {
     expect(tester.getSize(find.byType(MonthCalendar)).height, height);
   });
 
+  testWidgets('a horizontal swipe changes the month', (tester) async {
+    await tester.pumpWidget(app(const [], initialMonth: DateTime(2026, 1, 15)));
+    expect(find.text('January 2026'), findsOneWidget);
+
+    await tester.fling(find.byType(MonthCalendar), const Offset(-320, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('February 2026'), findsOneWidget);
+
+    await tester.fling(find.byType(MonthCalendar), const Offset(320, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('January 2026'), findsOneWidget);
+  });
+
   testWidgets('tapping the title returns to the current month', (tester) async {
     await tester.pumpWidget(app(const [], initialMonth: DateTime(2025, 2, 10)));
     expect(find.text('February 2025'), findsOneWidget);
