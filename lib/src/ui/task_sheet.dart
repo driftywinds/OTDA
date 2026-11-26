@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
+import '../data/series.dart';
 import '../e2ee/attachments.dart';
 import '../e2ee/session.dart';
 import '../quickadd/rule.dart' as rules;
@@ -247,8 +248,45 @@ class _TaskSheetState extends State<TaskSheet> {
         '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     final keepTime = _due?['time'];
     final value = <String, Object?>{'date': date, 'time': ?keepTime};
+
+    // A series cannot move onto a date it has already done, skipped or moved.
+    // The date is derived from its occurrence records, so this works offline.
+    if (_seriesId == null && _recurrence.isNotEmpty) {
+      final all = await widget.repo.tasks();
+      if (!mounted) return;
+      final oldDate = _due?['date']?.toString();
+      if (exceptionDatesOf(widget.task.id, all).contains(date)) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('${friendlyDate(date, _todayIso())} is already done for this series.')));
+        return;
+      }
+      final shift = oldDate == null ? null : daysBetween(oldDate, date);
+      await widget.repo.setField('task', widget.task.id, 'due', value);
+      // The start and deadline belong to the series too. Move them by the same
+      // number of days as the due date, never turning a missing field into one.
+      if (shift != null && shift != 0) {
+        for (final field in ['start', 'deadline']) {
+          final old = widget.task.raw[field]?.toString() ?? '';
+          if (old.isEmpty || old == 'someday') continue;
+          await widget.repo.setField('task', widget.task.id, field, _shiftDate(old, shift));
+        }
+      }
+      if (mounted) setState(() => _due = value);
+      return;
+    }
+
     await widget.repo.setField('task', widget.task.id, 'due', value);
     setState(() => _due = value);
+  }
+
+  static String _shiftDate(String date, int days) {
+    final parsed = DateTime.tryParse(date);
+    if (parsed == null) return date;
+    final moved = DateTime.utc(parsed.year, parsed.month, parsed.day).add(Duration(days: days));
+    return '${moved.year.toString().padLeft(4, '0')}-'
+        '${moved.month.toString().padLeft(2, '0')}-'
+        '${moved.day.toString().padLeft(2, '0')}';
   }
 
   static String _recurrenceLabel(String rule) {
