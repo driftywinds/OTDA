@@ -43,7 +43,11 @@ Offline-first, with the same data model as the server so every device converges.
 - Attachments: pick files, encrypt personal ones with the `OTAT1` chunked format, upload
   with size/sha256, verify every chunk on open, view images in-app and share the rest.
   Enabling or disabling encryption re-uploads existing files as new rows first.
-- Not yet: notes/comments, link attachments, an in-app PDF viewer, note public pages,
+- Notes: Markdown in the task sheet with headings, lists, quotes, code, tables,
+  links and tappable checklists. Checklist taps rewrite the Markdown description;
+  OpenTodo's rich editor folds that newer description into its `notes_doc` on the
+  next reconciliation, so the web note and OTDA agree.
+- Not yet: comments, images inside notes, an in-app PDF viewer, note public pages,
   and the device relay.
 
 - Package / bundle id: `com.dw.otda`

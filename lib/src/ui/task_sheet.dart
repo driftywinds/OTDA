@@ -14,6 +14,7 @@ import '../quickadd/rule.dart' as rules;
 import '../reminders/service.dart';
 import 'format.dart';
 import 'new_task_sheet.dart';
+import 'notes_field.dart';
 import 'repeat_sheet.dart';
 import 'task_details.dart';
 import 'task_history_screen.dart';
@@ -1328,16 +1329,9 @@ class _TaskSheetState extends State<TaskSheet> {
               const SizedBox(height: 12),
               Padding(
                 padding: gutter,
-                child: TextField(
+                child: NotesField(
                   controller: _notes,
-                  minLines: 3,
-                  maxLines: 12,
-                  decoration: const InputDecoration(
-                    hintText: 'Notes',
-                    alignLabelWithHint: true,
-                    contentPadding: EdgeInsets.all(16),
-                  ),
-                  onTapOutside: (_) => _saveNotes(),
+                  onSave: _saveNotes,
                 ),
               ),
               const SizedBox(height: 8),
