@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -137,6 +138,7 @@ class _NotesFieldState extends State<NotesField> {
                 minLines: 6,
                 maxLines: 18,
                 keyboardType: TextInputType.multiline,
+                inputFormatters: const [MarkdownListFormatter()],
                 decoration: const InputDecoration(
                   hintText: 'Write notes. Markdown works: # heading, - list, - [ ] checklist, **bold**.',
                   border: InputBorder.none,
@@ -172,6 +174,85 @@ class _NotesFieldState extends State<NotesField> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Continues Markdown list markers when Enter is pressed, and removes the
+/// marker when Enter is pressed again on an empty item.
+///
+/// This mirrors the behaviour of the editor on OpenTodo's web app: `- item`
+/// becomes `- item\n- `, `1. item` becomes `2. `, and a checklist continues
+/// unchecked. A second Enter on the empty item exits the list instead of
+/// creating an endless run of markers.
+class MarkdownListFormatter extends TextInputFormatter {
+  const MarkdownListFormatter();
+
+  static final _checklist = RegExp(r'^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$');
+  static final _numbered = RegExp(r'^(\s*)(\d+)([.)])\s+(.*)$');
+  static final _bullet = RegExp(r'^(\s*)([-*+])\s+(.*)$');
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Only a single newline insertion is ours. Pasting text, deleting text and
+    // IME composition keep their normal behaviour.
+    if (newValue.composing.isValid) return newValue;
+    if (oldValue.selection.isValid == false || newValue.selection.isValid == false) return newValue;
+    if (newValue.text.length != oldValue.text.length + 1) return newValue;
+    final cursor = newValue.selection.baseOffset;
+    if (cursor <= 0 || cursor > newValue.text.length) return newValue;
+    if (newValue.text[cursor - 1] != '\n') return newValue;
+    if (newValue.text.replaceRange(cursor - 1, cursor, '') != oldValue.text) return newValue;
+    if (oldValue.selection.baseOffset != cursor - 1) return newValue;
+
+    final before = oldValue.text.substring(0, cursor - 1);
+    final lineStart = before.lastIndexOf('\n') + 1;
+    final lineEnd = oldValue.text.indexOf('\n', cursor - 1);
+    final end = lineEnd < 0 ? oldValue.text.length : lineEnd;
+    final line = oldValue.text.substring(lineStart, end);
+    final offsetInLine = cursor - 1 - lineStart;
+
+    final checklist = _checklist.firstMatch(line);
+    final numbered = _numbered.firstMatch(line);
+    final bullet = _bullet.firstMatch(line);
+    if (checklist == null && numbered == null && bullet == null) return newValue;
+
+    final String prefix;
+    final String next;
+    if (checklist != null) {
+      final indent = checklist[1]!;
+      final marker = checklist[2]!;
+      final content = checklist[4]!;
+      final prefixEnd = line.length - content.length;
+      prefix = line.substring(0, prefixEnd);
+      next = '$indent$marker [ ] ';
+    } else if (numbered != null) {
+      final content = numbered[4]!;
+      final prefixEnd = line.length - content.length;
+      prefix = line.substring(0, prefixEnd);
+      final number = int.tryParse(numbered[2]!) ?? 1;
+      next = '${numbered[1]}${number + 1}${numbered[3]} ';
+    } else {
+      final content = bullet![3]!;
+      final prefixEnd = line.length - content.length;
+      prefix = line.substring(0, prefixEnd);
+      next = '${bullet[1]}${bullet[2]} ';
+    }
+
+    // A line that is only its marker: pressing Enter leaves the list and
+    // restores the blank line that was there before the marker appeared.
+    if (line.substring(prefix.length).trim().isEmpty && offsetInLine >= prefix.length) {
+      final cleaned = oldValue.text.replaceRange(lineStart, lineStart + prefix.length, '');
+      return TextEditingValue(
+        text: cleaned,
+        selection: TextSelection.collapsed(offset: lineStart),
+      );
+    }
+
+    final value = newValue.text.replaceRange(cursor, cursor, next);
+    return TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: cursor + next.length),
     );
   }
 }
