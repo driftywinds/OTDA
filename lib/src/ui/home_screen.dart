@@ -1740,9 +1740,6 @@ class _TaskRow extends StatelessWidget {
             ),
           ),
         ),
-        // A hairline between rows instead of a card round each one, starting under
-        // the title so the checks line up in a column.
-        Divider(height: 1, thickness: 1, indent: leftInset + 44, endIndent: 0),
       ],
     );
   }
