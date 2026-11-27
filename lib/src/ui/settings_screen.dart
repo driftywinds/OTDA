@@ -543,6 +543,8 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
   bool? _allowed;
   bool? _exact;
   bool? _battery;
+  bool? _vibration;
+  bool? _sound;
   bool _enabled = true;
   bool _alarmClock = true;
   String _time = '09:00';
@@ -580,11 +582,14 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
     final alarmClock = await service.alarmClockMode();
     final time = await service.reminderTime();
     final maker = await SystemBridge.manufacturer();
+    final channel = await service.reminderChannel();
     if (!mounted) return;
     setState(() {
       _allowed = allowed;
       _exact = exact;
       _battery = battery;
+      _vibration = channel?.enableVibration;
+      _sound = channel?.playSound;
       _enabled = enabled;
       _alarmClock = alarmClock;
       _time = time;
@@ -729,8 +734,16 @@ class _NotificationsCardState extends State<_NotificationsCard> with WidgetsBind
               onTap: SystemBridge.openAutostart),
         ],
         divider,
-        status(Icons.volume_up_outlined, 'Sound and pop-up', 'Reminders channel',
+        status(Icons.volume_up_outlined, 'Sound and pop-up', _sound == null ? 'Reminders channel' : (_sound! ? 'Reminders channel' : 'Off in Android settings'),
             onTap: () => SystemBridge.openChannelSettings(ReminderService.channelReminders)),
+        divider,
+        status(
+          Icons.vibration_rounded,
+          'Vibration',
+          _vibration == null ? '…' : (_vibration! ? 'On' : 'Off in Android settings'),
+          good: _vibration ?? true,
+          onTap: () => SystemBridge.openChannelSettings(ReminderService.channelReminders),
+        ),
         divider,
         status(Icons.schedule_rounded, 'Time for tasks without one', _time, onTap: _pickTime),
         divider,

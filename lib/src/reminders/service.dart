@@ -141,6 +141,7 @@ class ReminderService {
       description: 'A task reminder at its own time',
       importance: Importance.high,
       playSound: true,
+      enableVibration: true,
     ));
     await android.createNotificationChannel(const AndroidNotificationChannel(
       channelDueToday,
@@ -159,6 +160,23 @@ class ReminderService {
 
   AndroidFlutterLocalNotificationsPlugin? get _android =>
       _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+  /// The live Android channel, for Settings to show whether vibration or sound
+  /// was switched off in the system. Android 8+ keeps those choices outside the
+  /// app, so this is a read of the channel rather than a preference we own.
+  Future<AndroidNotificationChannel?> reminderChannel() async {
+    try {
+      await init();
+      final channels = await _android?.getNotificationChannels();
+      if (channels == null) return null;
+      for (final channel in channels) {
+        if (channel.id == channelReminders) return channel;
+      }
+    } on Object {
+      // Android < 8 has no channels; Settings shows "…" rather than failing.
+    }
+    return null;
+  }
 
   // ---- settings --------------------------------------------------------
 
@@ -373,6 +391,7 @@ class ReminderService {
           color: _accent,
           category: AndroidNotificationCategory.reminder,
           onlyAlertOnce: true,
+          enableVibration: true,
           autoCancel: autoCancel,
           actions: const [
             AndroidNotificationAction('complete', 'Complete',
