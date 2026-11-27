@@ -1388,7 +1388,7 @@ class _Header extends StatelessWidget {
     final count = shown == 1 ? '1 task' : '$shown tasks';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      padding: const EdgeInsets.fromLTRB(listLeftEdge, 4, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -400,6 +400,10 @@ class DetailChip extends StatelessWidget {
   }
 }
 
+/// Where a list's left edge is: a row's check circle starts here (6 of row inset plus 10 of tap
+/// padding), and so do the section labels and the page's date line, so they read as one column.
+const listLeftEdge = 16.0;
+
 /// Section label above a group of rows.
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key, this.color, this.count, this.icon});
@@ -414,7 +418,7 @@ class SectionLabel extends StatelessWidget {
     final theme = Theme.of(context);
     final tint = color ?? theme.colorScheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 18, 16, 6),
+      padding: const EdgeInsets.fromLTRB(listLeftEdge, 20, 16, 6),
       child: Row(
         children: [
           if (icon != null) ...[
