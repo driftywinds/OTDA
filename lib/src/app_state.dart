@@ -81,7 +81,7 @@ class AppState extends ChangeNotifier {
   static const _rowDetailsPref = 'ui.row_details';
   static const _textScalePref = 'ui.text_scale';
   static const _weekStatsPref = 'ui.week_stats';
-  static const _appLockPref = 'ui.app_lock';
+  static const appLockPref = 'ui.app_lock';
 
   /// The instance theme's seeds, kept so the widget popup (which has no network
   /// and no session) can wear the same palette as the app.
@@ -292,7 +292,7 @@ class AppState extends ChangeNotifier {
       _textScale = (prefs.getDouble(_textScalePref) ?? 1).clamp(0.8, 1.4).toDouble();
       _rowDetails = prefs.getString(_rowDetailsPref) ?? 'all';
       _showWeekStats = prefs.getBool(_weekStatsPref) ?? false;
-      _appLockEnabled = prefs.getBool(_appLockPref) ?? false;
+      _appLockEnabled = prefs.getBool(appLockPref) ?? false;
       AppLock.instance.setEnabled(_appLockEnabled);
       final accent = prefs.getString(_accentPref) ?? '';
       _accentHex = accent.isEmpty ? null : accent;
@@ -404,7 +404,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_appLockPref, value);
+      await prefs.setBool(appLockPref, value);
     } on Object {
       // the choice stays in memory for this run
     }

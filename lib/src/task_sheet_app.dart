@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_state.dart' show AppState;
 import 'data/repo.dart';
 import 'e2ee/session.dart';
 import 'quick_add_app.dart' show PopupShell;
@@ -11,7 +13,8 @@ import 'ui/task_sheet.dart';
 /// What a tap on a widget row opens: the task's own sheet (title, date, repeat, project, notes...) as a
 /// bottom drawer over whatever app is in front, instead of starting the whole app. It is the same
 /// [TaskSheet] the app uses, in the same see-through window as the "+" composer and the reminder drawer,
-/// and it writes straight to the local replica. The widget's top-right arrow still opens the full app.
+/// and it writes straight to the local replica. Accounts with the app lock on, or encrypted ones this
+/// device has not unlocked, open the full app instead. The widget's top-right arrow still opens the full app.
 class TaskSheetApp extends StatelessWidget {
   const TaskSheetApp({super.key});
 
@@ -60,10 +63,22 @@ class _TaskSheetHostState extends State<_TaskSheetHost> {
     var handedToApp = false;
     Repo? repo;
     try {
-      // An end-to-end encrypted account needs its key, which only the full app holds unlocked: the
-      // popup would show ciphertext. Open the app on the task instead.
+      // The app lock gates the interface with the fingerprint or device PIN, and this window has no such
+      // gate (a task's notes are more than the widget shows). People who use it get the full app, which
+      // asks first.
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(AppState.appLockPref) ?? false) {
+        handedToApp = true;
+        await SystemBridge.openTaskSheetInApp(taskId);
+        return;
+      }
+      // An end-to-end encrypted account works here once the app has unlocked it on this device: the key
+      // is kept in the platform keystore (restore() loads it), the local replica holds plaintext, and
+      // the sync engine seals edits when the app next pushes them. Only a device that has never been
+      // unlocked has no key, and the popup would show ciphertext, so that one asks the app, which asks
+      // for the passphrase.
       await E2eeSession.instance.restore();
-      if (E2eeSession.instance.enabled) {
+      if (E2eeSession.instance.enabled && !E2eeSession.instance.unlocked) {
         handedToApp = true;
         await SystemBridge.openTaskSheetInApp(taskId);
         return;
