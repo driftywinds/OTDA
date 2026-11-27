@@ -53,8 +53,19 @@ List<PlannedReminder> planReminders(
   Map<String, tz.TZDateTime> snoozedUntil = const {},
   Map<String, int> offsets = const {},
 }) {
-  final from = _iso(now);
+  final today = _iso(now);
   final to = _iso(now.add(window));
+  // A snooze can outlive the day it was set on: "10 min" at 23:55 fires at 00:05, when the
+  // occurrence's own day is already yesterday. Look back as far as the oldest snoozed day, or that
+  // reminder is silently dropped and never fires.
+  var from = today;
+  final snoozedDays = <String>{};
+  for (final entry in snoozedUntil.entries) {
+    if (!entry.value.isAfter(now)) continue;
+    final day = entry.key.substring(entry.key.lastIndexOf('|') + 1);
+    snoozedDays.add(day);
+    if (day.compareTo(from) < 0) from = day;
+  }
   final candidates = tasks.where((task) =>
       !task.isDeleted &&
       !task.isCompleted &&
@@ -68,6 +79,8 @@ List<PlannedReminder> planReminders(
     final hour = int.tryParse(parts.first) ?? 9;
     final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
     final date = DateTime.parse(day);
+    // Days before today are only here for their snooze; an unsnoozed one is history.
+    if (day.compareTo(today) < 0 && !snoozedDays.contains(day)) continue;
 
     final snoozeKey = '${task.id}|$day';
     final base = tz.TZDateTime(zone, date.year, date.month, date.day, hour, minute);
@@ -81,7 +94,7 @@ List<PlannedReminder> planReminders(
       day: day,
       at: at,
       title: task.title.isEmpty ? 'Task' : task.title,
-      body: _body(task, day, from, time, projectNames),
+      body: _body(task, day, today, time, projectNames),
     ));
   }
   out.sort((a, b) => a.at.compareTo(b.at));

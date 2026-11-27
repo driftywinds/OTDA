@@ -109,4 +109,47 @@ class SystemBridge {
       // already gone
     }
   }
+
+  // ---- the reminder drawer (ReminderSheetActivity) ------------------------
+
+  static const _reminder = MethodChannel('com.dw.otda/reminder');
+
+  /// The `taskId|day` of the reminder that was tapped, or null.
+  static Future<String?> reminderPayload() async {
+    try {
+      final payload = await _reminder.invokeMethod<String>('payload');
+      return payload == null || payload.isEmpty ? null : payload;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Called when another reminder is tapped while the drawer is already open.
+  static void listenReminder(void Function(String payload) onPayload) {
+    _reminder.setMethodCallHandler((call) async {
+      if (call.method == 'payload') {
+        final payload = call.arguments as String? ?? '';
+        if (payload.isNotEmpty) onPayload(payload);
+      }
+      return null;
+    });
+  }
+
+  /// Opens the task in the app (what the drawer's open button does), then closes the drawer.
+  static Future<void> openTaskInApp(String taskId, String day) async {
+    try {
+      await _reminder.invokeMethod<bool>('openTask', {'id': taskId, 'day': day});
+    } on Object {
+      // not running inside the drawer
+    }
+  }
+
+  /// Closes the drawer window.
+  static Future<void> closeReminder() async {
+    try {
+      await _reminder.invokeMethod<bool>('close');
+    } on Object {
+      // already gone
+    }
+  }
 }

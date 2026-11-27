@@ -55,7 +55,6 @@
                 <data android:scheme="otda" android:host="complete"/>
             </intent-filter>
         </activity>
-        <!-- The widget's "+" popup. Not in Recents, and not part of the app's task. -->
         <!-- Runs one widget action and disappears: a system-started activity is
              what the launcher is allowed to start, unlike a background callback. -->
         <activity
@@ -70,6 +69,7 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- The widget's "+" popup. Not in Recents, and not part of the app's task. -->
         <activity
             android:name=".QuickAddActivity"
             android:exported="false"
@@ -80,9 +80,29 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize|stateVisible"/>
+        <!-- The bottom drawer a tap on a reminder opens (Snooze / Complete within thumb reach).
+             flutter_local_notifications points a notification's tap at
+             getLaunchIntentForPackage(), which prefers a MAIN + INFO activity over the launcher
+             one: declaring this one with that filter is what redirects the tap here. INFO is not
+             LAUNCHER, so it adds no second icon and the app still opens from the launcher. -->
+        <activity
+            android:name=".ReminderSheetActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@style/QuickAddTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.INFO"/>
+            </intent-filter>
+        </activity>
         <!-- flutter_local_notifications: the alarm receiver fires scheduled reminders,
              the boot receiver restores them after a reboot or an app update, and the
-             action receiver runs the Complete / Snooze buttons without opening the app. -->
+             action receiver runs the Complete / Snooze buttons without opening the app. A tap on the
+             notification itself is routed to ReminderSheetActivity above. -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false"/>

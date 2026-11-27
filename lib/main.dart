@@ -6,6 +6,7 @@ import 'src/util/log.dart';
 import 'src/app_state.dart';
 import 'src/headless_action_app.dart';
 import 'src/quick_add_app.dart';
+import 'src/reminder_sheet_app.dart';
 import 'src/reminders/service.dart';
 import 'src/system_bridge.dart';
 import 'src/security/app_lock.dart';
@@ -35,6 +36,13 @@ void completeMain() {
 void quickAddMain() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const QuickAddApp());
+}
+
+/// Entry point of ReminderSheetActivity: the bottom drawer a tap on a reminder opens.
+@pragma('vm:entry-point')
+void reminderSheetMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ReminderSheetApp());
 }
 
 class OtdaApp extends StatefulWidget {

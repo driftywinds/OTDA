@@ -100,4 +100,35 @@ void main() {
     expect(reminderId('x', '2026-11-19'), reminderId('x', '2026-11-19'));
     expect(reminderId('x', '2026-11-19'), isNot(reminderId('x', '2026-11-20')));
   });
+
+  test('a snooze that lands after midnight still fires', () {
+    // 23:55, snoozed 10 minutes: the alarm is at 00:05 on the 20th, but the occurrence is the 19th's.
+    final late = tz.TZDateTime(tz.UTC, 2026, 11, 19, 23, 55);
+    final plan = planReminders(
+      [task('g', {'title': 'Call', 'due': {'date': '2026-11-19', 'time': '23:50'}})],
+      now: late,
+      zone: tz.local,
+      snoozedUntil: {'g|2026-11-19': tz.TZDateTime(tz.UTC, 2026, 11, 20, 0, 5)},
+    );
+    expect(plan, hasLength(1));
+    expect(plan.single.at, tz.TZDateTime(tz.UTC, 2026, 11, 20, 0, 5));
+    expect(plan.single.payload, 'g|2026-11-19');
+
+    // Once the clock has passed midnight the snooze is still ahead, so it is still planned.
+    final after = planReminders(
+      [task('g', {'title': 'Call', 'due': {'date': '2026-11-19', 'time': '23:50'}})],
+      now: tz.TZDateTime(tz.UTC, 2026, 11, 20, 0, 1),
+      zone: tz.local,
+      snoozedUntil: {'g|2026-11-19': tz.TZDateTime(tz.UTC, 2026, 11, 20, 0, 5)},
+    );
+    expect(after, hasLength(1));
+
+    // Without a snooze an occurrence from yesterday is history, not a reminder.
+    final none = planReminders(
+      [task('g', {'title': 'Call', 'due': {'date': '2026-11-19', 'time': '23:50'}})],
+      now: tz.TZDateTime(tz.UTC, 2026, 11, 20, 0, 1),
+      zone: tz.local,
+    );
+    expect(none, isEmpty);
+  });
 }

@@ -11,14 +11,24 @@ import 'ui/app_themes.dart';
 /// see-through window over whatever app is in front. It opens the replica without
 /// the main app, saves the task, re-arms reminders and refreshes the widget, then
 /// closes itself. The task reaches the server the next time the app syncs.
-class QuickAddApp extends StatefulWidget {
+class QuickAddApp extends StatelessWidget {
   const QuickAddApp({super.key});
 
   @override
-  State<QuickAddApp> createState() => _QuickAddAppState();
+  Widget build(BuildContext context) => const PopupShell(home: _QuickAddHost());
 }
 
-class _QuickAddAppState extends State<QuickAddApp> {
+/// The themed, see-through app both popups (the "+" composer and the reminder drawer) run in.
+class PopupShell extends StatefulWidget {
+  const PopupShell({super.key, required this.home});
+
+  final Widget home;
+
+  @override
+  State<PopupShell> createState() => _PopupShellState();
+}
+
+class _PopupShellState extends State<PopupShell> {
   // The popup runs in its own engine with no session, but the appearance settings
   // are device preferences: reading them here is what makes it wear the app's
   // accent, font, density and dark style instead of the stock look.
@@ -56,7 +66,7 @@ class _QuickAddAppState extends State<QuickAddApp> {
               child: child ?? const SizedBox.shrink(),
             );
           },
-          home: const _QuickAddHost(),
+          home: widget.home,
         );
       },
     );

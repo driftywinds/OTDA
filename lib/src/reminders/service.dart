@@ -529,8 +529,8 @@ Future<void> onReminderAction(NotificationResponse response) async {
   await DebugLog.add('action ${response.actionId} payload=$payload', source: 'bg');
   if (payload == null || !payload.contains('|')) return;
   final parts = payload.split('|');
-  final taskId = parts[0];
-  final day = parts[1];
+  final taskId = parts.first;
+  final day = parts.length > 1 ? parts[1] : '';
 
   final Repo repo;
   try {
@@ -539,35 +539,59 @@ Future<void> onReminderAction(NotificationResponse response) async {
     await DebugLog.add('action: could not open the database: $e', source: 'bg');
     return;
   }
-  final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
-  if (task == null) {
-    await DebugLog.add('action: task $taskId not found', source: 'bg');
-    return;
-  }
-
-  switch (response.actionId) {
-    case 'complete':
-      await repo.setCompleted(task, true);
-    case 'snooze_10':
-      await repo.setSnooze(taskId, day, DateTime.now().add(const Duration(minutes: 10)));
-    case 'snooze_tomorrow':
-      final tomorrow = DateTime.now().add(const Duration(days: 1));
-      final time = (await ReminderService.instance.reminderTime()).split(':');
-      final at = DateTime(
-        tomorrow.year,
-        tomorrow.month,
-        tomorrow.day,
-        int.tryParse(time.first) ?? 9,
-        time.length > 1 ? int.tryParse(time[1]) ?? 0 : 0,
-      );
-      await repo.setSnooze(taskId, day, at);
-    default:
-      return;
-  }
+  if (!await applyReminderAction(repo, response.actionId ?? '', taskId, day)) return;
   await DebugLog.add('action ${response.actionId}: done, re-arming', source: 'bg');
   // The widget goes first: it must never wait for the reminders to be re-armed.
   await pushWidgetsFromRepo(repo);
   await ReminderService.instance.rearmFrom(repo);
+}
+
+/// The snooze choices a reminder offers, as action ids: the two notification buttons plus the extra
+/// ones the bottom drawer shows.
+const snoozeActions = ['snooze_10', 'snooze_60', 'snooze_tomorrow'];
+
+/// When a snooze action wakes the reminder again, counted from [now]. Null for an unknown action.
+/// [reminderTime] is the `HH:mm` a "tomorrow" snooze lands on.
+DateTime? snoozeTarget(String actionId, DateTime now, String reminderTime) {
+  switch (actionId) {
+    case 'snooze_10':
+      return now.add(const Duration(minutes: 10));
+    case 'snooze_60':
+      return now.add(const Duration(hours: 1));
+    case 'snooze_tomorrow':
+      final parts = reminderTime.split(':');
+      // Calendar arithmetic, not +24h: a daylight-saving day is 23 or 25 hours long.
+      return DateTime(
+        now.year,
+        now.month,
+        now.day + 1,
+        int.tryParse(parts.first) ?? 9,
+        parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+      );
+  }
+  return null;
+}
+
+/// Runs a reminder's Complete or Snooze against the replica. Shared by the notification's buttons
+/// (a background isolate) and the bottom drawer a tap on the notification opens, so both do the same
+/// thing. True when it changed something; the caller then refreshes the widget and re-arms.
+Future<bool> applyReminderAction(Repo repo, String actionId, String taskId, String day) async {
+  final task = (await repo.tasks()).where((t) => t.id == taskId).firstOrNull;
+  if (task == null) {
+    await DebugLog.add('action: task $taskId not found', source: ReminderService._source);
+    return false;
+  }
+  if (actionId == 'complete') {
+    // Already done elsewhere (the widget, another device): nothing to do, and ticking it again would
+    // move a repeating series on a second time.
+    if (task.isCompleted) return false;
+    await repo.setCompleted(task, true);
+    return true;
+  }
+  final at = snoozeTarget(actionId, DateTime.now(), await ReminderService.instance.reminderTime());
+  if (at == null) return false;
+  await repo.setSnooze(taskId, day, at);
+  return true;
 }
 
 /// Opens the replica without any UI and without a network client.
