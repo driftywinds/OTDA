@@ -32,6 +32,32 @@ void main() {
     });
   });
 
+  group('reminderStillOpen', () {
+    final series = Task('s', {'id': 's', 'title': 'Water', 'recurrence': 'every day', 'due': {'date': '2026-11-27'}});
+    Task record(String day, {bool done = true, bool deleted = false}) => Task('s-$day', {
+          'id': 's-$day',
+          'series_id': 's',
+          'occurrence_date': day,
+          if (done) 'completed_at': 1,
+          if (deleted) 'deleted_at': 1,
+        });
+
+    test('a missing, deleted or completed task has nothing left to act on', () {
+      expect(reminderStillOpen([], null, ''), isFalse);
+      expect(reminderStillOpen([], Task('d', {'id': 'd', 'deleted_at': 1}), ''), isFalse);
+      expect(reminderStillOpen([], Task('c', {'id': 'c', 'completed_at': 1}), ''), isFalse);
+      expect(reminderStillOpen([task()], task(), '2026-11-27'), isTrue);
+    });
+
+    test('a repeating task is open per occurrence', () {
+      final tasks = [series, record('2026-11-26')];
+      expect(reminderStillOpen(tasks, series, '2026-11-26'), isFalse, reason: 'that day is done');
+      expect(reminderStillOpen(tasks, series, '2026-11-27'), isTrue);
+      expect(reminderStillOpen([series, record('2026-11-26', deleted: true)], series, '2026-11-26'), isTrue);
+      expect(reminderStillOpen([series, record('2026-11-26', done: false)], series, '2026-11-26'), isTrue);
+    });
+  });
+
   group('ReminderSheet', () {
     Future<void> open(WidgetTester tester, void Function(String?) onResult) async {
       await tester.pumpWidget(MaterialApp(

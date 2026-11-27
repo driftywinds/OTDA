@@ -66,6 +66,13 @@ List<PlannedReminder> planReminders(
     snoozedDays.add(day);
     if (day.compareTo(from) < 0) from = day;
   }
+  // A date a finished (done or skipped) record stands for is not coming up any more. Without this a
+  // completed occurrence other than the series' current one was still armed.
+  final finished = <String>{
+    for (final task in tasks)
+      if (!task.isDeleted && task.isCompleted && task.raw['series_id'] != null)
+        '${task.raw['series_id']}|${task.raw['occurrence_date']}',
+  };
   final candidates = tasks.where((task) =>
       !task.isDeleted &&
       !task.isCompleted &&
@@ -81,6 +88,8 @@ List<PlannedReminder> planReminders(
     final date = DateTime.parse(day);
     // Days before today are only here for their snooze; an unsnoozed one is history.
     if (day.compareTo(today) < 0 && !snoozedDays.contains(day)) continue;
+
+    if (finished.contains('${task.id}|$day')) continue;
 
     final snoozeKey = '${task.id}|$day';
     final base = tz.TZDateTime(zone, date.year, date.month, date.day, hour, minute);

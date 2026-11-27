@@ -276,6 +276,7 @@ class ReminderService {
         return;
       }
       final enabled = await remindersEnabled();
+      await _clearFinishedFromShade(tasks);
       final pending = await _plugin.pendingNotificationRequests();
       await DebugLog.add(
           'rearm: ${tasks.length} tasks, ${snoozes.length} snoozes, enabled=$enabled, ${pending.length} pending before',
@@ -330,13 +331,14 @@ class ReminderService {
     }
   }
 
-  Future<void> _schedule(int id, String title, String body, tz.TZDateTime at, String payload, bool exact) async {
+  Future<void> _schedule(int id, String title, String body, tz.TZDateTime at, String payload, bool exact,
+      {bool autoCancel = false}) async {
     Future<void> go(AndroidScheduleMode mode) => _plugin.zonedSchedule(
           id: id,
           title: title,
           body: body,
           scheduledDate: at,
-          notificationDetails: _details(),
+          notificationDetails: _details(autoCancel: autoCancel),
           androidScheduleMode: mode,
           payload: payload,
         );
@@ -358,7 +360,10 @@ class ReminderService {
     }
   }
 
-  NotificationDetails _details() => const NotificationDetails(
+  /// [autoCancel] false (the default) keeps the notification after a tap: a tap opens the bottom
+  /// drawer, and the reminder stays until the task is completed or snoozed, from the drawer or from the
+  /// notification's own buttons. The Settings test notifications have no drawer and clear on tap.
+  NotificationDetails _details({bool autoCancel = false}) => NotificationDetails(
         android: AndroidNotificationDetails(
           channelReminders,
           'Reminders',
@@ -368,7 +373,8 @@ class ReminderService {
           color: _accent,
           category: AndroidNotificationCategory.reminder,
           onlyAlertOnce: true,
-          actions: [
+          autoCancel: autoCancel,
+          actions: const [
             AndroidNotificationAction('complete', 'Complete',
                 showsUserInterface: false, cancelNotification: true),
             AndroidNotificationAction('snooze_10', 'Snooze 10 min',
@@ -377,8 +383,51 @@ class ReminderService {
                 showsUserInterface: false, cancelNotification: true),
           ],
         ),
-        iOS: DarwinNotificationDetails(threadIdentifier: channelReminders),
+        iOS: const DarwinNotificationDetails(threadIdentifier: channelReminders),
       );
+
+  /// Takes a reminder's notification out of the shade, once its task is completed or snoozed. A tap no
+  /// longer clears it, so whoever acts on the reminder has to.
+  Future<void> dismiss(String taskId, String day) async {
+    try {
+      await init();
+      await _plugin.cancel(id: reminderId(taskId, day));
+    } on Object catch (e) {
+      await DebugLog.add('dismiss $taskId|$day failed: $e', source: _source);
+    }
+  }
+
+  /// Clears the reminders still showing for something that is done: ticked on the widget, in the app or
+  /// on another device. Reminders stay up after a tap now, so nothing else would remove them. Ids are
+  /// one-way hashes of task and day, so the live ones are matched against the recent days of every task.
+  Future<void> _clearFinishedFromShade(List<Task> tasks) async {
+    try {
+      final shown = {
+        for (final n in await _plugin.getActiveNotifications())
+          if (n.id != null && n.id != _testNowId && n.id != _testLaterId) n.id!,
+      };
+      if (shown.isEmpty) return;
+      final now = DateTime.now();
+      final days = [
+        for (var back = -3; back <= 14; back++)
+          _isoDay(DateTime(now.year, now.month, now.day - back)),
+      ];
+      for (final task in tasks) {
+        for (final day in days) {
+          final id = reminderId(task.id, day);
+          if (shown.contains(id) && !reminderStillOpen(tasks, task, day)) {
+            await _plugin.cancel(id: id);
+            shown.remove(id);
+          }
+        }
+      }
+    } on Object catch (e) {
+      await DebugLog.add('shade cleanup failed: $e', source: _source);
+    }
+  }
+
+  static String _isoDay(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+      '${_two(d.month)}-${_two(d.day)}';
 
   // ---- testing ---------------------------------------------------------
 
@@ -394,7 +443,7 @@ class ReminderService {
       id: _testNowId,
       title: 'Reminder test',
       body: 'If you can read this, notifications are allowed.',
-      notificationDetails: _details(),
+      notificationDetails: _details(autoCancel: true),
       payload: 'test',
     );
     return 'Sent. Pull down the notification shade.';
@@ -411,7 +460,8 @@ class ReminderService {
     await DebugLog.add('test: schedule for $at exact=$exact', source: _source);
     try {
       await _schedule(_testLaterId, 'Scheduled reminder test',
-          'This one came from the alarm clock, not from the open app.', at, 'test', exact);
+          'This one came from the alarm clock, not from the open app.', at, 'test', exact,
+          autoCancel: true);
     } on Object catch (e) {
       await DebugLog.add('test: schedule FAILED: $e', source: _source);
       return 'Scheduling failed: $e';
@@ -572,6 +622,18 @@ DateTime? snoozeTarget(String actionId, DateTime now, String reminderTime) {
   return null;
 }
 
+/// Whether the reminder for [task] on [day] still has something to act on: the task exists and is not
+/// done, and for a repeating task that occurrence has no finished record. Pure, so it is testable.
+bool reminderStillOpen(List<Task> tasks, Task? task, String day) {
+  if (task == null || task.isDeleted || task.isCompleted) return false;
+  if (day.isEmpty) return true;
+  return !tasks.any((t) =>
+      !t.isDeleted &&
+      t.isCompleted &&
+      t.raw['series_id']?.toString() == task.id &&
+      t.raw['occurrence_date']?.toString() == day);
+}
+
 /// Runs a reminder's Complete or Snooze against the replica. Shared by the notification's buttons
 /// (a background isolate) and the bottom drawer a tap on the notification opens, so both do the same
 /// thing. True when it changed something; the caller then refreshes the widget and re-arms.
@@ -582,9 +644,13 @@ Future<bool> applyReminderAction(Repo repo, String actionId, String taskId, Stri
     return false;
   }
   if (actionId == 'complete') {
-    // Already done elsewhere (the widget, another device): nothing to do, and ticking it again would
-    // move a repeating series on a second time.
-    if (task.isCompleted) return false;
+    // Already done elsewhere (the widget, another device): nothing to do.
+    if (!reminderStillOpen(await repo.tasks(), task, day)) return false;
+    // A repeating task's reminder is for one occurrence, and it completes that one. The series itself
+    // only ever stands on its current occurrence, so an old notification must not tick today's, and a
+    // new one must not tick an old one. An occurrence that is already done changes nothing.
+    final isSeries = isRecurring(task) && (task.raw['series_id']?.toString() ?? '').isEmpty;
+    if (isSeries && day.isNotEmpty) return repo.completeOccurrence(task, day);
     await repo.setCompleted(task, true);
     return true;
   }

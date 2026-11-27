@@ -12,7 +12,8 @@ import 'ui/format.dart';
 /// The drawer a tap on a reminder notification opens, like TickTick's: a see-through window over
 /// whatever app is in front, with the task and two big buttons (Snooze, Complete) at the bottom, where
 /// a thumb reaches. The notification's own Complete / Snooze buttons are unchanged and still run
-/// without opening anything.
+/// without opening anything. A tap does not clear the notification: it stays, and opens this drawer
+/// again on every tap, until the task is completed or snoozed from here or from its buttons.
 ///
 /// It opens the replica without the main app, does what was chosen through [applyReminderAction] (the
 /// same code the notification buttons use), refreshes the widget, re-arms reminders and closes itself.
@@ -67,9 +68,14 @@ class _ReminderHostState extends State<_ReminderHost> {
       final day = parts.length > 1 ? parts[1] : '';
       final repo = _repo ??= await openHeadlessRepo();
       final tasks = await repo.tasks();
-      final task = tasks.where((t) => t.id == taskId && !t.isDeleted).firstOrNull;
-      // Gone or already done (ticked on the widget, say): nothing to act on.
-      if (task == null || task.isCompleted) return;
+      final task = tasks.where((t) => t.id == taskId).firstOrNull;
+      // Gone, or already done for this occurrence (ticked on the widget, say): nothing to act on, and
+      // the notification, which a tap no longer clears, should not keep standing there.
+      if (!reminderStillOpen(tasks, task, day)) {
+        await ReminderService.instance.dismiss(taskId, day);
+        return;
+      }
+      if (task == null) return;
       final project = (await repo.projects()).where((p) => p.id == task.projectId).firstOrNull;
       if (!mounted || mine != _generation) return;
 
@@ -81,12 +87,16 @@ class _ReminderHostState extends State<_ReminderHost> {
       );
       // A newer tap replaced this sheet: it owns the window now.
       if (mine != _generation) return;
+      // Closed without choosing: the notification stays, and tapping it opens the drawer again.
       if (choice == null) return;
       if (choice == 'open') {
         await SystemBridge.openTaskInApp(taskId, day);
         return;
       }
-      if (await applyReminderAction(repo, choice, taskId, day)) {
+      final changed = await applyReminderAction(repo, choice, taskId, day);
+      // Completed or snoozed (or found already done): the reminder is dealt with, so it leaves the shade.
+      await ReminderService.instance.dismiss(taskId, day);
+      if (changed) {
         await DebugLog.add('reminder sheet: $choice $taskId', source: 'popup');
         // The widget goes first: it must never wait for the reminders.
         await pushWidgetsFromRepo(repo);

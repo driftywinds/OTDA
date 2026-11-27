@@ -239,4 +239,61 @@ void main() {
     expect(shown, hasLength(1));
     expect(upcomingDay(series, all, today), tomorrow);
   });
+
+  group('completing the occurrence a reminder was for', () {
+    test('a newer occurrence is recorded on its own, and the series stays on today', () async {
+      final (repo, db, clock) = await buildRepo();
+      final id = await addTask(db, clock, 'series-r1', {
+        'title': 'Water plants',
+        'due': {'date': today},
+        'recurrence': 'every day',
+      });
+
+      expect(await repo.completeOccurrence(await taskById(repo, id), tomorrow), isTrue);
+
+      final series = await taskById(repo, id);
+      expect(series.dueDate, today, reason: 'today is still open');
+      expect(series.isCompleted, isFalse);
+      final records = (await repo.tasks()).where((t) => t.raw['series_id'] == id).toList();
+      expect(records.single.raw['occurrence_date'], tomorrow);
+      expect(records.single.isCompleted, isTrue);
+
+      // Ticking again changes nothing.
+      expect(await repo.completeOccurrence(await taskById(repo, id), tomorrow), isFalse);
+      expect((await repo.tasks()).where((t) => t.raw['series_id'] == id), hasLength(1));
+
+      // Today's own tick then steps over the day that is already done.
+      expect(await repo.completeOccurrence(await taskById(repo, id), today), isTrue);
+      expect((await taskById(repo, id)).dueDate, shift(today, 2));
+    });
+
+    test('an older occurrence is recorded without moving the series', () async {
+      final (repo, db, clock) = await buildRepo();
+      final yesterday = shift(today, -1);
+      final id = await addTask(db, clock, 'series-r2', {
+        'title': 'Water plants',
+        'due': {'date': today},
+        'recurrence': 'every day',
+      });
+
+      expect(await repo.completeOccurrence(await taskById(repo, id), yesterday), isTrue);
+
+      expect((await taskById(repo, id)).dueDate, today, reason: "today's occurrence is untouched");
+      final record = (await repo.tasks()).singleWhere((t) => t.raw['series_id'] == id);
+      expect(record.raw['occurrence_date'], yesterday);
+      expect(record.isCompleted, isTrue);
+      expect(await repo.completeOccurrence(await taskById(repo, id), yesterday), isFalse);
+    });
+
+    test('the current occurrence rolls the series on, as an ordinary tick does', () async {
+      final (repo, db, clock) = await buildRepo();
+      final id = await addTask(db, clock, 'series-r3', {
+        'title': 'Water plants',
+        'due': {'date': today},
+        'recurrence': 'every day',
+      });
+      expect(await repo.completeOccurrence(await taskById(repo, id), today), isTrue);
+      expect((await taskById(repo, id)).dueDate, tomorrow);
+    });
+  });
 }

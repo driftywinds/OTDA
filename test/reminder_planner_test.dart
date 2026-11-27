@@ -131,4 +131,24 @@ void main() {
     );
     expect(none, isEmpty);
   });
+
+  test('an occurrence with a finished record is not armed again', () {
+    final series = task('s', {
+      'title': 'Water',
+      'due': {'date': '2026-11-19', 'time': '09:30'},
+      'recurrence': 'every day',
+    });
+    final record = task('s-2026-11-20', {
+      'title': 'Water',
+      'series_id': 's',
+      'occurrence_date': '2026-11-20',
+      'completed_at': 1,
+      'due': {'date': '2026-11-20', 'time': '09:30'},
+    });
+    final plan = planReminders([series, record], now: now, zone: tz.local);
+    final days = plan.map((r) => r.day).toList();
+    expect(days, contains('2026-11-19'));
+    expect(days, isNot(contains('2026-11-20')), reason: 'that day was already completed');
+    expect(days, contains('2026-11-21'));
+  });
 }

@@ -528,6 +528,41 @@ class Repo {
     }
   }
 
+  /// Completes one named occurrence of a repeating series, for a reminder that was for [date].
+  ///
+  /// The series only ever stands on one occurrence (its `due`). When [date] is that one this is an
+  /// ordinary completion and the series rolls on. For any other date, older or newer, only that
+  /// occurrence's own record is written and the series stays where it is, so an old notification never
+  /// completes today's occurrence and a new one never completes yesterday's. A date that already has a
+  /// finished record changes nothing. True when something changed.
+  Future<bool> completeOccurrence(Task series, String date) async {
+    if (series.isDeleted || series.isCompleted) return false;
+    final raw = series.raw['recurrence']?.toString() ?? '';
+    final parsed = rules.parseRule(raw);
+    if (!parsed.ok) return false;
+    final today = _todayString();
+    final all = await db.entities('task');
+    final tasks = [for (final row in all) Task(row['id'] as String, row)];
+    final current = currentOccurrence(series, tasks, today) ?? occurrenceDateOf(series, today);
+    if (date == current) {
+      await setCompleted(series, true);
+      return true;
+    }
+    final until = parsed.rule?.until;
+    if (until != null && date.compareTo(until) > 0) return false;
+    final recordId = occurrenceIdOf(series.id, date);
+    final existing = await db.entity('task', recordId);
+    if (existing != null && existing['deleted_at'] == null && existing['completed_at'] != null) return false;
+    final ts = await clock.next();
+    final fields = occurrenceFields(series, date, DateTime.now().millisecondsSinceEpoch, today);
+    for (final entry in fields.entries) {
+      await db.putField('task', recordId, entry.key, entry.value, ts, engine.device);
+    }
+    // The id is derived from series and date, so an earlier undo may have tombstoned this very row.
+    await db.putField('task', recordId, 'deleted_at', null, ts, engine.device);
+    return true;
+  }
+
   /// Deletes a series in one of the three scopes the model supports.
   ///
   /// One occurrence is a skip: the record says so and the series moves on, exactly
