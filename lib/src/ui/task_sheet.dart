@@ -983,7 +983,7 @@ class _TaskSheetState extends State<TaskSheet> {
 
   /// What is set on the task, as chips: tap one to change it, tap its cross to
   /// clear it. The project is always shown, since it says where the task lives.
-  List<Widget> _valueChips(String today, String? date, String? time, String? sectionName, ColorScheme scheme) {
+  List<ValueChip> _valueChips(String today, String? date, String? time, String? sectionName, ColorScheme scheme) {
     return [
       if (date != null)
         ValueChip(
@@ -1230,12 +1230,10 @@ class _TaskSheetState extends State<TaskSheet> {
                 ],
               ),
               Padding(
-                padding: gutter,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _valueChips(today, date, time, sectionName, scheme),
-                ),
+                // Same left edge as the icon bar and the notes card below, and the same right edge,
+                // so the chips, the icons and the cards line up as one column.
+                padding: const EdgeInsets.only(left: 10, right: 0, top: 2, bottom: 4),
+                child: ChipGrid(chips: _valueChips(today, date, time, sectionName, scheme)),
               ),
               if (_children.isNotEmpty) ...[
                 const SizedBox(height: 8),

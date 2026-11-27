@@ -4,12 +4,13 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import com.dw.otda.TaskSheetActivity
 
 /**
  * Receives a tap on a widget row and disappears: a plain, transparent Activity with no Flutter, so it
  * starts in a moment and is always allowed to start (a collection widget's row tap is an activity
  * PendingIntent). A tick or untick is queued here, locally, and drawn at once; opening a row hands
- * the task link to the app.
+ * the task to a transparent bottom-sheet activity (TaskSheetActivity).
  *
  * The tap is handled in both onCreate and onNewIntent: the activity is singleTask, so a second tap that
  * lands while the first instance is still finishing arrives in onNewIntent, and ignoring it would drop
@@ -41,10 +42,21 @@ class WidgetActionActivity : Activity() {
                 toggleTask(this, id, day, sid, occ, intent.getBooleanExtra(WidgetIntents.EXTRA_DONE, true))
             }
             WidgetIntents.OP_OPEN -> {
-                val link = Uri.parse("otda://task/${Uri.encode(id)}").let {
-                    if (day == null) it else it.buildUpon().appendQueryParameter("day", day).build()
+                // The task's own sheet over whatever is in front, not the whole app. If that cannot
+                // start for any reason, the app's task link is the fallback, so a tap never does nothing.
+                val started = runCatching {
+                    startActivity(
+                        Intent(this, TaskSheetActivity::class.java)
+                            .putExtra(TaskSheetActivity.EXTRA_ID, id)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }.isSuccess
+                if (!started) {
+                    val link = Uri.parse("otda://task/${Uri.encode(id)}").let {
+                        if (day == null) it else it.buildUpon().appendQueryParameter("day", day).build()
+                    }
+                    runCatching { startActivity(WidgetIntents.deepLink(this, link)) }
                 }
-                runCatching { startActivity(WidgetIntents.deepLink(this, link)) }
             }
         }
     }

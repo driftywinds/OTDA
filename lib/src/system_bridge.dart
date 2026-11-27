@@ -152,4 +152,47 @@ class SystemBridge {
       // already gone
     }
   }
+
+  // ---- the task sheet popup (TaskSheetActivity) ----------------------------
+
+  static const _taskSheet = MethodChannel('com.dw.otda/tasksheet');
+
+  /// The id of the task a widget row tap asked to open, or null.
+  static Future<String?> taskSheetId() async {
+    try {
+      final id = await _taskSheet.invokeMethod<String>('id');
+      return id == null || id.isEmpty ? null : id;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Called when another row is tapped while the popup is already open.
+  static void listenTaskSheet(void Function(String id) onTask) {
+    _taskSheet.setMethodCallHandler((call) async {
+      if (call.method == 'task') {
+        final id = call.arguments as String? ?? '';
+        if (id.isNotEmpty) onTask(id);
+      }
+      return null;
+    });
+  }
+
+  /// Hands the task to the full app, for what the popup cannot show (an end-to-end encrypted account).
+  static Future<void> openTaskSheetInApp(String taskId) async {
+    try {
+      await _taskSheet.invokeMethod<bool>('openInApp', {'id': taskId});
+    } on Object {
+      // not running inside the popup
+    }
+  }
+
+  /// Closes the popup window.
+  static Future<void> closeTaskSheet() async {
+    try {
+      await _taskSheet.invokeMethod<bool>('close');
+    } on Object {
+      // already gone
+    }
+  }
 }

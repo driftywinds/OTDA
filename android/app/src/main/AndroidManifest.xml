@@ -80,6 +80,19 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize|stateVisible"/>
+        <!-- The task's own sheet, opened by a tap on a widget row: a transparent window over whatever
+             app is in front, like the "+" popup. Not in Recents, and not part of the app's task. -->
+        <activity
+            android:name=".TaskSheetActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@style/QuickAddTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"/>
+
         <!-- The bottom drawer a tap on a reminder opens (Snooze / Complete within thumb reach).
              flutter_local_notifications points a notification's tap at
              getLaunchIntentForPackage(), which prefers a MAIN + INFO activity over the launcher

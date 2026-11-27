@@ -219,6 +219,11 @@ class PropIconBar extends StatelessWidget {
 /// A property's value as a small chip: tap it to change the value, tap the cross
 /// to clear it. [muted] is the neutral look for a value that is always there (the
 /// project, even when it is the Inbox).
+///
+/// Every chip is the same height whatever it holds (a cross, a chevron or nothing),
+/// so a row of them reads as one set. [fill] stretches it to the width it is given
+/// (what [ChipGrid] does), with the label on the left and the cross or chevron
+/// pinned to the right edge.
 class ValueChip extends StatelessWidget {
   const ValueChip({
     super.key,
@@ -227,6 +232,7 @@ class ValueChip extends StatelessWidget {
     this.color,
     this.muted = false,
     this.dropdown = false,
+    this.fill = false,
     this.onTap,
     this.onClear,
   });
@@ -238,54 +244,119 @@ class ValueChip extends StatelessWidget {
 
   /// A small chevron after the label, for a chip that opens a menu.
   final bool dropdown;
+
+  /// Take all the width on offer instead of just what the label needs.
+  final bool fill;
   final VoidCallback? onTap;
   final VoidCallback? onClear;
+
+  /// The height every chip shares.
+  static const height = 40.0;
+
+  ValueChip filled() => ValueChip(
+        key: key,
+        label: label,
+        icon: icon,
+        color: color,
+        muted: muted,
+        dropdown: dropdown,
+        fill: true,
+        onTap: onTap,
+        onClear: onClear,
+      );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final tint = muted ? scheme.onSurfaceVariant : (color ?? scheme.primary);
-    final shape = BorderRadius.circular(10);
+    final shape = BorderRadius.circular(12);
+    final hasTrailing = onClear != null || dropdown;
     return Material(
       color: muted ? scheme.field : tint.withValues(alpha: 0.12),
       borderRadius: shape,
       child: InkWell(
         borderRadius: shape,
         onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(10, 6, onClear != null || dropdown ? 6 : 10, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 15, color: tint),
-                const SizedBox(width: 6),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(color: tint),
-                ),
-              ),
-              if (onClear != null) ...[
-                const SizedBox(width: 2),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onClear,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.close_rounded, size: 15, color: tint),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: height),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 0, hasTrailing ? 4 : 12, 0),
+            child: Row(
+              mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 17, color: tint),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  fit: fill ? FlexFit.tight : FlexFit.loose,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(color: tint, fontWeight: FontWeight.w600),
                   ),
                 ),
-              ] else if (dropdown)
-                Icon(Icons.expand_more_rounded, size: 16, color: tint),
-            ],
+                if (onClear != null) ...[
+                  const SizedBox(width: 2),
+                  // A square slot of its own, so the cross never changes the chip's height.
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onClear,
+                    child: SizedBox(
+                      width: 32,
+                      height: height,
+                      child: Icon(Icons.close_rounded, size: 17, color: tint),
+                    ),
+                  ),
+                ] else if (dropdown) ...[
+                  const SizedBox(width: 2),
+                  SizedBox(
+                    width: 32,
+                    height: height,
+                    child: Icon(Icons.expand_more_rounded, size: 19, color: tint),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A task's value chips laid out as a tidy grid: two equal columns, so the rows
+/// line up edge to edge instead of ragged, and a chip with a long label takes a
+/// whole row rather than being cut short. Each keeps its own colour.
+class ChipGrid extends StatelessWidget {
+  const ChipGrid({super.key, required this.chips, this.spacing = 8});
+
+  final List<ValueChip> chips;
+  final double spacing;
+
+  /// Labels longer than this would be clipped in half a row.
+  static const _halfRowLabel = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final full = constraints.maxWidth;
+        final half = (full - spacing) / 2;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final chip in chips)
+              SizedBox(
+                width: chip.label.length > _halfRowLabel ? full : half,
+                child: chip.filled(),
+              ),
+          ],
+        );
+      },
     );
   }
 }

@@ -7,6 +7,7 @@ import 'src/app_state.dart';
 import 'src/headless_action_app.dart';
 import 'src/quick_add_app.dart';
 import 'src/reminder_sheet_app.dart';
+import 'src/task_sheet_app.dart';
 import 'src/reminders/service.dart';
 import 'src/system_bridge.dart';
 import 'src/security/app_lock.dart';
@@ -43,6 +44,13 @@ void quickAddMain() {
 void reminderSheetMain() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ReminderSheetApp());
+}
+
+/// Entry point of TaskSheetActivity: the task's own sheet, opened by a tap on a widget row.
+@pragma('vm:entry-point')
+void taskSheetMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const TaskSheetApp());
 }
 
 class OtdaApp extends StatefulWidget {
