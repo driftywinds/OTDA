@@ -1,5 +1,9 @@
 # OpenTodo 1.8 and 1.9: what changes for OTDA
 
+> **Superseded for server compatibility by 1.10:** see
+> [the 1.10 impact note](opentodo-1.10-impact.md). The 1.9 client fixes below are
+> implemented; 1.10 adds no API change.
+
 Checked on 26 November 2026 against the published
 [v1.9.0 release](https://github.com/OpenTodoApp/OpenTodo/releases/tag/v1.9.0),
 its changelog and OpenAPI document. OpenTodo 1.8.0 was prepared but never
