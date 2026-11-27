@@ -134,6 +134,25 @@ void main() {
     expect(row['right'], '20 Nov 09:30');
   });
 
+  test('pinned tasks come before Done today', () {
+    final doneAt = DateTime(2026, 11, 19, 10, 30).millisecondsSinceEpoch;
+    final snapshot = buildWidgetSnapshot([
+      task('pinned', {'title': 'Pinned first', 'due': {'date': '2026-12-03'}}),
+      task('done', {'title': 'Finished', 'due': {'date': today}, 'completed_at': doneAt}),
+    ], const [], today: today, pinned: {'pinned'});
+
+    final labels = [
+      for (final row in snapshot['rows'] as List)
+        if ((row as Map)['t'] == 'section') row['label'],
+    ];
+    expect(labels, ['Pinned', 'Done today']);
+    final titles = [
+      for (final row in snapshot['rows'] as List)
+        if ((row as Map)['t'] == 'task') row['title'],
+    ];
+    expect(titles, ['Pinned first', 'Finished']);
+  });
+
   test('the list is capped and the remainder is counted', () {
     final snapshot = buildWidgetSnapshot([
       for (var i = 0; i < 40; i++)

@@ -903,7 +903,8 @@ Future<void> _pushWidgetsOnce(Repo repo) async {
   final ack = await _widgetAck();
   final tasks = await repo.tasks();
   final projects = await repo.projects();
-  await pushWidgets(tasks, projects, today: _todayString(), ack: ack);
+  final pinned = await repo.pinnedTaskIds();
+  await pushWidgets(tasks, projects, today: _todayString(), ack: ack, pinned: pinned);
   // Reminders follow the ticks that were just applied, but only after the widget is redrawn.
   if (applied > 0) {
     try {
@@ -917,7 +918,7 @@ Future<void> _pushWidgetsOnce(Repo repo) async {
 /// Writes the widget snapshots for the projects that have a widget and asks the
 /// launcher to redraw. The native side never computes anything.
 Future<void> pushWidgets(List<Task> tasks, List<Project> projects,
-    {required String today, int? ack}) async {
+    {required String today, int? ack, Set<String> pinned = const {}}) async {
   try {
     final active = await HomeWidget.getWidgetData<String>('active_projects') ?? '';
     final ids = active.split(',').where((id) => id.trim().isNotEmpty).toSet();
@@ -931,6 +932,7 @@ Future<void> pushWidgets(List<Task> tasks, List<Project> projects,
       projectIds: {...ids, ...every, 'all'},
       today: today,
       ack: ack,
+      pinned: pinned,
     );
     for (final entry in snapshots.entries) {
       await HomeWidget.saveWidgetData<String>('snapshot_${entry.key}', jsonEncode(entry.value));

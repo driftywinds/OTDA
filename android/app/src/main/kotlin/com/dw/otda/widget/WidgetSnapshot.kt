@@ -192,7 +192,7 @@ internal fun overlayPending(root: JSONObject, ops: List<PendingOp>, ack: Long) {
 }
 
 private const val DONE_TODAY = "Done today"
-private val SECTION_ORDER = listOf(DONE_TODAY, "Overdue", "Today", "Tomorrow", "This week", "Later", "Anytime")
+private val SECTION_ORDER = listOf("Pinned", DONE_TODAY, "Overdue", "Today", "Tomorrow", "This week", "Later", "Anytime")
 
 private fun dayOf(row: JSONObject): String? =
     row.opt("day")?.toString()?.takeIf { it.isNotBlank() && it != "null" }

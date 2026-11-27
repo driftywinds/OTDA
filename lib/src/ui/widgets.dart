@@ -331,11 +331,12 @@ class DetailChip extends StatelessWidget {
 
 /// Section label above a group of rows.
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.color, this.count});
+  const SectionLabel(this.text, {super.key, this.color, this.count, this.icon});
 
   final String text;
   final Color? color;
   final int? count;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -345,6 +346,10 @@ class SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
       child: Row(
         children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: tint),
+            const SizedBox(width: 6),
+          ],
           Text(
             text.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(

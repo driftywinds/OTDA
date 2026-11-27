@@ -18,8 +18,10 @@ Map<String, Object?> buildWidgetSnapshot(
   required String today,
   int limit = 30,
   int? ack,
+  Set<String> pinned = const {},
 }) =>
-    _assemble(_candidates(tasks, today), projects, projectId: projectId, today: today, limit: limit, ack: ack);
+    _assemble(_candidates(tasks, today, pinned: pinned), projects,
+        projectId: projectId, today: today, limit: limit, ack: ack);
 
 /// Every snapshot a push needs ('all' and one per project id), sharing the part that is the same for
 /// all of them. Working out which day each task belongs to costs a pass over every task per repeating
@@ -32,8 +34,9 @@ Map<String, Map<String, Object?>> buildWidgetSnapshots(
   required String today,
   int limit = 30,
   int? ack,
+  Set<String> pinned = const {},
 }) {
-  final candidates = _candidates(tasks, today);
+  final candidates = _candidates(tasks, today, pinned: pinned);
   return {
     for (final id in projectIds)
       id: _assemble(candidates, projects, projectId: id == 'all' ? null : id, today: today, limit: limit, ack: ack),
@@ -49,9 +52,9 @@ class _Candidate {
   final Task task;
 }
 
-const _sectionOrder = ['Done today', 'Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Anytime'];
+const _sectionOrder = ['Pinned', 'Done today', 'Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'Anytime'];
 
-List<_Candidate> _candidates(List<Task> tasks, String today) {
+List<_Candidate> _candidates(List<Task> tasks, String today, {Set<String> pinned = const {}}) {
   final rows = <_Candidate>[];
   bool finishedToday(Task task) {
     final millis = task.completedAt;
@@ -65,6 +68,12 @@ List<_Candidate> _candidates(List<Task> tasks, String today) {
 
   for (final task in tasks) {
     if (task.isDeleted) continue;
+    // Pinned open tasks come before every other section, even Done today. A
+    // completed task is never pinned; its pin is cleared by the repository.
+    if (pinned.contains(task.id) && !task.isCompleted) {
+      rows.add(_Candidate('Pinned', task.dueDate ?? '', task));
+      continue;
+    }
     // A finished row stays in front of the person who ticked it: today's done
     // tasks get their own section above Overdue and Today, including a repeating
     // task's finished occurrence record.

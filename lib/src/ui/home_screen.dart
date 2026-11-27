@@ -68,6 +68,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// synced through `user_prefs.today_assignees`.
   bool _showAssignedToOthers = false;
 
+  /// Device-local pinned task ids. Pinned rows are rendered in their own section
+  /// above every other section; they are not a synced task field.
+  Set<String> _pinned = const {};
+
   String _calendarDay = '';
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -254,8 +258,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final workspaces = await repo.workspaces();
     final memberships = await repo.memberships();
     final prefs = await repo.userPrefs();
+    var pinned = await repo.pinnedTaskIds();
     final collapsedRaw = await repo.db.meta('ui.collapsed');
     if (!mounted) return;
+    // A task completed on another device must lose its local pin too.
+    final livePinned = {
+      for (final id in pinned)
+        if (tasks.any((task) => task.id == id && !task.isCompleted && !task.isDeleted)) id,
+    };
+    if (livePinned.length != pinned.length) {
+      await repo.replacePinned(livePinned);
+      pinned = livePinned;
+    }
     final defaultWorkspace = workspaces.where((w) => w.isDefault).map((w) => w.id).firstOrNull ??
         workspaces.map((w) => w.id).firstOrNull;
     final todayNow = _today;
@@ -287,6 +301,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
       _workspaces = workspaces;
       _showAssignedToOthers = prefs['today_assignees']?.toString() == 'all';
+      _pinned = pinned;
       _sharedProjects = {
         for (final membership in memberships)
           if (membership.isShared) membership.projectId,
@@ -510,6 +525,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await widget.state.repo?.db.setMeta('ui.collapsed', _collapsed.join(','));
   }
 
+  Future<void> _togglePin(Task task) async {
+    final repo = widget.state.repo;
+    if (repo == null) return;
+    await repo.setPinned(task.id, !_pinned.contains(task.id));
+    await _load();
+  }
+
   /// The row's long-press menu: subtask, move/promote, delete.
   Future<void> _taskMenu(Task task) async {
     final repo = widget.state.repo;
@@ -527,6 +549,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               subtitle: task.parentId == null ? const Text('Top level') : const Text('Subtask'),
             ),
             const Divider(height: 1),
+            if (!task.isCompleted)
+              ListTile(
+                leading: Icon(_pinned.contains(task.id) ? Icons.push_pin : Icons.push_pin_outlined),
+                title: Text(_pinned.contains(task.id) ? 'Unpin from top' : 'Pin to top'),
+                subtitle: Text(_pinned.contains(task.id) ? 'Remove the Pinned section' : 'Stay above every other section'),
+                onTap: () => Navigator.of(context).pop('pin'),
+              ),
             ListTile(
               leading: const Icon(Icons.subdirectory_arrow_right_rounded),
               title: const Text('Add subtask'),
@@ -555,6 +584,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     if (!mounted || action == null) return;
     switch (action) {
+      case 'pin':
+        await _togglePin(task);
       case 'subtask':
         await _addSubtask(task);
       case 'move':
@@ -849,12 +880,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// at the top level, with no write.
   List<Object> _entries(List<Task> tasks) {
     final today = _today;
+    final canPin = _view == TaskView.inbox ||
+        _view == TaskView.today ||
+        _view == TaskView.upcoming ||
+        _view == TaskView.anytime ||
+        _view == TaskView.someday ||
+        _view == TaskView.project;
+    final pinned = canPin
+        ? tasks.where((t) => !t.isCompleted && _pinned.contains(t.id)).toList()
+        : <Task>[];
+    pinned.sort((a, b) {
+      final ak = '${a.dueDate ?? '9999'}${a.dueTime ?? '99:99'}';
+      final bk = '${b.dueDate ?? '9999'}${b.dueTime ?? '99:99'}';
+      final byDate = ak.compareTo(bk);
+      return byDate != 0 ? byDate : _position(a).compareTo(_position(b));
+    });
+    final rest = pinned.isEmpty
+        ? tasks
+        : [for (final task in tasks) if (!pinned.any((p) => p.id == task.id)) task];
+    final prefix = <Object>[
+      if (pinned.isNotEmpty) ...['Pinned', ..._nest(pinned)],
+    ];
     if (_view == TaskView.inbox) {
-      final done = tasks
+      final done = rest
           .where((t) => t.isCompleted && _finishedToday(t, today))
           .toList()
         ..sort((a, b) => (b.completedAt ?? 0).compareTo(a.completedAt ?? 0));
-      final open = tasks.where((t) => !t.isCompleted).toList();
+      final open = rest.where((t) => !t.isCompleted).toList();
       final todayTasks = <Task>[];
       final upcoming = <(String?, Task)>[];
       final anytime = <Task>[];
@@ -892,6 +944,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (entry.$1 != null) entry.$2.id: entry.$1!,
       };
       return [
+        ...prefix,
         if (done.isNotEmpty) ...['Done today', ..._nest(done)],
         if (todayTasks.isNotEmpty) ...['Today', ..._nest(todayTasks)],
         if (upcoming.isNotEmpty) ...['Upcoming', ..._nest([for (final entry in upcoming) entry.$2])],
@@ -900,20 +953,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
     }
     if (_view == TaskView.today) {
-      final open = tasks.where((t) => !t.isCompleted).toList();
-      final done = tasks.where((t) => t.isCompleted).toList();
+      final open = rest.where((t) => !t.isCompleted).toList();
+      final done = rest.where((t) => t.isCompleted).toList();
       final overdue = open.where((t) => (t.dueDate ?? '9999').compareTo(today) < 0).toList();
-      final rest = open.where((t) => !overdue.contains(t)).toList();
+      final remaining = open.where((t) => !overdue.contains(t)).toList();
       return [
+        ...prefix,
         if (overdue.isNotEmpty) ...['Overdue', ..._nest(overdue)],
-        if (rest.isNotEmpty) ...['Today', ..._nest(rest)],
+        if (remaining.isNotEmpty) ...['Today', ..._nest(remaining)],
         if (done.isNotEmpty) ...['Done today', ..._nest(done)],
       ];
     }
     if (_view == TaskView.upcoming) {
-      final out = <Object>[];
+      final out = <Object>[...prefix];
       final grouped = <String, List<Task>>{};
-      for (final task in tasks) {
+      for (final task in rest) {
         final day = _upcomingDays[task.id] ?? task.dueDate;
         if (day == null) continue;
         grouped.putIfAbsent(day, () => []).add(task);
@@ -923,7 +977,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         out.addAll(_nest(entry.value));
       }
       final anytime = [
-        for (final task in tasks)
+        for (final task in rest)
           if (_upcomingDays[task.id] == null && inAnytime(task.raw, today)) task,
       ];
       if (anytime.isNotEmpty) {
@@ -932,7 +986,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       return out;
     }
-    return _nest(tasks);
+    return [...prefix, ..._nest(rest)];
   }
 
   /// Depth-first rows for one group: roots keep the list's order, children go
@@ -1168,7 +1222,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   (context, index) {
                     final entry = entries[index];
                     if (entry is String) {
-                      return SectionLabel(entry, color: entry == 'Overdue' ? scheme.error : null);
+                      return SectionLabel(
+                        entry,
+                        color: entry == 'Overdue'
+                            ? scheme.error
+                            : (entry == 'Pinned' ? scheme.primary : null),
+                        icon: entry == 'Pinned' ? Icons.push_pin_rounded : null,
+                      );
                     }
                     final row = entry as _TaskRowEntry;
                     final task = row.task;

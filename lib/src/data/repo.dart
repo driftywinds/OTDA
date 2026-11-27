@@ -163,6 +163,35 @@ class Repo {
   Future<void> setUserPref(String field, Object? value) =>
       setField('user_prefs', 'me', field, value);
 
+  /// Pinned task ids are device-local: a meta row, not a synced task field. They
+  /// survive sync and restart, and never touch another device.
+  static const _pinnedKey = 'ui.pinned_tasks';
+
+  Future<Set<String>> pinnedTaskIds() async {
+    final raw = await db.meta(_pinnedKey);
+    if (raw == null || raw.isEmpty) return <String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) return {for (final id in decoded) if (id is String) id};
+    } on Object {
+      // A damaged local preference means "nothing pinned", never a failed list.
+    }
+    return <String>{};
+  }
+
+  Future<void> setPinned(String taskId, bool pinned) async {
+    final ids = await pinnedTaskIds();
+    final changed = pinned ? ids.add(taskId) : ids.remove(taskId);
+    if (!changed) return;
+    await db.setMeta(_pinnedKey, jsonEncode(ids.toList()));
+  }
+
+  /// Drops pins whose task is no longer open/live (for example completed on
+  /// another device). The app calls this when it reloads its task list.
+  Future<void> replacePinned(Set<String> ids) async {
+    await db.setMeta(_pinnedKey, jsonEncode(ids.toList()));
+  }
+
   /// The id of the label with this name (case-insensitive), creating it when it
   /// does not exist yet — what the web app does when a quick-add line names a
   /// label that is not there.
@@ -415,6 +444,7 @@ class Repo {
         // "kept": hidden from lists by withoutKept(), still visible in this
         // task's Subtasks section.
         await db.putField('task', task.id, 'completed_at', now, ts, engine.device);
+        await setPinned(task.id, false);
         return;
       }
       // Completing a plain task completes its open descendants too: one
@@ -438,6 +468,9 @@ class Repo {
         final row = await db.entity('task', id);
         if (row == null || row['completed_at'] != null) continue;
         await db.putField('task', id, 'completed_at', now, ts, engine.device);
+      }
+      for (final id in ids) {
+        await setPinned(id, false);
       }
       return;
     }
