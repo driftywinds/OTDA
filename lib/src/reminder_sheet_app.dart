@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:material_ui/material_ui.dart';
 
@@ -5,6 +6,7 @@ import 'data/models.dart';
 import 'data/repo.dart';
 import 'quick_add_app.dart' show PopupShell;
 import 'reminders/debug_log.dart';
+import 'reminders/planner.dart' show defaultReminderTime;
 import 'reminders/service.dart';
 import 'system_bridge.dart';
 import 'ui/format.dart';
@@ -77,13 +79,16 @@ class _ReminderHostState extends State<_ReminderHost> {
       }
       if (task == null) return;
       final project = (await repo.projects()).where((p) => p.id == task.projectId).firstOrNull;
+      final reminderTime = await ReminderService.instance.reminderTime();
       if (!mounted || mine != _generation) return;
 
       final choice = await showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
-        showDragHandle: true,
-        builder: (_) => ReminderSheet(task: task, day: day, projectName: project?.name),
+        // The card draws its own rounded, floating shape.
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        builder: (_) => ReminderSheet(task: task, day: day, project: project, reminderTime: reminderTime),
       );
       // A newer tap replaced this sheet: it owns the window now.
       if (mine != _generation) return;
@@ -113,15 +118,29 @@ class _ReminderHostState extends State<_ReminderHost> {
   Widget build(BuildContext context) => const Scaffold(backgroundColor: Colors.transparent);
 }
 
-/// The drawer's content. Pops with `complete`, a snooze action id, `open`, or null when dismissed.
+/// The drawer's content. Pops with `complete`, a snooze action id (see [snoozeTarget]), `open`, or null
+/// when dismissed.
+///
+/// A floating card: the due day and project on top, the title, and the two actions pinned to the bottom
+/// edge where a thumb rests. Snooze swaps the card's body for a list of fixed times, each showing when it
+/// will wake the task, so nothing needs a second tap to understand.
 class ReminderSheet extends StatefulWidget {
-  const ReminderSheet({super.key, required this.task, required this.day, this.projectName});
+  const ReminderSheet({
+    super.key,
+    required this.task,
+    required this.day,
+    this.project,
+    this.reminderTime = defaultReminderTime,
+  });
 
   final Task task;
 
   /// The occurrence the reminder was for (`yyyy-MM-dd`), which may not be the task's own due date.
   final String day;
-  final String? projectName;
+  final Project? project;
+
+  /// The `HH:mm` "Tomorrow" and "Next week" land on.
+  final String reminderTime;
 
   @override
   State<ReminderSheet> createState() => _ReminderSheetState();
@@ -129,139 +148,433 @@ class ReminderSheet extends StatefulWidget {
 
 class _ReminderSheetState extends State<ReminderSheet> {
   bool _choosingSnooze = false;
+  String? _error;
+
+  // ---- what the header says -------------------------------------------------
+
+  String get _day => widget.day.isNotEmpty ? widget.day : (widget.task.dueDate ?? _isoOf(DateTime.now()));
+
+  static String _isoOf(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+  bool get _overdue {
+    final due = DateTime.tryParse(_day);
+    if (due == null) return false;
+    final time = widget.task.dueTime;
+    final parts = (time ?? '').split(':');
+    final at = DateTime(
+      due.year,
+      due.month,
+      due.day,
+      int.tryParse(parts.first) ?? 23,
+      parts.length > 1 ? int.tryParse(parts[1]) ?? 59 : 59,
+    );
+    return at.isBefore(DateTime.now());
+  }
 
   String get _when {
-    final now = DateTime.now();
-    final today = DateFormat('yyyy-MM-dd').format(now);
-    final day = widget.day.isNotEmpty ? widget.day : (widget.task.dueDate ?? today);
+    final today = _isoOf(DateTime.now());
+    final day = friendlyDate(_day, today);
     final time = widget.task.dueTime;
-    return time == null || time.isEmpty ? friendlyDate(day, today) : '${friendlyDate(day, today)}, $time';
+    final parsed = time == null ? null : _parseClock(time);
+    return parsed == null ? day : '$day, ${_clock(parsed)}';
   }
+
+  static DateTime? _parseClock(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.tryParse(parts.first);
+    final m = parts.length > 1 ? int.tryParse(parts[1]) : 0;
+    if (h == null || m == null) return null;
+    return DateTime(2000, 1, 1, h, m);
+  }
+
+  static String _clock(DateTime t) => DateFormat.jm().format(t);
+
+  Color? _projectColor() {
+    final raw = widget.project?.color?.replaceFirst('#', '');
+    if (raw == null || (raw.length != 6 && raw.length != 8)) return null;
+    final value = int.tryParse(raw, radix: 16);
+    if (value == null) return null;
+    return Color(raw.length == 6 ? 0xFF000000 | value : value);
+  }
+
+  // ---- actions --------------------------------------------------------------
+
+  void _finish(String choice) {
+    HapticFeedback.lightImpact();
+    Navigator.of(context).pop(choice);
+  }
+
+  Future<void> _pickCustom() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 2, now.month, now.day),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))),
+    );
+    if (time == null || !mounted) return;
+    final at = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (!at.isAfter(DateTime.now())) {
+      setState(() => _error = 'Pick a time that has not passed yet.');
+      return;
+    }
+    _finish('snooze_at:${at.millisecondsSinceEpoch}');
+  }
+
+  // ---- build ----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final title = widget.task.title.isEmpty ? 'Task' : widget.task.title;
-    final project = widget.projectName;
-    final height = MediaQuery.sizeOf(context).height;
+    final media = MediaQuery.of(context);
+    final height = media.size.height;
 
     return SafeArea(
-      top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 12, 16),
-        child: ConstrainedBox(
-          // Tall enough that the buttons sit low, in reach of a thumb, however short the title is.
-          constraints: BoxConstraints(minHeight: height * 0.3),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(_when,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodyMedium?.copyWith(color: scheme.primary)),
-                  ),
-                  if (project != null && project.isNotEmpty) ...[
-                    const SizedBox(width: 14),
-                    Icon(Icons.inbox_outlined, size: 16, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(project,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
-                    ),
-                  ],
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Open task',
-                    onPressed: () => Navigator.of(context).pop('open'),
-                    icon: const Icon(Icons.open_in_new),
-                  ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        child: Material(
+          color: scheme.surfaceContainerHigh,
+          elevation: 3,
+          shadowColor: Colors.black,
+          borderRadius: BorderRadius.circular(28),
+          clipBehavior: Clip.antiAlias,
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: height * 0.72),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOut,
+                child: _choosingSnooze
+                    ? _SnoozePane(
+                        key: const ValueKey('snooze'),
+                        reminderTime: widget.reminderTime,
+                        error: _error,
+                        onBack: () => setState(() {
+                          _choosingSnooze = false;
+                          _error = null;
+                        }),
+                        onClose: () => Navigator.of(context).pop(),
+                        onChoose: _finish,
+                        onCustom: _pickCustom,
+                      )
+                    : _mainPane(context, height),
               ),
-              const SizedBox(height: 4),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(title, style: text.titleLarge, maxLines: 4, overflow: TextOverflow.ellipsis),
-              ),
-              const SizedBox(height: 28),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 150),
-                  child: _choosingSnooze ? _snoozeChoices(context) : _mainButtons(context),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _mainButtons(BuildContext context) {
-    const big = Size.fromHeight(56);
-    return Row(
+  Widget _mainPane(BuildContext context, double screenHeight) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final title = widget.task.title.isEmpty ? 'Task' : widget.task.title;
+    final note = (widget.task.raw['description']?.toString() ?? '').trim();
+    final project = widget.project;
+    final projectColor = _projectColor();
+    final repeats = (widget.task.raw['recurrence']?.toString() ?? '').isNotEmpty;
+    final dateColor = _overdue ? scheme.error : scheme.primary;
+
+    return SizedBox(
       key: const ValueKey('main'),
-      children: [
-        Expanded(
-          child: FilledButton.tonal(
-            style: FilledButton.styleFrom(minimumSize: big),
-            onPressed: () => setState(() => _choosingSnooze = true),
-            child: const Text('Snooze'),
-          ),
+      // Tall enough that the buttons sit low, where a thumb rests, whatever the title length.
+      height: (screenHeight * 0.3).clamp(300.0, 420.0),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 14,
+                    runSpacing: 2,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_when, style: text.labelLarge?.copyWith(color: dateColor, fontWeight: FontWeight.w600)),
+                          if (repeats) ...[
+                            const SizedBox(width: 5),
+                            Icon(Icons.repeat_rounded, size: 15, color: dateColor),
+                          ],
+                        ],
+                      ),
+                      if (project != null && project.name.isNotEmpty)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (projectColor != null)
+                              Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(color: projectColor, shape: BoxShape.circle),
+                              )
+                            else
+                              Icon(Icons.inbox_rounded, size: 15, color: scheme.onSurfaceVariant),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(project.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.labelLarge?.copyWith(color: scheme.onSurfaceVariant)),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                _HeaderButton(
+                  tooltip: 'Open task',
+                  icon: Icons.open_in_new_rounded,
+                  onPressed: () => _finish('open'),
+                ),
+                _HeaderButton(
+                  tooltip: 'Close',
+                  icon: Icons.close_rounded,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // The title and note take the middle and scroll if long; the buttons below never move.
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.2)),
+                    if (note.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(note,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionButton(
+                    label: 'Snooze',
+                    icon: Icons.snooze_rounded,
+                    background: scheme.surfaceContainerHighest,
+                    foreground: scheme.onSurface,
+                    onPressed: () => setState(() => _choosingSnooze = true),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ActionButton(
+                    label: 'Complete',
+                    icon: Icons.check_rounded,
+                    background: scheme.primary.withValues(alpha: 0.18),
+                    foreground: scheme.primary,
+                    onPressed: () => _finish('complete'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FilledButton(
-            style: FilledButton.styleFrom(minimumSize: big),
-            onPressed: () => Navigator.of(context).pop('complete'),
-            child: const Text('Complete'),
-          ),
-        ),
-      ],
+      ),
     );
   }
+}
 
-  Widget _snoozeChoices(BuildContext context) {
-    const big = Size.fromHeight(56);
-    Widget choice(String label, String action) => Expanded(
-          child: FilledButton.tonal(
-            style: FilledButton.styleFrom(minimumSize: big, padding: const EdgeInsets.symmetric(horizontal: 4)),
-            onPressed: () => Navigator.of(context).pop(action),
-            child: Text(label, maxLines: 1),
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({required this.tooltip, required this.icon, required this.onPressed});
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 22),
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+      );
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 19, color: foreground),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
-        );
+        ),
+      );
+}
+
+/// The fixed-time snoozes. Each row says when it will wake the task, worked out by the same
+/// [snoozeTarget] that applies it.
+class _SnoozePane extends StatelessWidget {
+  const _SnoozePane({
+    super.key,
+    required this.reminderTime,
+    required this.error,
+    required this.onBack,
+    required this.onClose,
+    required this.onChoose,
+    required this.onCustom,
+  });
+
+  final String reminderTime;
+  final String? error;
+  final VoidCallback onBack;
+  final VoidCallback onClose;
+  final void Function(String action) onChoose;
+  final VoidCallback onCustom;
+
+  static const _choices = [
+    ('snooze_10', '10 minutes', Icons.timer_outlined),
+    ('snooze_30', '30 minutes', Icons.timer_outlined),
+    ('snooze_60', '1 hour', Icons.schedule_rounded),
+    ('snooze_180', '3 hours', Icons.schedule_rounded),
+    ('snooze_evening', 'This evening', Icons.wb_twilight_rounded),
+    ('snooze_tomorrow', 'Tomorrow', Icons.wb_sunny_outlined),
+    ('snooze_nextweek', 'Next week', Icons.event_rounded),
+  ];
+
+  /// "6:00 PM" today, otherwise "Sat, 9:00 AM" or "Mon 30 Nov, 9:00 AM".
+  static String _label(DateTime at, DateTime now) {
+    final clock = DateFormat.jm().format(at);
+    final today = DateTime(now.year, now.month, now.day);
+    final days = DateTime(at.year, at.month, at.day).difference(today).inDays;
+    if (days == 0) return clock;
+    if (days < 7) return '${DateFormat.E().format(at)}, $clock';
+    return '${DateFormat('E d MMM').format(at)}, $clock';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final now = DateTime.now();
+    final rows = <Widget>[];
+    for (final (action, label, icon) in _choices) {
+      final at = snoozeTarget(action, now, reminderTime);
+      if (at == null) continue; // an evening that has already begun
+      rows.add(_SnoozeRow(icon: icon, label: label, trailing: _label(at, now), onTap: () => onChoose(action)));
+    }
+    rows.add(_SnoozeRow(
+      icon: Icons.edit_calendar_rounded,
+      label: 'Pick date & time',
+      trailing: null,
+      onTap: onCustom,
+    ));
+
     return Column(
-      key: const ValueKey('snooze'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Row(
+            children: [
+              _HeaderButton(tooltip: 'Back', icon: Icons.arrow_back_rounded, onPressed: onBack),
+              const SizedBox(width: 4),
+              Expanded(child: Text('Snooze until', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+              _HeaderButton(tooltip: 'Close', icon: Icons.close_rounded, onPressed: onClose),
+            ],
+          ),
+        ),
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+            children: rows,
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+            child: Text(error!, style: text.bodySmall?.copyWith(color: scheme.error)),
+          ),
+      ],
+    );
+  }
+}
+
+class _SnoozeRow extends StatelessWidget {
+  const _SnoozeRow({required this.icon, required this.label, required this.trailing, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final String? trailing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        child: Row(
           children: [
-            choice('10 min', 'snooze_10'),
-            const SizedBox(width: 8),
-            choice('1 hour', 'snooze_60'),
-            const SizedBox(width: 8),
-            choice('Tomorrow', 'snooze_tomorrow'),
+            Icon(icon, size: 21, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(child: Text(label, style: text.bodyLarge)),
+            if (trailing != null)
+              Text(trailing!, style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant))
+            else
+              Icon(Icons.chevron_right_rounded, size: 22, color: scheme.onSurfaceVariant),
           ],
         ),
-        const SizedBox(height: 4),
-        TextButton(
-          onPressed: () => setState(() => _choosingSnooze = false),
-          child: const Text('Back'),
-        ),
-      ],
+      ),
     );
   }
 }

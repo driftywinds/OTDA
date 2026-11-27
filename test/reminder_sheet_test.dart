@@ -25,6 +25,28 @@ void main() {
       expect(snoozeTarget('snooze_tomorrow', DateTime(2026, 11, 30, 18), '08:30'), DateTime(2026, 12, 1, 8, 30));
     });
 
+    test('the fixed-time choices land where they say', () {
+      // Fri 27 Nov 2026, 10:00.
+      final morning = DateTime(2026, 11, 27, 10);
+      expect(snoozeTarget('snooze_30', morning, '09:00'), DateTime(2026, 11, 27, 10, 30));
+      expect(snoozeTarget('snooze_180', morning, '09:00'), DateTime(2026, 11, 27, 13));
+      expect(snoozeTarget('snooze_evening', morning, '09:00'), DateTime(2026, 11, 27, 18));
+      expect(snoozeTarget('snooze_tomorrow', morning, '08:30'), DateTime(2026, 11, 28, 8, 30));
+      // The coming Monday, 30 Nov.
+      expect(snoozeTarget('snooze_nextweek', morning, '09:00'), DateTime(2026, 11, 30, 9));
+      // On a Monday "next week" is seven days off, not today.
+      expect(snoozeTarget('snooze_nextweek', DateTime(2026, 11, 30, 10), '09:00'), DateTime(2026, 12, 7, 9));
+    });
+
+    test('an evening that has begun is not offered, and a picked time must be ahead', () {
+      expect(snoozeTarget('snooze_evening', DateTime(2026, 11, 27, 18, 1), '09:00'), isNull);
+      final now = DateTime(2026, 11, 27, 10);
+      final later = DateTime(2026, 11, 27, 15, 30);
+      expect(snoozeTarget('snooze_at:${later.millisecondsSinceEpoch}', now, '09:00'), later);
+      expect(snoozeTarget('snooze_at:${DateTime(2026, 11, 27, 9).millisecondsSinceEpoch}', now, '09:00'), isNull);
+      expect(snoozeTarget('snooze_at:oops', now, '09:00'), isNull);
+    });
+
     test('a broken time falls back to 9:00; an unknown action is no snooze', () {
       expect(snoozeTarget('snooze_tomorrow', now, 'xx'), DateTime(2026, 11, 28, 9));
       expect(snoozeTarget('complete', now, '09:00'), isNull);
@@ -68,7 +90,7 @@ void main() {
                 onPressed: () async => onResult(await showModalBottomSheet<String>(
                   context: context,
                   isScrollControlled: true,
-                  builder: (_) => ReminderSheet(task: task(), day: '2026-11-27', projectName: 'Inbox'),
+                  builder: (_) => ReminderSheet(task: task(), day: '2026-11-27', project: Project('p', {'name': 'Inbox'})),
                 )),
                 child: const Text('go'),
               ),
@@ -96,12 +118,15 @@ void main() {
       expect(result, 'complete');
     });
 
-    testWidgets('Snooze offers durations, and a choice closes with its action', (tester) async {
+    testWidgets('Snooze lists fixed times, and a choice closes with its action', (tester) async {
       String? result;
       await open(tester, (r) => result = r);
       await tester.tap(find.text('Snooze'));
       await tester.pumpAndSettle();
       expect(find.text('Complete'), findsNothing);
+      expect(find.text('Snooze until'), findsOneWidget);
+      expect(find.text('Tomorrow'), findsOneWidget);
+      expect(find.text('Pick date & time'), findsOneWidget);
       await tester.tap(find.text('1 hour'));
       await tester.pumpAndSettle();
       expect(result, 'snooze_60');
@@ -112,7 +137,7 @@ void main() {
       await open(tester, (r) => result = r);
       await tester.tap(find.text('Snooze'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Back'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
       expect(find.text('Complete'), findsOneWidget);
       await tester.tap(find.byTooltip('Close'));

@@ -596,28 +596,53 @@ Future<void> onReminderAction(NotificationResponse response) async {
   await ReminderService.instance.rearmFrom(repo);
 }
 
-/// The snooze choices a reminder offers, as action ids: the two notification buttons plus the extra
-/// ones the bottom drawer shows.
-const snoozeActions = ['snooze_10', 'snooze_60', 'snooze_tomorrow'];
+/// The evening a "This evening" snooze lands on.
+const eveningHour = 18;
 
-/// When a snooze action wakes the reminder again, counted from [now]. Null for an unknown action.
-/// [reminderTime] is the `HH:mm` a "tomorrow" snooze lands on.
+/// When a snooze action wakes the reminder again, counted from [now]. Null for an unknown action, or one
+/// that has nothing ahead of it (an evening snooze after the evening has begun).
+///
+/// The notification's buttons use `snooze_10` and `snooze_tomorrow`; the bottom drawer offers the rest,
+/// and `snooze_at:<epoch ms>` for a time the person picked. [reminderTime] is the `HH:mm` that
+/// "tomorrow" and "next week" land on. Pure, so the drawer can show each choice's time before it is
+/// taken and the two always agree.
 DateTime? snoozeTarget(String actionId, DateTime now, String reminderTime) {
+  DateTime atReminderTime(int daysAhead) {
+    final parts = reminderTime.split(':');
+    // Calendar arithmetic, not +24h: a daylight-saving day is 23 or 25 hours long.
+    return DateTime(
+      now.year,
+      now.month,
+      now.day + daysAhead,
+      int.tryParse(parts.first) ?? 9,
+      parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+    );
+  }
+
+  if (actionId.startsWith('snooze_at:')) {
+    final millis = int.tryParse(actionId.substring('snooze_at:'.length));
+    if (millis == null) return null;
+    final at = DateTime.fromMillisecondsSinceEpoch(millis);
+    return at.isAfter(now) ? at : null;
+  }
   switch (actionId) {
     case 'snooze_10':
       return now.add(const Duration(minutes: 10));
+    case 'snooze_30':
+      return now.add(const Duration(minutes: 30));
     case 'snooze_60':
       return now.add(const Duration(hours: 1));
+    case 'snooze_180':
+      return now.add(const Duration(hours: 3));
+    case 'snooze_evening':
+      final evening = DateTime(now.year, now.month, now.day, eveningHour);
+      return evening.isAfter(now) ? evening : null;
     case 'snooze_tomorrow':
-      final parts = reminderTime.split(':');
-      // Calendar arithmetic, not +24h: a daylight-saving day is 23 or 25 hours long.
-      return DateTime(
-        now.year,
-        now.month,
-        now.day + 1,
-        int.tryParse(parts.first) ?? 9,
-        parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
-      );
+      return atReminderTime(1);
+    case 'snooze_nextweek':
+      // The coming Monday; on a Monday that is a week away, not today.
+      final ahead = (DateTime.monday - now.weekday + 7) % 7;
+      return atReminderTime(ahead == 0 ? 7 : ahead);
   }
   return null;
 }
