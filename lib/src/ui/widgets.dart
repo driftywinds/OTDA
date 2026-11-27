@@ -343,7 +343,7 @@ class SectionLabel extends StatelessWidget {
     final theme = Theme.of(context);
     final tint = color ?? theme.colorScheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+      padding: const EdgeInsets.fromLTRB(6, 18, 16, 6),
       child: Row(
         children: [
           if (icon != null) ...[
