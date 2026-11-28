@@ -46,8 +46,8 @@ Offline-first, with the same data model as the server so every device converges.
   and the device relay.
 
 - Package / bundle id: `com.dw.otda`
-- Target server: OpenTodo **v1.10.1** (`/api/v1`), backward-compatible with
-  **v1.5.0 and later**; see [the 1.10 impact note](docs/opentodo-1.10-impact.md)
+- Target server: OpenTodo **v1.11.0** (`/api/v1`), backward-compatible with
+  **v1.5.0 and later**; see [the 1.11 impact note](docs/opentodo-1.11-impact.md)
 - Platforms: Android, iOS (the home-screen widget, the quick-add popup and the
   exact-alarm reminders are Android only)
 
@@ -144,14 +144,14 @@ The product overview stays here. The engineering notes live in the docs:
 | [Testing](docs/testing.md) | Local commands, test groups and the integration server. |
 | [Releasing](docs/releasing.md) | CI, the release workflow and the signing secrets. |
 | [API spec](docs/api-spec.md) | Regenerating spec/API.md and the filtered OpenAPI file. |
-| [OpenTodo 1.10 compatibility](docs/opentodo-1.10-impact.md) | What changed upstream and what it means for OTDA. |
+| [OpenTodo 1.11 compatibility](docs/opentodo-1.11-impact.md) | What changed upstream and what it means for OTDA. |
 
 ## Install
 
 - **Android:** install from Google Play, or add the GitHub repo to Obtainium.
 - **iOS:** build from source with Flutter; the Android-only pieces are the widget,
   quick-add popup and exact-alarm reminders.
-- **Server:** OpenTodo **v1.5.0 or later**; OTDA currently targets **v1.10.1**.
+- **Server:** OpenTodo **v1.5.0 or later**; OTDA currently targets **v1.11.0**.
 
 ## Privacy
 

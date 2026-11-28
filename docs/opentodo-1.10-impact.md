@@ -1,5 +1,9 @@
 # OpenTodo 1.10: what changes for OTDA
 
+> **Superseded for server compatibility by 1.11:** see
+> [the 1.11 impact note](opentodo-1.11-impact.md). The API did not change in
+> 1.11; its new surface is the completed Habits feature.
+
 Checked on 27 November 2026 against the published
 [v1.10.1 release](https://github.com/OpenTodoApp/OpenTodo/releases/tag/v1.10.1),
 its changelog and the v1.9.0…v1.10.1 API diff. v1.10.0 was tagged but never
