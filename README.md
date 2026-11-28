@@ -20,6 +20,16 @@ Offline-first, with the same data model as the server so every device converges.
   </a>
 </p>
 
+<p align="center">
+  <img src="assets/readme/hero.png"
+    alt="OTDA on two Android phones: Inbox with pinned tasks and a Today list, beside the task drawer"
+    width="100%">
+</p>
+
+<p align="center">
+  <sub><i>Your tasks, on your server — pinned work, a daily plan and a widget that stays in step.</i></sub>
+</p>
+
 - Tasks with deadline, start/Someday, estimate, energy, section, labels, subtasks,
   a Trash with restore and purge, and repeating occurrences.
 - Workspaces: switch, create, rename, move projects between them, see members and
@@ -56,20 +66,98 @@ Offline-first, with the same data model as the server so every device converges.
 - Platforms: Android, iOS (the home-screen widget, the quick-add popup and the
   exact-alarm reminders are Android only)
 
+## Screens
+
+<p align="center">
+  <a href="assets/readme/overview.png">
+    <img src="assets/readme/overview.png"
+      alt="Today, Inbox, Upcoming and the workspace drawer across four Android screens"
+      width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <sub>Today, Inbox, Upcoming and the workspace drawer — one local replica, every screen in step.</sub>
+</p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="33%">
+      <a href="assets/readme/inbox.jpg">
+        <img src="assets/readme/inbox.jpg" alt="Inbox with pinned tasks, Done today and the rest of the day" width="220">
+      </a>
+      <br>
+      <sub><b>Inbox</b><br>Everything, in one place</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="assets/readme/today.jpg">
+        <img src="assets/readme/today.jpg" alt="Today with pinned tasks, overdue items, timed tasks and Done today" width="220">
+      </a>
+      <br>
+      <sub><b>Today</b><br>Pinned, overdue and done</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="assets/readme/upcoming.jpg">
+        <img src="assets/readme/upcoming.jpg" alt="Upcoming grouped by Tomorrow, Tuesday, Wednesday and Thursday" width="220">
+      </a>
+      <br>
+      <sub><b>Upcoming</b><br>The days ahead</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <a href="assets/readme/projects.jpg">
+        <img src="assets/readme/projects.jpg" alt="The navigation drawer showing projects, views and account actions" width="220">
+      </a>
+      <br>
+      <sub><b>Projects</b><br>Projects and navigation</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="assets/readme/workspaces.jpg">
+        <img src="assets/readme/workspaces.jpg" alt="Workspaces screen showing the Personal workspace and its projects" width="220">
+      </a>
+      <br>
+      <sub><b>Workspaces</b><br>Projects, members and access</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="assets/readme/settings.jpg">
+        <img src="assets/readme/settings.jpg" alt="Settings with account details, two-factor authentication and date preferences" width="220">
+      </a>
+      <br>
+      <sub><b>Settings</b><br>Account, security and dates</sub>
+    </td>
+  </tr>
+</table>
+
+### The widget
+
+<p align="center">
+  <a href="assets/readme/widget.webp">
+    <img src="assets/readme/widget.webp"
+      alt="OTDA home-screen widget with Pinned, Done today, Overdue, Today and Tomorrow sections"
+      width="300">
+  </a>
+</p>
+
+<p align="center">
+  <sub>The same pinned tasks and Done today, above the rest of the day — without opening the app.</sub>
+</p>
+
 ## Contents
 
-1. [What is here](#what-is-here)
-2. [Architecture at a glance](#architecture-at-a-glance)
-3. [The quick-add parser](#the-quick-add-parser) — the part worth reading first
-4. [The data model and sync](#the-data-model-and-sync)
-5. [Reminders](#reminders)
-6. [The home-screen widget](#the-home-screen-widget)
-7. [Settings](#settings)
-8. [Sign-in](#sign-in)
-9. [Test it](#test-it)
-10. [Releasing](#releasing)
-11. [Regenerate the API spec](#regenerate-the-api-spec)
-12. [Privacy](#privacy)
+1. [Screens](#screens)
+2. [What is here](#what-is-here)
+3. [Architecture at a glance](#architecture-at-a-glance)
+4. [The quick-add parser](#the-quick-add-parser) — the part worth reading first
+5. [The data model and sync](#the-data-model-and-sync)
+6. [Reminders](#reminders)
+7. [The home-screen widget](#the-home-screen-widget)
+8. [Settings](#settings)
+9. [Sign-in](#sign-in)
+10. [Test it](#test-it)
+11. [Releasing](#releasing)
+12. [Regenerate the API spec](#regenerate-the-api-spec)
+13. [Privacy](#privacy)
 
 ## What is here
 
